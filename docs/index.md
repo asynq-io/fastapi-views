@@ -2,9 +2,9 @@
 
 # fastapi-views
 
-![CI](https://github.com/performancemedia/fastapi-views/workflows/CI/badge.svg)
-![Build](https://github.com/performancemedia/fastapi-views/workflows/Publish/badge.svg)
-![License](https://img.shields.io/github/license/performancemedia/fastapi-views)
+![CI](https://github.com/asynq-io/fastapi-views/workflows/CI/badge.svg)
+![Build](https://github.com/asynq-io/fastapi-views/workflows/Publish/badge.svg)
+![License](https://img.shields.io/github/license/asynq-io/fastapi-views)
 ![Python](https://img.shields.io/pypi/pyversions/fastapi-views)
 ![Format](https://img.shields.io/pypi/format/fastapi-views)
 ![PyPi](https://img.shields.io/pypi/v/fastapi-views)
@@ -17,9 +17,9 @@
 ---
 Version: 0.3.0
 
-Documentation: https://performancemedia.github.io/fastapi-views/
+Documentation: https://asynq-io.github.io/fastapi-views/
 
-Repository: https://github.com/performancemedia/fastapi-views
+Repository: https://github.com/asynq-io/fastapi-views
 
 ---
 
