@@ -2,7 +2,7 @@
 name = "fastapi-views"
 version = "0.3.0"
 description = "FastAPI Class Views and utilities"
-authors = ["Radzim Kowalow <radzim.kowalow@performance-media.pl>"]
+authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
 readme = "README.md"
 packages = [{ include = "fastapi_views" }]
 
@@ -22,7 +22,12 @@ uvloop = { version = "^0.19.0", optional = true }
 uvicorn = { version = "^0.27.1", optional = true }
 
 [tool.poetry.extras]
-all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi"]
+all = [
+    "uvloop",
+    "starlette-exporter",
+    "uvicorn",
+    "opentelemetry-instrumentation-fastapi",
+]
 uvloop = ["uvloop"]
 prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
@@ -100,7 +105,13 @@ max-complexity = 8
 [tool.deptry.per_rule_ignores]
 DEP001 = ["opentelemetry", "yaml"]
 DEP002 = ["uvloop", "uvicorn", "opentelemetry-instrumentation-fastapi"]
-DEP003 = ["fastapi_views", "pydantic_core", "starlette", "typing_extensions", "annotated_types"]
+DEP003 = [
+    "fastapi_views",
+    "pydantic_core",
+    "starlette",
+    "typing_extensions",
+    "annotated_types",
+]
 
 [tool.semantic_release]
 version_variable = ['fastapi_views/_version.py:__version__']

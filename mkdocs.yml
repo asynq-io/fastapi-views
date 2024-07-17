@@ -16,7 +16,7 @@ theme:
   - search.highlight
   - content.tabs.link
 repo_name: performance-media/fastapi-views
-repo_url: https://github.com/performancemedia/fastapi-views
+repo_url: https://github.com/asynq-io/fastapi-views
 nav:
   - "FastAPI Views": index.md
   - "Features": features.md
