@@ -35,7 +35,7 @@ opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.2.0"
-ruff = "^0.1.11"
+ruff = "^0.5.4"
 deptry = "^0.12.0"
 bandit = "^1.7.4"
 python-semantic-release = "^7.33.2"
@@ -63,7 +63,7 @@ testpaths = ["./tests"]
 asyncio_mode = "auto"
 
 [tool.mypy]
-python_version = 3.9
+python_version = "3.9"
 ignore_missing_imports = true
 no_site_packages = true
 
@@ -99,7 +99,7 @@ docstring-code-format = true
 docstring-code-line-length = "dynamic"
 line-ending = "auto"
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 8
 
 [tool.deptry.per_rule_ignores]
