@@ -1,5 +1,15 @@
-name: Test
-on: [push, pull_request]
+name: Tests
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  schedule:
+    # cron every week on monday
+    - cron: "0 0 * * 1"
 jobs:
   lint:
     runs-on: ubuntu-20.04
