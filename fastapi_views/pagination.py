@@ -32,7 +32,15 @@ PageToken = Annotated[
 ]
 
 
-class Page(BaseSchema, Generic[T]):
+class TokenPage(BaseSchema, Generic[T]):
     items: list[T] = []
     next_page: Optional[PageToken] = None
     previous_page: Optional[PageToken] = None
+
+
+class NumberedPage(BaseSchema, Generic[T]):
+    items: list[T] = []
+    current_page: int
+    page_size: int
+    total_pages: Optional[int] = None
+    total_items: Optional[int] = None
