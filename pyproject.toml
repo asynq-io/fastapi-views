@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastapi-views"
-version = "0.3.0"
+version = "0.3.1"
 description = "FastAPI Class Views and utilities"
 authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
 readme = "README.md"
