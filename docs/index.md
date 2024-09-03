@@ -15,7 +15,7 @@
 *FastAPI Class Views and utilities*
 
 ---
-Version: 0.3.1
+Version: 0.3.2
 
 Documentation: https://asynq-io.github.io/fastapi-views/
 
