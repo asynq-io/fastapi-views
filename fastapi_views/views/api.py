@@ -166,7 +166,7 @@ class APIView(View, ErrorHandlerMixin):
     def serialize_response(
         self, action: Action, content: Any, status_code: int = HTTP_200_OK
     ):
-        if content and not isinstance(content, bytes):
+        if content is not None and not isinstance(content, bytes):
             serializer = self.get_serializer(action)
             content = serializer.serialize(content, **self.serializer_options)
         if self.response.status_code is None:
