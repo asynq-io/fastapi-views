@@ -51,7 +51,7 @@ httpx = ">=0.23.1,<0.28.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
-mkdocs-material = "^8.2.1"
+mkdocs-material = ">=8.2.1,<10.0.0"
 mkdocs-autorefs = ">=0.4.1,<1.1.0"
 mkdocs-gen-files = ">=0.4,<0.6"
 mkdocstrings = { version = ">=0.18", extras = ["python"] }
