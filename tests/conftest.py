@@ -16,7 +16,6 @@ from fastapi_views.views.api import (
     AsyncListAPIView,
     AsyncRetrieveAPIView,
 )
-from fastapi_views.views.viewsets import AsyncGenericViewSet
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -24,7 +23,7 @@ def event_loop():
     return asyncio.get_event_loop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def app():
     return FastAPI()
 
@@ -53,7 +52,7 @@ def dummy_data():
 def view_as_fixture(name: str, prefix: str = "/test"):
     def wrapper(cls):
         @pytest.fixture(name=name)
-        def _view_fixture(app: FastAPI):
+        def _view_fixture(app: FastAPI) -> None:
             router = ViewRouter()
             router.register_view(cls, prefix=prefix)
             app.include_router(router)
@@ -85,7 +84,7 @@ class TestDestroyView(AsyncDestroyAPIView):
     detail_route = ""
 
     async def destroy(self) -> None:
-        assert 1 == 1
+        pass
 
 
 @view_as_fixture("create_view")
@@ -114,10 +113,3 @@ class FakeRepository:
 
     async def list(self, *args, **kwargs):
         return [{"x": "test"}]
-        # return [DummySerializer(x="test")]
-
-
-@view_as_fixture("generic_viewset")
-class TestGenericViewSet(AsyncGenericViewSet):
-    repository_factory = FakeRepository
-    response_schema = DummySerializer

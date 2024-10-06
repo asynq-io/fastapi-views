@@ -1,6 +1,6 @@
 from typing import Any, ClassVar, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic import Field, create_model, field_validator
 from pydantic_core import Url
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -14,18 +14,28 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from fastapi_views.opentelemetry import get_context_trace_id
+from fastapi_views.opentelemetry import get_correlation_id
+from fastapi_views.schemas import BaseSchema
 
 
-class ErrorDetails(BaseModel):
+class ErrorDetails(BaseSchema):
     """
     Base Model for https://www.rfc-editor.org/rfc/rfc9457.html
     """
 
     _registry: ClassVar[dict[int, type["ErrorDetails"]]] = {}
 
-    def __init_subclass__(cls, **kwargs):
+    @classmethod
+    def get_status(cls) -> int:
+        return cls.model_fields["status"].get_default()
+
+    @classmethod
+    def get_model_for_status(cls, status: int) -> Optional[type["ErrorDetails"]]:
+        return cls._registry.get(status, cls)
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._registry[cls.get_status()] = cls
+        super().__init_subclass__(**kwargs)
 
     type: Union[Url, Literal["about:blank"]] = Field(
         "about:blank",
@@ -33,46 +43,22 @@ class ErrorDetails(BaseModel):
     )
     title: Optional[str] = Field("Bad Request", description="Error title")
     status: int = Field(HTTP_400_BAD_REQUEST, description="Error status")
-    detail: str = Field(
-        ...,
-        description="Error detail",
-    )
+    detail: str = Field(description="Error detail")
     instance: Optional[str] = Field(None, description="Requested instance")
-    trace_id: Optional[str] = Field(
-        None, alias="traceId", description="Optional trace id", validate_default=True
+    correlation_id: Optional[str] = Field(
+        description="Optional correlation id", default_factory=get_correlation_id
     )
-    errors: Optional[Any] = Field(None, description="Any additional multiple errors")
+    errors: list[Any] = Field(None, description="List of any additional errors")
 
     @field_validator("detail", mode="before")
     @classmethod
-    def validate_detail(cls, v):
+    def validate_detail(cls, v: Any) -> str:
         return v or "Internal Server Error"
 
-    @field_validator("trace_id", mode="before")
-    @classmethod
-    def validate_trace_id(cls, v):
-        if v is None:
-            return get_context_trace_id()
-        return v
 
-    @classmethod
-    def get_status(cls) -> int:
-        return cls.model_fields["status"].get_default()
-
-    @classmethod
-    def get_model_for_status(cls, status: int):
-        return cls._registry.get(status, cls)
-
-    def model_dump_json(self, **kwargs) -> str:
-        kwargs.setdefault("exclude_none", True)
-        return super().model_dump_json(**kwargs)
-
-    model_config = ConfigDict(
-        use_enum_values=True, populate_by_name=True, extra="allow"
-    )
-
-
-def create_error_model(name: str, type: str, title: str, status: int):
+def create_error_model(
+    name: str, type: str, title: str, status: int
+) -> type[ErrorDetails]:
     return create_model(
         name,
         __base__=ErrorDetails,

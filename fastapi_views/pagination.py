@@ -3,13 +3,13 @@ import os
 from typing import Annotated, Generic, Optional, TypeVar
 
 from annotated_types import Interval
-from pydantic import AfterValidator, PlainSerializer
+from pydantic import AfterValidator, Field, PlainSerializer
 
 from .schemas import BaseSchema
 
 T = TypeVar("T")
 
-MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", 500))
+MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "500"))
 
 PageSize = Annotated[int, Interval(gt=0, le=MAX_PAGE_SIZE)]
 
@@ -33,14 +33,14 @@ PageToken = Annotated[
 
 
 class TokenPage(BaseSchema, Generic[T]):
-    items: list[T] = []
+    items: list[T] = Field([])
     next_page: Optional[PageToken] = None
     previous_page: Optional[PageToken] = None
 
 
 class NumberedPage(BaseSchema, Generic[T]):
-    items: list[T] = []
-    current_page: int
-    page_size: int
-    total_pages: Optional[int] = None
-    total_items: Optional[int] = None
+    items: list[T] = Field([], description="Array of objects returned")
+    current_page: int = Field(description="Number of current page")
+    page_size: int = Field(description="Number of items returned")
+    total_pages: Optional[int] = Field(None, description="Total pages available")
+    total_items: Optional[int] = Field(None, description="Total items available")
