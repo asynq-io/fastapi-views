@@ -15,8 +15,6 @@ F = Callable[[P.args, P.kwargs], Any]
 
 
 class SerializerOptions(TypedDict, total=False):
-    validate: bool
-    from_attributes: bool | Literal["auto"]
     indent: int | None
     include: IncEx | None
     exclude: IncEx | None
