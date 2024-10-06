@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any
 
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
 from .errors.handlers import add_error_handlers
@@ -22,6 +24,33 @@ def simplify_operation_ids(app: FastAPI) -> None:
             route.operation_id = route.name.replace(" ", "")
 
 
+def custom_openapi(self: FastAPI) -> dict[str, Any]:
+    if not self.openapi_schema:
+        self.openapi_schema = get_openapi(
+            title=self.title,
+            version=self.version,
+            openapi_version=self.openapi_version,
+            description=self.description,
+            terms_of_service=self.terms_of_service,
+            contact=self.contact,
+            license_info=self.license_info,
+            routes=self.routes,
+            tags=self.openapi_tags,
+            servers=self.servers,
+        )
+        for method_item in self.openapi_schema.get("paths", {}).values():
+            for param in method_item.values():
+                responses = param.get("responses")
+                if "422" in responses:
+                    del responses["422"]
+        schemas = self.openapi_schema.get("components", {}).get("schemas", {})
+        for k in ("ValidationError", "HTTPValidationError"):
+            if k in schemas:
+                del schemas[k]
+
+    return self.openapi_schema
+
+
 def configure_app(
     app: FastAPI,
     enable_error_handlers: bool = True,
@@ -32,6 +61,7 @@ def configure_app(
 ) -> None:
     if enable_error_handlers:
         add_error_handlers(app)
+        app.openapi = functools.partial(custom_openapi, app)
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
     if simplify_openapi_ids:

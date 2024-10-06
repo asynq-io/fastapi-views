@@ -69,14 +69,14 @@ def create_error_model(
 
 
 NotFoundErrorDetails = create_error_model(
-    "NotFoundErrorDetails",
+    "NotFound",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4",
     title="Not Found",
     status=HTTP_404_NOT_FOUND,
 )
 
 UnprocessableEntityErrorDetails = create_error_model(
-    "UnprocessableEntityErrorDetails",
+    "UnprocessableEntity",
     type="https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
     title="Unprocessable Entity",
     status=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -84,7 +84,7 @@ UnprocessableEntityErrorDetails = create_error_model(
 
 
 BadRequestErrorDetails = create_error_model(
-    "BadRequestErrorDetails",
+    "BadRequest",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1",
     title="Bad Request",
     status=HTTP_400_BAD_REQUEST,
@@ -98,35 +98,35 @@ UnauthorizedErrorDetails = create_error_model(
 )
 
 ForbiddenErrorDetails = create_error_model(
-    "ForbiddenErrorDetails",
+    "Forbidden",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
     title="Forbidden",
     status=HTTP_403_FORBIDDEN,
 )
 
 TooManyRequestsErrorDetails = create_error_model(
-    "TooManyRequestsErrorDetails",
+    "TooManyRequests",
     type="https://datatracker.ietf.org/doc/html/rfc6585#section-4",
     title="Too many requests",
     status=HTTP_429_TOO_MANY_REQUESTS,
 )
 
 ConflictErrorDetails = create_error_model(
-    "ConflictErrorDetails",
+    "Conflict",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
     title="Conflict",
     status=HTTP_409_CONFLICT,
 )
 
 ServiceUnavailableErrorDetails = create_error_model(
-    "ServiceUnavailableErrorDetails",
+    "ServiceUnavailable",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.4",
     title="Service Unavailable",
     status=HTTP_503_SERVICE_UNAVAILABLE,
 )
 
 InternalServerErrorDetails = create_error_model(
-    "InternalServerErrorDetails",
+    "InternalServer",
     type="https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1",
     title="Internal Server Error",
     status=HTTP_500_INTERNAL_SERVER_ERROR,

@@ -2,7 +2,7 @@ from logging import getLogger
 
 from fastapi import Request
 from fastapi.applications import FastAPI
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import Response
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
@@ -54,4 +54,5 @@ def exception_handler(request: Request, exc: Exception) -> Response:
 def add_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(APIError, api_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(ResponseValidationError, exception_handler)
     app.add_exception_handler(Exception, exception_handler)

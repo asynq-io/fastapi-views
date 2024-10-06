@@ -23,7 +23,6 @@ from fastapi_views.errors.exceptions import (
     Conflict,
     NotFound,
 )
-from fastapi_views.serializer import serialize
 from fastapi_views.types import Action, P, SerializerOptions
 
 from .functools import VIEWSET_ROUTE_FLAG, errors
@@ -173,11 +172,11 @@ class APIView(View, ErrorHandlerMixin):
     """
 
     media_type = "application/json"
-
+    validate_response: bool = False
+    from_attributes: Optional[bool] = None
     response_schema: Any
     serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
-        "from_attributes": True,
     }
 
     @classmethod
@@ -185,17 +184,25 @@ class APIView(View, ErrorHandlerMixin):
         return cls.response_schema
 
     @classmethod
-    @functools.lru_cache(maxsize=None, typed=True)
+    @functools.cache
     def get_serializer(cls, action: Action) -> TypeAdapter:
         response_schema = cls.get_response_schema(action)
         return TypeAdapter(response_schema)
 
     def serialize_response(
-        self, action: Action, content: Any, status_code: int = HTTP_200_OK
+        self,
+        action: Action,
+        content: Any,
+        status_code: int = HTTP_200_OK,
     ) -> Response:
-        if content is not None and not isinstance(content, bytes):
+        if content is not None and not isinstance(content, (bytes, str)):
             serializer = self.get_serializer(action)
-            content = serialize(serializer, content, **self.serializer_options)
+            if self.validate_response:
+                content = serializer.validate_python(
+                    content, from_attributes=self.from_attributes
+                )
+
+            content = serializer.dump_json(content, **self.serializer_options)
         if self.response.status_code is None:
             self.response.status_code = status_code
         return self.get_response(content)
