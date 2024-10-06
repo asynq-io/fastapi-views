@@ -19,7 +19,8 @@ def import_from_string(path: str) -> Any:
     try:
         return getattr(module, obj)
     except AttributeError:
-        raise ImportError(f"{module_name} has no object {obj}") from None
+        msg = f"{module_name} has no object {obj}"
+        raise ImportError(msg) from None
 
 
 @cli.command(help="Generate OpenAPI documentation from app object")
@@ -29,10 +30,11 @@ def docs(
     format: str = typer.Option(
         "json", help="Output format. Valid options are 'yaml' and 'json'(default)"
     ),
-):
+) -> None:
     app_obj = import_from_string(app)
     if not isinstance(app_obj, FastAPI):
-        raise ValueError(f"{app} is not a FastAPI application object")
+        msg = f"{app} is not a FastAPI application object"
+        raise TypeError(msg)
     openapi = app_obj.openapi()
 
     if format == "yaml":
@@ -44,14 +46,10 @@ def docs(
 
         data = dumps(openapi, indent=4)
     else:
-        raise ValueError(f"Invalid format: {format}")
+        msg = f"Invalid format: {format}"
+        raise ValueError(msg)
 
     with open(out, "w") as f:
         f.write(data)
 
     typer.secho("OK", fg="green")
-
-
-@cli.callback()
-def callback():
-    pass

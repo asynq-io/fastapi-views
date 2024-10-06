@@ -12,18 +12,6 @@ from .api import (
     RetrieveAPIView,
     UpdateAPIView,
 )
-from .generics import (
-    AsyncGenericCreateView,
-    AsyncGenericDestroyView,
-    AsyncGenericListView,
-    AsyncGenericRetrieveView,
-    AsyncGenericUpdateView,
-    GenericCreateView,
-    GenericDestroyView,
-    GenericListView,
-    GenericRetrieveView,
-    GenericUpdateView,
-)
 
 
 class ReadOnlyAPIViewSet(ListAPIView, RetrieveAPIView, ABC):
@@ -99,79 +87,3 @@ class AsyncAPIViewSet(
     ABC,
 ):
     """AsyncAPIViewSet"""
-
-
-class GenericReadOnlyViewSet(GenericListView, GenericRetrieveView, ABC):
-    """GenericReadOnlyViewSet"""
-
-
-class AsyncGenericReadOnlyViewSet(AsyncGenericListView, AsyncGenericRetrieveView, ABC):
-    """AsyncGenericReadOnlyViewSet"""
-
-
-class GenericListCreateViewSet(GenericListView, GenericCreateView, ABC):
-    """GenericListCreateViewSet"""
-
-
-class AsyncGenericListCreateViewSet(AsyncGenericListView, AsyncGenericCreateView, ABC):
-    """AsyncGenericListCreateViewSet"""
-
-
-class GenericRetrieveUpdateViewSet(GenericRetrieveView, GenericUpdateView, ABC):
-    """GenericRetrieveUpdateViewSet"""
-
-
-class AsyncGenericRetrieveUpdateViewSet(
-    AsyncGenericRetrieveView, AsyncGenericUpdateView, ABC
-):
-    """AsyncGenericRetrieveUpdateViewSet"""
-
-
-class GenericRetrieveUpdateDestroyAPIViewSet(
-    GenericRetrieveView, GenericUpdateView, GenericDestroyView, ABC
-):
-    """GenericRetrieveUpdateDestroyAPIViewSet"""
-
-
-class AsyncGenericRetrieveUpdateDestroyAPIViewSet(
-    AsyncGenericRetrieveView, AsyncGenericUpdateView, AsyncGenericDestroyView, ABC
-):
-    """AsyncGenericRetrieveUpdateDestroyAPIViewSet"""
-
-
-class GenericListRetrieveUpdateDeleteViewSet(
-    GenericListView, GenericRetrieveView, GenericUpdateView, GenericDestroyView, ABC
-):
-    """GenericListRetrieveUpdateDeleteViewSet"""
-
-
-class AsyncGenericListRetrieveUpdateDeleteViewSet(
-    AsyncGenericListView,
-    AsyncGenericRetrieveView,
-    AsyncGenericUpdateView,
-    AsyncGenericDestroyView,
-    ABC,
-):
-    """AsyncGenericListRetrieveUpdateDeleteViewSet"""
-
-
-class GenericViewSet(
-    GenericListView,
-    GenericCreateView,
-    GenericRetrieveView,
-    GenericUpdateView,
-    GenericDestroyView,
-    ABC,
-):
-    """GenericViewSet"""
-
-
-class AsyncGenericViewSet(
-    AsyncGenericListView,
-    AsyncGenericCreateView,
-    AsyncGenericRetrieveView,
-    AsyncGenericUpdateView,
-    AsyncGenericDestroyView,
-    ABC,
-):
-    """AsyncGenericViewSet"""

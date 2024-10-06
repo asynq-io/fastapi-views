@@ -1,4 +1,3 @@
-import random
 from typing import Optional, TypeVar
 from uuid import UUID
 
@@ -6,7 +5,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
-from fastapi_views.healthcheck import HealthCheck
 from fastapi_views.views.viewsets import AsyncAPIViewSet
 
 
@@ -42,17 +40,10 @@ class MyViewSet(AsyncAPIViewSet):
         items.pop(id, None)
 
 
-async def healthcheck():
-    if random.randint(1, 5) == 3:  # nosec
-        raise Exception("Something went wrong")
-
-
-hc = HealthCheck(checks=[healthcheck])
-
 router = ViewRouter(prefix="/items")
 router.register_view(MyViewSet)
 
 app = FastAPI(title="My API")
 app.include_router(router)
 
-configure_app(app, healthcheck=hc)
+configure_app(app)
