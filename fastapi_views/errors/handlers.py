@@ -1,4 +1,5 @@
 from logging import getLogger
+from typing import cast
 
 from fastapi import Request
 from fastapi.applications import FastAPI
@@ -12,7 +13,8 @@ from .models import BadRequestErrorDetails, InternalServerErrorDetails
 logger = getLogger("exceptions.handler")
 
 
-def api_error_handler(request: Request, exc: APIError) -> Response:
+def api_error_handler(request: Request, exc: Exception) -> Response:
+    exc = cast(APIError, exc)
     model = exc.as_model()
     if model.instance is None:
         model.instance = request.url.path
@@ -24,13 +26,11 @@ def api_error_handler(request: Request, exc: APIError) -> Response:
     )
 
 
-def request_validation_handler(
-    request: Request, exc: RequestValidationError
-) -> Response:
-    model = BadRequestErrorDetails(
-        detail="Validation error",
+def request_validation_handler(request: Request, exc: Exception) -> Response:
+    model = BadRequestErrorDetails.new(
+        "Validation error",
         instance=request.url.path,
-        errors=exc.errors(),
+        errors=getattr(exc, "_errors", []),
     )
     return Response(
         content=model.model_dump_json(),
@@ -42,8 +42,8 @@ def request_validation_handler(
 def exception_handler(request: Request, exc: Exception) -> Response:
     logger.exception("Unhandled exception", exc_info=exc)
     return Response(
-        content=InternalServerErrorDetails(
-            detail="Unhandled server error",
+        content=InternalServerErrorDetails.new(
+            "Unhandled server error",
             instance=request.url.path,
         ).model_dump_json(),
         status_code=HTTP_500_INTERNAL_SERVER_ERROR,

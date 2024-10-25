@@ -61,7 +61,7 @@ def configure_app(
 ) -> None:
     if enable_error_handlers:
         add_error_handlers(app)
-        app.openapi = functools.partial(custom_openapi, app)
+        app.__setattr__("openapi", functools.partial(custom_openapi, app))
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
     if simplify_openapi_ids:

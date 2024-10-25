@@ -22,12 +22,10 @@ except ImportError:
         return None
 
 
-try:
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-except ImportError:
-    FastAPIInstrumentor = None
-
-
 def maybe_instrument_app(app: FastAPI, **options: Any) -> None:
-    if FastAPIInstrumentor is not None:
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
         FastAPIInstrumentor.instrument_app(app, **options)
+    except ImportError:
+        pass

@@ -13,6 +13,7 @@ from starlette.status import (
     HTTP_500_INTERNAL_SERVER_ERROR,
     HTTP_503_SERVICE_UNAVAILABLE,
 )
+from typing_extensions import Self
 
 from fastapi_views.opentelemetry import get_correlation_id
 from fastapi_views.schemas import BaseSchema
@@ -24,6 +25,10 @@ class ErrorDetails(BaseSchema):
     """
 
     _registry: ClassVar[dict[int, type["ErrorDetails"]]] = {}
+
+    @classmethod
+    def new(cls: type[Self], detail: str, **kwargs: Any) -> Self:
+        return cls(detail=detail, **kwargs)
 
     @classmethod
     def get_status(cls) -> int:
@@ -38,8 +43,7 @@ class ErrorDetails(BaseSchema):
         super().__init_subclass__(**kwargs)
 
     type: Union[Url, Literal["about:blank"]] = Field(
-        "about:blank",
-        description="Error type",
+        "about:blank", description="Error type"
     )
     title: Optional[str] = Field("Bad Request", description="Error title")
     status: int = Field(HTTP_400_BAD_REQUEST, description="Error status")
