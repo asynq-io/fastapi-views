@@ -14,12 +14,19 @@ class ItemSchema(BaseModel):
     price: int
 
 
+class ItemV2Schema(BaseModel):
+    detail: str
+    quantity: int
+    pricing: float
+
+
 items: dict[UUID, ItemSchema] = {}
 
 P = TypeVar("P", bound=type[BaseModel])
 
 
 class MyViewSet(AsyncAPIViewSet):
+    vendor_prefix = "vendor"
     api_component_name = "Item"
     response_schema = ItemSchema
 

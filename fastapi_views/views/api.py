@@ -1,15 +1,8 @@
 import asyncio
-import functools
 import inspect
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Generator
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Generic,
-    Union,
-)
+from typing import Any, Callable, ClassVar, Generic, TypeVar, Union
 
 from fastapi import Depends, Request, Response
 from opentelemetry.util.http import Optional
@@ -29,6 +22,8 @@ from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DetailViewMixin, ErrorHandlerMixin
 
 Endpoint = Callable[..., Union[Response, Awaitable[Response]]]
+T = TypeVar("T")
+TypeAdapterMap = dict[T, TypeAdapter[T]]
 
 
 class View(ABC):
@@ -49,7 +44,7 @@ class View(ABC):
     media_type: Optional[str] = None
     api_component_name: str
     default_response_class: type[Response] = Response
-    errors: tuple[APIError, ...] = ()
+    errors: tuple[type[APIError], ...] = ()
 
     def __init__(self, request: Request, response: Response) -> None:
         self.request = request
@@ -178,16 +173,21 @@ class APIView(View, ErrorHandlerMixin):
     serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
+    _serializers: ClassVar[TypeAdapterMap] = {}
+
+    @classmethod
+    def get_extra_kwargs(cls, action: Action) -> dict[str, Any]:  # noqa: ARG003
+        return {}
 
     @classmethod
     def get_response_schema(cls, action: Action) -> Any:  # noqa: ARG003
         return cls.response_schema
 
-    @classmethod
-    @functools.cache
-    def get_serializer(cls, action: Action) -> TypeAdapter:
-        response_schema = cls.get_response_schema(action)
-        return TypeAdapter(response_schema)
+    def get_serializer(self, action: Action) -> TypeAdapter:
+        response_schema = self.get_response_schema(action)
+        if response_schema not in self._serializers:
+            self._serializers[response_schema] = TypeAdapter(response_schema)
+        return self._serializers[response_schema]
 
     def serialize_response(
         self,
@@ -229,8 +229,10 @@ class BaseListAPIView(APIView):
             endpoint=cls.get_list_endpoint(),
             methods=["GET"],
             response_model=cls.get_response_schema("list"),
+            responses=errors(BadRequest),
             name=f"List {cls.get_name()}",
             operation_id=f"list_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("list"),
         )
         yield from super().get_api_actions(prefix)
 
@@ -284,10 +286,11 @@ class BaseRetrieveAPIView(APIView, DetailViewMixin):
             endpoint=cls.get_retrieve_endpoint(),
             path=cls.get_detail_route(action="retrieve"),
             methods=["GET"],
-            responses=errors(NotFound, BadRequest),
+            responses=errors(BadRequest, NotFound),
             response_model=cls.get_response_schema(action="retrieve"),
             name=f"Get {cls.get_name()}",
             operation_id=f"get_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("retrieve"),
         )
         yield from super().get_api_actions(prefix)
 
@@ -349,10 +352,11 @@ class BaseCreateAPIView(APIView):
             endpoint=cls.get_create_endpoint(),
             methods=["POST"],
             status_code=201,
-            responses=errors(Conflict, BadRequest),
+            responses=errors(BadRequest, Conflict),
             response_model=cls.get_response_schema(action="create"),
             name=f"Create {cls.get_name()}",
             operation_id=f"create_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("create"),
         )
         yield from super().get_api_actions(prefix)
 
@@ -414,10 +418,11 @@ class BaseUpdateAPIView(APIView, DetailViewMixin):
             path=cls.get_detail_route(action="update"),
             endpoint=cls.get_update_endpoint(),
             methods=["PUT"],
-            responses=errors(NotFound, BadRequest),
+            responses=errors(BadRequest, NotFound),
             response_model=cls.get_response_schema(action="update"),
             name=f"Update {cls.get_name()}",
             operation_id=f"update_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("update"),
         )
         yield from super().get_api_actions(prefix)
 
@@ -475,13 +480,14 @@ class BasePartialUpdateAPIView(APIView, DetailViewMixin):
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         yield cls.get_api_action(
             prefix=prefix,
-            path=cls.get_detail_route(action="update"),
+            path=cls.get_detail_route(action="partial_update"),
             endpoint=cls.get_partial_update_endpoint(),
             methods=["PATCH"],
-            responses=errors(NotFound, BadRequest),
-            response_model=cls.get_response_schema(action="update"),
+            responses=errors(BadRequest, NotFound),
+            response_model=cls.get_response_schema(action="partial_update"),
             name=f"Partial update {cls.get_name()}",
             operation_id=f"patch_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("partial_update"),
         )
 
         yield from super().get_api_actions(prefix)
@@ -551,6 +557,7 @@ class BaseDestroyAPIView(APIView, DetailViewMixin):
             status_code=HTTP_204_NO_CONTENT,
             name=f"Delete {cls.get_name()}",
             operation_id=f"delete_{cls.get_slug_name()}",
+            **cls.get_extra_kwargs("destroy"),
         )
         yield from super().get_api_actions(prefix)
 

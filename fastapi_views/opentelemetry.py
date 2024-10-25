@@ -7,12 +7,14 @@ if TYPE_CHECKING:
 
 try:
     from opentelemetry import trace
-    from opentelemetry.trace import format_span_id, format_trace_id
+    from opentelemetry.trace import format_trace_id
 
     def get_correlation_id() -> str | None:
         span = trace.get_current_span()
-        span_context = span.get_span_context()
-        return f"00-{format_trace_id(span_context.trace_id)}-{format_span_id(span_context.span_id)}-{span_context.trace_flags:02x}"
+        if span.is_recording():
+            span_context = span.get_span_context()
+            return format_trace_id(span_context.trace_id)
+        return None
 
 except ImportError:
 
