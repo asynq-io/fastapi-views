@@ -65,7 +65,7 @@ test = "pytest {args:tests}"
 check = [
     "ruff check ./fastapi_views",
     "ruff format --check ./fastapi_views",
-    "mypy --install-types --non-interactive {args:eventiq tests}",
+    "mypy --non-interactive {args:fastapi_views tests}",
     "bandit -r ./fastapi_views",
 ]
 

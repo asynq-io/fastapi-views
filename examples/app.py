@@ -26,7 +26,6 @@ P = TypeVar("P", bound=type[BaseModel])
 
 
 class MyViewSet(AsyncAPIViewSet):
-    vendor_prefix = "vendor"
     api_component_name = "Item"
     response_schema = ItemSchema
 
