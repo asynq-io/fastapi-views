@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, Protocol, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict, TypeVar
 
 from typing_extensions import ParamSpec
 
@@ -24,27 +24,3 @@ class SerializerOptions(TypedDict, total=False):
     exclude_none: bool
     round_trip: bool
     warnings: bool
-
-
-class Repository(Protocol[Entity]):
-    def retrieve(self, *args: Any, **kwargs: Any) -> Entity | None: ...
-
-    def create(self, entity: Entity, **kwargs: Any) -> Entity | None: ...
-
-    def update(self, entity: Entity, **kwargs: Any) -> Entity | None: ...
-
-    def delete(self, *args: Any, **kwargs: Any) -> None: ...
-
-    def list(self, *args: Any, **kwargs: Any) -> list[Entity]: ...
-
-
-class AsyncRepository(Protocol[Entity]):
-    async def retrieve(self, *args: Any, **kwargs: Any) -> Entity | None: ...
-
-    async def create(self, entity: Entity, **kwargs: Any) -> Entity | None: ...
-
-    async def update(self, entity: Entity, **kwargs: Any) -> Entity | None: ...
-
-    async def delete(self, *args: Any, **kwargs: Any) -> None: ...
-
-    async def list(self, *args: Any, **kwargs: Any) -> list[Entity]: ...

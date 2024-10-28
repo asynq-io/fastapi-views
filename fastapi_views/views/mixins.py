@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
 
 from starlette.status import HTTP_400_BAD_REQUEST
 
 from fastapi_views.errors.exceptions import APIError, NotFound
-from fastapi_views.types import Action, AsyncRepository, Repository
 
 if TYPE_CHECKING:
     from fastapi import Request
 
-R = TypeVar("R", bound=Union[AsyncRepository, Repository])
+    from fastapi_views.types import Action
 
 
 class DetailViewMixin:
