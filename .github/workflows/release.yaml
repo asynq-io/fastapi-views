@@ -19,6 +19,6 @@ jobs:
           curl -sSL https://install.python-poetry.org | python3 -
           poetry build
       - name: Publish
-        uses: pypa/gh-action-pypi-publish@v1.10.3
+        uses: pypa/gh-action-pypi-publish@v1.11.0
         with:
           password: ${{ secrets.PYPI_TOKEN }}
