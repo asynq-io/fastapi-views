@@ -55,7 +55,7 @@ mkdocs-material = ">=8.2.1,<10.0.0"
 mkdocs-autorefs = ">=0.4.1,<1.1.0"
 mkdocs-gen-files = ">=0.4,<0.6"
 mkdocstrings = { version = ">=0.18", extras = ["python"] }
-watchdog = ">=2.0,<4.0"
+watchdog = ">=2.0,<7.0"
 
 [tool.pytest.ini_options]
 addopts = "--cov=./fastapi_views --count=3"
