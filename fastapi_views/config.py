@@ -59,6 +59,7 @@ def configure_app(
     gzip_middleware_min_size: int | None = None,
     **tracing_options: Any,
 ) -> None:
+    maybe_instrument_app(app, **tracing_options)
     if enable_error_handlers:
         add_error_handlers(app)
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
@@ -68,5 +69,3 @@ def configure_app(
         simplify_operation_ids(app)
     if gzip_middleware_min_size:
         app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
-
-    maybe_instrument_app(app, **tracing_options)

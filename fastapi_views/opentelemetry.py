@@ -1,31 +1,40 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+CORRELATION_ID: ContextVar[str | None] = ContextVar("CORRELATION_ID", default=None)
+
 try:
-    from opentelemetry import trace
-    from opentelemetry.trace import format_trace_id
+    from opentelemetry.trace import Span, format_trace_id
+
+    def server_request_hook(span: Span, _scope: dict[str, Any]) -> None:
+        if span and span.is_recording():
+            span_context = span.get_span_context()
+            trace_id = format_trace_id(span_context.trace_id)
+            CORRELATION_ID.set(trace_id)
 
     def get_correlation_id() -> str | None:
-        span = trace.get_current_span()
-        if span.is_recording():
-            span_context = span.get_span_context()
-            return format_trace_id(span_context.trace_id)
-        return None
+        return CORRELATION_ID.get()
+
 
 except ImportError:
 
     def get_correlation_id() -> str | None:
         return None
 
+    def server_request_hook(span: Span, _scope: dict[str, Any]) -> None:
+        pass
+
 
 def maybe_instrument_app(app: FastAPI, **options: Any) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+        options.setdefault("server_request_hook", server_request_hook)
         FastAPIInstrumentor.instrument_app(app, **options)
     except ImportError:
         pass

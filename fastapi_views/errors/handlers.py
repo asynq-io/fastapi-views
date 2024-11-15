@@ -39,8 +39,7 @@ def request_validation_handler(request: Request, exc: Exception) -> Response:
     )
 
 
-def exception_handler(request: Request, exc: Exception) -> Response:
-    logger.exception("Unhandled exception", exc_info=exc)
+def exception_handler(request: Request, _exc: Exception) -> Response:
     return Response(
         content=InternalServerErrorDetails.new(
             "Unhandled server error",

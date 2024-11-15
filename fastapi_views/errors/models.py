@@ -52,7 +52,7 @@ class ErrorDetails(BaseSchema):
     correlation_id: Optional[str] = Field(
         description="Optional correlation id", default_factory=get_correlation_id
     )
-    errors: list[Any] = Field(None, description="List of any additional errors")
+    errors: list[Any] = Field([], description="List of any additional errors")
 
     @field_validator("detail", mode="before")
     @classmethod

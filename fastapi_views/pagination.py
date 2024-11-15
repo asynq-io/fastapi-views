@@ -11,6 +11,7 @@ T = TypeVar("T")
 
 MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "500"))
 
+PageNumber = Annotated[int, Interval(ge=0)]
 PageSize = Annotated[int, Interval(gt=0, le=MAX_PAGE_SIZE)]
 
 

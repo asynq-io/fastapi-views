@@ -18,13 +18,14 @@ class DetailViewMixin:
     raise_on_none: bool = True
     request: Request
     get_name: Callable[..., str]
+    error_message = "{} does not exist"
 
     @classmethod
     def get_detail_route(cls, action: Action) -> str:  # noqa: ARG003
         return cls.detail_route
 
     def raise_not_found_error(self) -> NoReturn:
-        msg = f"{self.get_name()} does not exist."
+        msg = self.error_message.format(self.get_name())
         raise NotFound(msg)
 
 
