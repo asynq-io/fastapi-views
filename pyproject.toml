@@ -37,7 +37,15 @@ fastapi-views = "fastapi_views.cli:cli"
 uvloop = ["uvloop"]
 prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
+cli = ["typer"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
+all = [
+    "uvloop",
+    "starlette-exporter",
+    "uvicorn",
+    "typer",
+    "opentelemetry-instrumentation-fastapi",
+]
 
 [tool.hatch.version]
 path = "fastapi_views/_version.py"
