@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
 
 from starlette.status import HTTP_400_BAD_REQUEST
 
-from fastapi_views.errors.exceptions import APIError, NotFound
+from fastapi_views.exceptions import APIError, NotFound
 
 if TYPE_CHECKING:
     from fastapi import Request

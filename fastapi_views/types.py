@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict, TypeVar
 from typing_extensions import ParamSpec
 
 if TYPE_CHECKING:
-    from pydantic.type_adapter import IncEx
+    from pydantic.main import IncEx
 
 Entity = TypeVar("Entity", bound=Any)
 Action = Literal["create", "list", "retrieve", "update", "destroy", "partial_update"]

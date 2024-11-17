@@ -25,8 +25,9 @@ class APIError(Exception):
         self.headers = headers
         self.kwargs = kwargs
 
-    def get_status(self) -> int:
-        return self.model.model_fields["status"].get_default()
+    @classmethod
+    def get_status(cls) -> int:
+        return cls.model.model_fields["status"].get_default()
 
     def as_model(self, **kwargs: Any) -> ErrorDetails:
         kwargs = {**self.kwargs, **kwargs}

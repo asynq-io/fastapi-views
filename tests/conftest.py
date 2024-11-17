@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 
 from fastapi_views import ViewRouter
-from fastapi_views.schemas import BaseSchema
+from fastapi_views.models import BaseSchema
 from fastapi_views.views.api import (
     AsyncCreateAPIView,
     AsyncDestroyAPIView,
@@ -93,23 +93,3 @@ class TestCreateView(AsyncCreateAPIView):
 
     async def create(self) -> Any:
         return DummySerializer(x="test")
-
-
-class FakeRepository:
-    async def retrieve(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def create(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def update(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def partial_update(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def delete(self, *args, **kwargs) -> None:
-        pass
-
-    async def list(self, *args, **kwargs):
-        return [{"x": "test"}]

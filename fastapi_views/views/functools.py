@@ -10,8 +10,8 @@ from fastapi_views.types import F, P
 from fastapi_views.views.mixins import ErrorHandlerMixin
 
 if TYPE_CHECKING:
-    from fastapi_views.errors.exceptions import APIError
-    from fastapi_views.errors.models import ErrorDetails
+    from fastapi_views.exceptions import APIError
+    from fastapi_views.models import ErrorDetails
 
 VIEWSET_ROUTE_FLAG = "_is_viewset_route"
 
@@ -30,7 +30,7 @@ override = annotate
 
 
 def errors(*exceptions: type[APIError]) -> dict[int, dict[str, type[ErrorDetails]]]:
-    return {e.model.get_status(): {"model": e.model} for e in exceptions}
+    return {e.get_status(): {"model": e.model} for e in exceptions}
 
 
 def throws(*exceptions: type[APIError]) -> Callable[..., F]:

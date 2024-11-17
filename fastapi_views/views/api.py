@@ -9,7 +9,7 @@ from pydantic.type_adapter import TypeAdapter
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate
 
-from fastapi_views.errors.exceptions import (
+from fastapi_views.exceptions import (
     APIError,
     BadRequest,
     Conflict,
@@ -67,6 +67,7 @@ class View(ABC):
             content = content.encode(self.response.charset)
         if isinstance(content, bytes):
             self.response.body = content
+            self.response.headers["Content-Length"] = str(len(content))
         return self.response
 
     @classmethod
@@ -123,7 +124,7 @@ class View(ABC):
         kwargs.setdefault("methods", ["GET"])
         kwargs.setdefault("operation_id", f"{cls.get_slug_name()}_{endpoint_name}")
         kwargs["responses"] = {
-            e.model.get_status(): {"model": e.model} for e in cls.errors
+            e.get_status(): {"model": e.model} for e in cls.errors
         } | kwargs.get("responses", {})
         return kwargs
 
@@ -146,7 +147,7 @@ class View(ABC):
         endpoint.kwargs = getattr(method, "kwargs", {})
 
 
-class APIView(View, ErrorHandlerMixin):
+class APIView(View, ErrorHandlerMixin, Generic[T]):
     """
     View with build-in json serialization via
     `serializer` and error handling
@@ -155,7 +156,7 @@ class APIView(View, ErrorHandlerMixin):
     content_type: str = "application/json"
     validate_response: bool = False
     from_attributes: Optional[bool] = None
-    response_schema: Any
+    response_schema: T
     serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
@@ -172,10 +173,10 @@ class APIView(View, ErrorHandlerMixin):
         return getattr(method, "kwargs", {}).get("status_code", default)
 
     @classmethod
-    def get_response_schema(cls, action: Optional[Action] = None) -> Any:  # noqa: ARG003
+    def get_response_schema(cls, action: Optional[Action] = None) -> T:  # noqa: ARG003
         return cls.response_schema
 
-    def get_serializer(self, action: Optional[Action] = None) -> TypeAdapter:
+    def get_serializer(self, action: Optional[Action] = None) -> TypeAdapter[T]:
         response_schema = self.get_response_schema(action)
         if response_schema not in self._serializers:
             self._serializers[response_schema] = TypeAdapter(response_schema)

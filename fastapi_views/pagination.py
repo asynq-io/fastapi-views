@@ -5,7 +5,7 @@ from typing import Annotated, Generic, Optional, TypeVar
 from annotated_types import Interval
 from pydantic import AfterValidator, Field, PlainSerializer
 
-from .schemas import BaseSchema
+from .models import BaseSchema
 
 T = TypeVar("T")
 

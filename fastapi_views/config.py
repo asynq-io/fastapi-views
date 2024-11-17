@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
-from .errors.handlers import add_error_handlers
+from .handlers import add_error_handlers
 from .opentelemetry import maybe_instrument_app
 from .prometheus import add_prometheus_middleware
 
@@ -56,7 +56,7 @@ def configure_app(
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
     simplify_openapi_ids: bool = True,
-    gzip_middleware_min_size: int | None = None,
+    gzip_middleware_min_size: int | None = 500,
     **tracing_options: Any,
 ) -> None:
     maybe_instrument_app(app, **tracing_options)

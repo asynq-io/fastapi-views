@@ -1,6 +1,9 @@
-from typing import Any, ClassVar, Literal, Optional, Union
+from datetime import datetime
+from typing import Any, Literal, Optional, Union
+from uuid import UUID
 
-from pydantic import Field, create_model, field_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic.alias_generators import to_camel
 from pydantic_core import Url
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -15,8 +18,32 @@ from starlette.status import (
 )
 from typing_extensions import Self
 
-from fastapi_views.opentelemetry import get_correlation_id
-from fastapi_views.schemas import BaseSchema
+from .opentelemetry import get_correlation_id
+
+
+class BaseSchema(BaseModel):
+    model_config = ConfigDict(
+        use_enum_values=True, populate_by_name=True, from_attributes=True
+    )
+
+
+class CamelCaseSchema(BaseSchema):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+
+class IdSchema(BaseSchema):
+    id: UUID = Field(..., description="Entity ID")
+
+
+class CreatedUpdatedSchema(BaseSchema):
+    created_at: datetime = Field(..., description="Timestamp when entity was created")
+    updated_at: datetime = Field(
+        ..., description="Timestamp when entity was last updated"
+    )
+
+
+class IdCreatedUpdatedSchema(IdSchema, CreatedUpdatedSchema):
+    pass
 
 
 class ErrorDetails(BaseSchema):
@@ -24,23 +51,9 @@ class ErrorDetails(BaseSchema):
     Base Model for https://www.rfc-editor.org/rfc/rfc9457.html
     """
 
-    _registry: ClassVar[dict[int, type["ErrorDetails"]]] = {}
-
     @classmethod
     def new(cls: type[Self], detail: str, **kwargs: Any) -> Self:
         return cls(detail=detail, **kwargs)
-
-    @classmethod
-    def get_status(cls) -> int:
-        return cls.model_fields["status"].get_default()
-
-    @classmethod
-    def get_model_for_status(cls, status: int) -> Optional[type["ErrorDetails"]]:
-        return cls._registry.get(status, cls)
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        cls._registry[cls.get_status()] = cls
-        super().__init_subclass__(**kwargs)
 
     type: Union[Url, Literal["about:blank"]] = Field(
         "about:blank", description="Error type"
