@@ -9,14 +9,13 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 
 from fastapi_views import ViewRouter
-from fastapi_views.schemas import BaseSchema
+from fastapi_views.models import BaseSchema
 from fastapi_views.views.api import (
     AsyncCreateAPIView,
     AsyncDestroyAPIView,
     AsyncListAPIView,
     AsyncRetrieveAPIView,
 )
-from fastapi_views.views.viewsets import AsyncGenericViewSet
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -24,7 +23,7 @@ def event_loop():
     return asyncio.get_event_loop()
 
 
-@pytest.fixture()
+@pytest.fixture
 def app():
     return FastAPI()
 
@@ -53,7 +52,7 @@ def dummy_data():
 def view_as_fixture(name: str, prefix: str = "/test"):
     def wrapper(cls):
         @pytest.fixture(name=name)
-        def _view_fixture(app: FastAPI):
+        def _view_fixture(app: FastAPI) -> None:
             router = ViewRouter()
             router.register_view(cls, prefix=prefix)
             app.include_router(router)
@@ -85,7 +84,7 @@ class TestDestroyView(AsyncDestroyAPIView):
     detail_route = ""
 
     async def destroy(self) -> None:
-        assert 1 == 1
+        pass
 
 
 @view_as_fixture("create_view")
@@ -94,30 +93,3 @@ class TestCreateView(AsyncCreateAPIView):
 
     async def create(self) -> Any:
         return DummySerializer(x="test")
-
-
-class FakeRepository:
-    async def retrieve(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def create(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def update(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def partial_update(self, *args, **kwargs):
-        return DummySerializer(x="test")
-
-    async def delete(self, *args, **kwargs) -> None:
-        pass
-
-    async def list(self, *args, **kwargs):
-        return [{"x": "test"}]
-        # return [DummySerializer(x="test")]
-
-
-@view_as_fixture("generic_viewset")
-class TestGenericViewSet(AsyncGenericViewSet):
-    repository_factory = FakeRepository
-    response_schema = DummySerializer

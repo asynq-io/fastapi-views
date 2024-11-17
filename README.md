@@ -3,18 +3,17 @@
 ![Tests](https://github.com/asynq-io/fastapi-views/workflows/Tests/badge.svg)
 ![Build](https://github.com/asynq-io/fastapi-views/workflows/Publish/badge.svg)
 ![License](https://img.shields.io/github/license/asynq-io/fastapi-views)
+![Mypy](https://img.shields.io/badge/mypy-checked-blue)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v1.json)](https://github.com/charliermarsh/ruff)
+[![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://docs.pydantic.dev/latest/contributing/#badges)
+[![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 ![Python](https://img.shields.io/pypi/pyversions/fastapi-views)
 ![Format](https://img.shields.io/pypi/format/fastapi-views)
 ![PyPi](https://img.shields.io/pypi/v/fastapi-views)
-![Mypy](https://img.shields.io/badge/mypy-checked-blue)
-![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-[![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
 *FastAPI Class Views and utilities*
 
 ---
-Version: 0.3.2 
-
 Documentation: https://asynq-io.github.io/fastapi-views/
 
 Repository: https://github.com/asynq-io/fastapi-views
@@ -32,7 +31,7 @@ pip install fastapi-views
 ```python
 from typing import Optional
 from uuid import UUID
-
+from fastapi import FastAPI
 from fastapi_views import Serializer, ViewRouter
 from fastapi_views.views.viewsets import AsyncAPIViewSet
 
@@ -49,7 +48,7 @@ items = {}
 class MyViewSet(AsyncAPIViewSet):
     api_component_name = "Item"
     serializer = ItemSchema
-    
+
     async def list(self):
         return list(items.values())
 
@@ -68,8 +67,9 @@ class MyViewSet(AsyncAPIViewSet):
 
 router = ViewRouter(prefix="/items")
 router.register_view(MyViewSet)
-# in app.py
-# app.include_router(router)
+
+app = FastAPI()
+app.include_router(router)
 
 ```
 
@@ -77,12 +77,13 @@ router.register_view(MyViewSet)
 
 - Class Based Views
   - APIViews
-  - GenericViews
   - ViewSets
 - Both async and sync function support
 - No dependencies on ORM
-- Openapi id simplification
-- 'Smart' and fast serialization using orjson
-- Http Problem Details implementation
+- OpenAPI operation id simplification
+- 'Smart' and fast serialization using Pydantic v2
+- Http Problem Details implementation (both models & exception classes)
 - Automatic prometheus metrics exporter
-- Pluggable healthcheck helper
+- Optional Opentelemetry instrumentation with `correlation_id` in error responses
+- CLI for generating OpenAPI documentation file
+- Pagination types & schemas

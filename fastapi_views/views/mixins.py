@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from functools import cached_property
-from typing import Any, Callable, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
 
-from fastapi import Request
-from pydantic import BaseModel
 from starlette.status import HTTP_400_BAD_REQUEST
 
-from ..errors.exceptions import APIError, NotFound
-from ..schemas import IdSchema
-from ..types import AsyncRepository, Repository
+from fastapi_views.exceptions import APIError, NotFound
 
-R = TypeVar("R", bound=Union[AsyncRepository, Repository])
+if TYPE_CHECKING:
+    from fastapi import Request
+
+    from fastapi_views.types import Action
 
 
 class DetailViewMixin:
@@ -20,13 +18,15 @@ class DetailViewMixin:
     raise_on_none: bool = True
     request: Request
     get_name: Callable[..., str]
+    error_message = "{} does not exist"
 
     @classmethod
-    def get_detail_route(cls, action: str):
+    def get_detail_route(cls, action: Action) -> str:  # noqa: ARG003
         return cls.detail_route
 
-    def raise_not_found_error(self):
-        raise NotFound(f"{self.get_name()} does not exist.")
+    def raise_not_found_error(self) -> NoReturn:
+        msg = self.error_message.format(self.get_name())
+        raise NotFound(msg)
 
 
 class _Sentinel(Exception):
@@ -36,12 +36,12 @@ class _Sentinel(Exception):
 class ErrorHandlerMixin:
     request: Request
 
-    raises: dict[type[Exception], str | dict[str, Any]] = {}
+    raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {}
 
     def get_error_message(self, key: type[Exception]) -> str | dict[str, Any]:
         return self.raises.get(key, {})
 
-    def handle_error(self, exc: Exception, **kwargs):
+    def handle_error(self, exc: Exception, **kwargs: Any) -> NoReturn:
         kw = self.get_error_message(type(exc))
         if isinstance(kw, str):
             kwargs["detail"] = kw
@@ -55,20 +55,3 @@ class ErrorHandlerMixin:
 
     def get_exception_class(self) -> tuple[type[Exception], ...] | type[Exception]:
         return tuple(self.raises.keys()) or _Sentinel
-
-
-class GenericViewMixin(ErrorHandlerMixin, Generic[R]):
-    repository_factory: Callable[..., R]
-    params: type[BaseModel] = BaseModel
-
-    @cached_property
-    def repository(self) -> R:
-        return self.repository_factory()
-
-    @classmethod
-    def get_params(cls, action: str):
-        return cls.params
-
-
-class GenericDetailViewMixin(GenericViewMixin[R], DetailViewMixin):
-    pk: type[BaseModel] = IdSchema

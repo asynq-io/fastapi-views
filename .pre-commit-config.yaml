@@ -1,15 +1,4 @@
 repos:
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.1.0
-    hooks:
-      - id: pyupgrade
-        args: ["--py39-plus"]
-
-  - repo: https://github.com/asottile/yesqa
-    rev: v1.2.3
-    hooks:
-      - id: yesqa
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
     hooks:
@@ -20,7 +9,7 @@ repos:
         args: [--allow-multiple-documents]
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.5.4"
+    rev: "v0.6.9"
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -33,18 +22,7 @@ repos:
         args: ["--skip", "B101"]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.2.0
+    rev: v1.11.2
     hooks:
       - id: mypy
-
-  - repo: https://github.com/fpgmaas/deptry.git
-    rev: 0.12.0
-    hooks:
-      - id: deptry
-
-  - repo: https://github.com/python-poetry/poetry
-    rev: 1.4.0
-    hooks:
-      - id: poetry-check
-      - id: poetry-lock
-        args: ["--no-update"]
+        args: ["--install-types", "--non-interactive"]

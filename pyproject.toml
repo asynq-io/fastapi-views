@@ -1,71 +1,105 @@
-[tool.poetry]
-name = "fastapi-views"
-version = "0.3.2"
-description = "FastAPI Class Views and utilities"
-authors = ["Radzim Kowalow <rarha_eu@protonmail.com>"]
-readme = "README.md"
-packages = [{ include = "fastapi_views" }]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
+[project]
+name = "fastapi-views"
+dynamic = ["version"]
+description = 'FastAPI Class Views and utilities'
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+keywords = ["fastapi", "views", "asyncio"]
+
+authors = [{ name = "RaRhAeu", email = "rarha_eu@protonmail.com" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = ["fastapi", "pydantic>2.0,<3"]
+
+[project.urls]
+Documentation = "https://github.com/asynq-io/fastapi-views#readme"
+Issues = "https://github.com/asynq-io/fastapi-views/issues"
+Source = "https://github.com/asynq-io/fastapi-views"
+
+[project.scripts]
 fastapi-views = "fastapi_views.cli:cli"
 
-[tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-typer = "^0.9.0"
-fastapi = "^0.110.1"
-pydantic = ">=2.0,<3.0"
-pydantic-settings = ">=2.0,<3.0"
-orjson = "^3.9.10"
-opentelemetry-instrumentation-fastapi = { version = "*", optional = true }
-starlette-exporter = { version = "^0.21.0", optional = true }
-uvloop = { version = "^0.19.0", optional = true }
-uvicorn = { version = ">=0.27.1,<0.33.0", optional = true }
-
-[tool.poetry.extras]
+[project.optional-dependencies]
+uvloop = ["uvloop"]
+prometheus = ["starlette-exporter"]
+uvicorn = ["uvicorn"]
+cli = ["typer"]
+opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 all = [
     "uvloop",
     "starlette-exporter",
     "uvicorn",
+    "typer",
     "opentelemetry-instrumentation-fastapi",
 ]
-uvloop = ["uvloop"]
-prometheus = ["starlette-exporter"]
-uvicorn = ["uvicorn"]
-opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.2.0"
-ruff = "^0.5.4"
-deptry = "^0.12.0"
-bandit = "^1.7.4"
-python-semantic-release = "^7.33.2"
+[tool.hatch.version]
+path = "fastapi_views/_version.py"
 
-[tool.poetry.group.test.dependencies]
-pytest = "^8.0.0"
-pytest-asyncio = "^0.21.2"
-pytest-cov = "^4.0.0"
-pytest-sugar = "^0.9.7"
-pytest-repeat = "^0.9.3"
-asgi-lifespan = "^2.0.0"
-httpx = ">=0.23.1,<0.28.0"
-
-[tool.poetry.group.docs.dependencies]
-mkdocs = "^1.4.2"
-mkdocs-material = ">=8.2.1,<10.0.0"
-mkdocs-autorefs = ">=0.4.1,<1.1.0"
-mkdocs-gen-files = ">=0.4,<0.6"
-mkdocstrings = { version = ">=0.18", extras = ["python"] }
-watchdog = ">=2.0,<4.0"
+[tool.hatch.envs.default]
+dependencies = [
+    "uvloop",
+    "uvicorn",
+    "starlette-exporter",
+    "opentelemetry-sdk",
+    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-logging",
+    "mypy",
+    "ruff",
+    "bandit",
+    "deptry",
+    "asgi-lifespan",
+    "httpx",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-sugar",
+    "pytest-repeat",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+check = [
+    "ruff check ./fastapi_views",
+    "ruff format --check ./fastapi_views",
+    "mypy --install-types --non-interactive {args:fastapi_views tests}",
+    "bandit -r ./fastapi_views",
+]
 
 [tool.pytest.ini_options]
-addopts = "--cov=./fastapi_views --count=3"
-testpaths = ["./tests"]
 asyncio_mode = "auto"
+addopts = "--cov=./fastapi_views"
+testpaths = ["./tests"]
+filterwarnings = "ignore::DeprecationWarning"
+
+[tool.pyright]
+venvPath = ".venv"
+venv = "fastapi-views"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+follow_imports = "normal"
 ignore_missing_imports = true
-no_site_packages = true
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+warn_no_return = false
+warn_unused_ignores = true
 
 [tool.ruff]
 target-version = "py39"
@@ -74,58 +108,36 @@ line-length = 88
 indent-width = 4
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "C",   # flake8-comprehensions
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-    "SIM", # flake8-simplify
-]
+select = ["ALL"]
+
 ignore = [
-    "B008", # do not perform function calls in argument defaults
-    "E501", # line too long
-]
-fixable = ["ALL"]
-unfixable = []
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-docstring-code-format = true
-docstring-code-line-length = "dynamic"
-line-ending = "auto"
-
-[tool.ruff.lint.mccabe]
-max-complexity = 8
-
-[tool.deptry.per_rule_ignores]
-DEP001 = ["opentelemetry", "yaml"]
-DEP002 = ["uvloop", "uvicorn", "opentelemetry-instrumentation-fastapi"]
-DEP003 = [
-    "fastapi_views",
-    "pydantic_core",
-    "starlette",
-    "typing_extensions",
-    "annotated_types",
+    "A001",
+    "A002",
+    "ARG002",
+    "ARG004",
+    "ASYNC109",
+    "ANN401",
+    "B008",     # do not perform function calls in argument defaults
+    "BLE001",
+    "COM812",
+    "D",
+    "E501",     # line too long
+    "FA100",
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "ISC001",
+    "N818",
+    "PLR0913",
+    "PLR2004",
+    "PTH123",
+    "S108",
 ]
 
-[tool.semantic_release]
-version_variable = ['fastapi_views/_version.py:__version__']
-version_toml = 'pyproject.toml:tool.poetry.version'
-version_pattern = [
-    'docs/index.md:Version: (\d+\.\d+\.\d+)',
-    'README.md:Version: (\d+\.\d+\.\d+)',
-]
-upload_to_repository = false
-major_on_zero = true
-hvcs = "github"
-commit_message = "Bump version: {version}"
-tag_commit = false
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
+"examples/*" = ["S101", "ANN001", "ANN201", "INP001", "T201", "EM101", "TRY003"]
+
+[tool.bandit]
+skips = ['B101']

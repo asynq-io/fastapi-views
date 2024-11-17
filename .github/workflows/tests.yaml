@@ -2,49 +2,31 @@ name: Tests
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     types:
       - opened
       - synchronize
   schedule:
     # cron every week on monday
-    - cron: "0 0 * * 1"
-jobs:
-  lint:
-    runs-on: ubuntu-20.04
-    name: lint
-    steps:
-      - uses: actions/checkout@master
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - run: sudo apt-get update && sudo apt-get install -y curl
-      - run: curl -sSL https://install.python-poetry.org | POETRY_VERSION=1.4.1 python3 -
-      - run: poetry install --all-extras
-      - run: poetry check
-      - run: poetry run ruff check ./fastapi_views
-      - run: poetry run ruff format ./fastapi_views --check
-      - run: poetry run mypy ./fastapi_views
-      - run: poetry run deptry ./fastapi_views
-      - run: poetry run bandit -r ./fastapi_views
+    - cron: "0 0 * * 2"
 
-  build-unix:
-    timeout-minutes: 30
+jobs:
+  tests:
     strategy:
       matrix:
-        os: ["ubuntu-20.04"]
-        python: ["3.9", "3.10", "3.11", "3.12"]
-
-    runs-on: ${{ matrix.os }}
-    name: test on ${{ matrix.python }} - ${{ matrix.os }}
-
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    name: "Python ${{ matrix.python-version }}"
+    runs-on: "ubuntu-20.04"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
-      - run: sudo apt-get update && sudo apt-get install -y gcc curl
-      - run: curl -sSL https://install.python-poetry.org | python3 -
-      - run: poetry install --all-extras
-      - run: poetry run pytest --cov=./fastapi_views --cov-report=xml -v ./tests
+          python-version: ${{ matrix.python-version }}
+      - name: Install Hatch
+        run: pipx install hatch
+      - name: Ruff
+        if: matrix.python-version == '3.13'
+        run: hatch run default:check
+      - name: Pytest
+        run: hatch run default:test

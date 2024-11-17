@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .models import (
     BadRequestErrorDetails,
     ConflictErrorDetails,
@@ -16,15 +18,18 @@ from .models import (
 class APIError(Exception):
     model: type[ErrorDetails] = ErrorDetails
 
-    def __init__(self, detail: str, headers: dict[str, str] | None = None, **kwargs):
+    def __init__(
+        self, detail: str, headers: dict[str, str] | None = None, **kwargs: Any
+    ) -> None:
         self.detail = detail
         self.headers = headers
         self.kwargs = kwargs
 
-    def get_status(self) -> int:
-        return self.model.model_fields["status"].get_default()
+    @classmethod
+    def get_status(cls) -> int:
+        return cls.model.model_fields["status"].get_default()
 
-    def as_model(self, **kwargs) -> ErrorDetails:
+    def as_model(self, **kwargs: Any) -> ErrorDetails:
         kwargs = {**self.kwargs, **kwargs}
         return self.model(detail=self.detail, **kwargs)
 
