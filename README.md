@@ -29,48 +29,57 @@ pip install fastapi-views
 ## Usage
 
 ```python
-from typing import Optional
+from typing import ClassVar, Optional
 from uuid import UUID
+
 from fastapi import FastAPI
-from fastapi_views import Serializer, ViewRouter
+from pydantic import BaseModel
+
+from fastapi_views import ViewRouter, configure_app
 from fastapi_views.views.viewsets import AsyncAPIViewSet
 
 
-class ItemSchema(Serializer):
+class UpdateItemSchema(BaseModel):
+    name: str
+    price: int
+
+
+class ItemSchema(BaseModel):
     id: UUID
     name: str
     price: int
 
 
-items = {}
-
-
 class MyViewSet(AsyncAPIViewSet):
     api_component_name = "Item"
-    serializer = ItemSchema
+    response_schema = ItemSchema
+    items: ClassVar[dict[UUID, ItemSchema]] = {}
 
-    async def list(self):
-        return list(items.values())
+    async def list(self) -> list[ItemSchema]:
+        return list(self.items.values())
 
     async def create(self, item: ItemSchema) -> ItemSchema:
-        items[item.id] = item
+        self.items[item.id] = item
         return item
 
     async def retrieve(self, id: UUID) -> Optional[ItemSchema]:
-        return items.get(id)
+        return self.items.get(id)
 
-    async def update(self, item: ItemSchema):
-        items[item.id] = item
+    async def update(self, id: UUID, item: UpdateItemSchema) -> ItemSchema:
+        self.items[id] = ItemSchema(id=id, name=item.name, price=item.price)
+        return self.items[id]
 
     async def destroy(self, id: UUID) -> None:
-        items.pop(id, None)
+        self.items.pop(id, None)
+
 
 router = ViewRouter(prefix="/items")
 router.register_view(MyViewSet)
 
-app = FastAPI()
+app = FastAPI(title="My API")
 app.include_router(router)
 
+configure_app(app)
 ```
 
 ## Features

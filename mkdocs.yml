@@ -3,27 +3,28 @@ site_description: "FastAPI Class Views and other utils"
 theme:
   name: "material"
   palette:
-  - scheme: default
-    toggle:
-      icon: material/toggle-switch
-      name: Switch to dark mode
-  - scheme: slate
-    toggle:
-      icon: material/toggle-switch-off-outline
-      name: Switch to light mode
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to light mode
   features:
-  - search.suggest
-  - search.highlight
-  - content.tabs.link
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
 repo_name: performance-media/fastapi-views
 repo_url: https://github.com/asynq-io/fastapi-views
 nav:
   - "FastAPI Views": index.md
-  - "Features": features.md
-  - "Usage": usage.md
+  - "Usage":
+      - "Basic": usage/basic.md
+      - "Viewset": usage/viewset.md
+      - "Opentelemetry": usage/opentelemetry.md
   - "Reference":
       - "APIViews": reference/views.md
-      - "Generic Views": reference/generics.md
       - "View sets": reference/viewsets.md
 
 markdown_extensions:
