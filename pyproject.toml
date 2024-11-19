@@ -69,6 +69,11 @@ dependencies = [
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocs-autorefs",
+    "mkdocstrings[python]",
+    "watchdog",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
@@ -78,6 +83,7 @@ check = [
     "mypy --install-types --non-interactive {args:fastapi_views tests}",
     "bandit -r ./fastapi_views",
 ]
+publish-docs = ["mkdocs gh-deploy --force"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

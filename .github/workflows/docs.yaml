@@ -1,10 +1,9 @@
 name: docs
 on:
-  push:
-    branches:
-      - master
-      - main
-      - feat/docs-page
+  release:
+    types:
+      - created
+
 permissions:
   contents: write
 jobs:
@@ -14,12 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: ${{ matrix.python-version }}
+      - name: Install Hatch
+        run: pipx install hatch
       - uses: actions/cache@v4
         with:
           key: ${{ github.ref }}
           path: .cache
-      - run: sudo apt-get update && sudo apt-get install -y curl
-      - run: curl -sSL https://install.python-poetry.org | python3 -
-      - run: poetry install
-      - run: poetry run mkdocs gh-deploy --force
+      - run: hatch run default:docs
