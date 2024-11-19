@@ -39,6 +39,11 @@ from fastapi_views import ViewRouter, configure_app
 from fastapi_views.views.viewsets import AsyncAPIViewSet
 
 
+class UpdateItemSchema(BaseModel):
+    name: str
+    price: int
+
+
 class ItemSchema(BaseModel):
     id: UUID
     name: str
@@ -60,8 +65,9 @@ class MyViewSet(AsyncAPIViewSet):
     async def retrieve(self, id: UUID) -> Optional[ItemSchema]:
         return self.items.get(id)
 
-    async def update(self, item: ItemSchema) -> None:
-        self.items[item.id] = item
+    async def update(self, id: UUID, item: UpdateItemSchema) -> ItemSchema:
+        self.items[id] = ItemSchema(id=id, name=item.name, price=item.price)
+        return self.items[id]
 
     async def destroy(self, id: UUID) -> None:
         self.items.pop(id, None)
