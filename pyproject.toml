@@ -83,7 +83,7 @@ check = [
     "mypy --install-types --non-interactive {args:fastapi_views tests}",
     "bandit -r ./fastapi_views",
 ]
-publish-docs = ["mkdocs gh-deploy --force"]
+docs = ["mkdocs gh-deploy --force"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
