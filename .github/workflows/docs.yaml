@@ -1,8 +1,9 @@
 name: docs
 on:
-  release:
-    types:
-      - created
+  push:
+    branches:
+      - main
+      - update/docs
 
 permissions:
   contents: write
