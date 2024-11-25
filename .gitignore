@@ -36,3 +36,4 @@ site/
 .tox/
 openapi.json
 openapi.yaml
+.ropeproject/

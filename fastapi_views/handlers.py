@@ -1,8 +1,8 @@
 from logging import getLogger
-from typing import cast
 
 from fastapi import Request
 from fastapi.applications import FastAPI
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import Response
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
@@ -13,8 +13,7 @@ from .models import BadRequestErrorDetails, InternalServerErrorDetails
 logger = getLogger("exceptions.handler")
 
 
-def api_error_handler(request: Request, exc: Exception) -> Response:
-    exc = cast(APIError, exc)
+def api_error_handler(request: Request, exc: APIError) -> Response:
     model = exc.as_model()
     if model.instance is None:
         model.instance = request.url.path
@@ -26,11 +25,13 @@ def api_error_handler(request: Request, exc: Exception) -> Response:
     )
 
 
-def request_validation_handler(request: Request, exc: Exception) -> Response:
+def request_validation_handler(
+    request: Request, exc: RequestValidationError
+) -> Response:
     model = BadRequestErrorDetails.new(
-        "Validation error",
+        "Request validation error",
         instance=request.url.path,
-        errors=getattr(exc, "_errors", []),
+        errors=jsonable_encoder(exc.errors()),
     )
     return Response(
         content=model.model_dump_json(),
@@ -51,7 +52,7 @@ def exception_handler(request: Request, _exc: Exception) -> Response:
 
 
 def add_error_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(APIError, api_error_handler)
-    app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(APIError, api_error_handler)  # type: ignore[arg-type, unused-ignore]
+    app.add_exception_handler(RequestValidationError, request_validation_handler)  # type: ignore[arg-type, unused-ignore]
     app.add_exception_handler(ResponseValidationError, exception_handler)
     app.add_exception_handler(Exception, exception_handler)
