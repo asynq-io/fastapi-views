@@ -59,7 +59,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi",
     "opentelemetry-instrumentation-logging",
     "mypy",
-    "ruff",
+    "ruff==0.8.0",
     "bandit",
     "deptry",
     "asgi-lifespan",
