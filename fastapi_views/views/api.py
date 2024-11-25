@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Generator
 from typing import Any, Callable, ClassVar, Generic, Optional, TypeVar, Union
 
 from fastapi import Depends, Request, Response
+from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate
@@ -170,7 +171,10 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         if action:
             kwargs.setdefault("name", f"{action.title()} {cls.get_name()}")
             kwargs.setdefault("operation_id", f"{action}_{cls.get_slug_name()}")
-        kwargs.setdefault("response_model", cls.get_response_schema(action))
+
+        status_code = kwargs.get("status_code", HTTP_200_OK)
+        if is_body_allowed_for_status_code(status_code):
+            kwargs.setdefault("response_model", cls.get_response_schema(action))
         kwargs.setdefault("responses", errors(*extra_errors, *cls.default_errors))
         return super().get_api_action(endpoint, prefix=prefix, path=path, **kwargs)
 
@@ -549,6 +553,7 @@ class BaseDestroyAPIView(APIView, DetailViewMixin):
             path=cls.get_detail_route(action="destroy"),
             endpoint=cls.get_destroy_endpoint(status_code),
             methods=["DELETE"],
+            status_code=status_code,
             response_class=Response,
             action="destroy",
             responses=errors(*cls.default_errors),
