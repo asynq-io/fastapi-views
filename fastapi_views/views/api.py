@@ -117,6 +117,9 @@ class View(ABC):
         kwargs["responses"] = {
             e.get_status(): {"model": e.model} for e in cls.errors
         } | kwargs.get("responses", {})
+        status_code = kwargs.get("status_code", HTTP_200_OK)
+        if not is_body_allowed_for_status_code(status_code):
+            kwargs["response_model"] = None
         return kwargs
 
     @classmethod
@@ -172,9 +175,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             kwargs.setdefault("name", f"{action.title()} {cls.get_name()}")
             kwargs.setdefault("operation_id", f"{action}_{cls.get_slug_name()}")
 
-        status_code = kwargs.get("status_code", HTTP_200_OK)
-        if is_body_allowed_for_status_code(status_code):
-            kwargs.setdefault("response_model", cls.get_response_schema(action))
+        kwargs.setdefault("response_model", cls.get_response_schema(action))
         kwargs.setdefault("responses", errors(*extra_errors, *cls.default_errors))
         return super().get_api_action(endpoint, prefix=prefix, path=path, **kwargs)
 
