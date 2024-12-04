@@ -1,8 +1,15 @@
+import http
 from datetime import datetime
 from typing import Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    create_model,
+    model_validator,
+)
 from pydantic.alias_generators import to_camel
 from pydantic_core import Url
 from starlette.status import (
@@ -58,19 +65,23 @@ class ErrorDetails(BaseSchema):
     type: Union[Url, Literal["about:blank"]] = Field(
         "about:blank", description="Error type"
     )
-    title: Optional[str] = Field("Bad Request", description="Error title")
+    title: str = Field(None, description="Error title")
     status: int = Field(HTTP_400_BAD_REQUEST, description="Error status")
-    detail: str = Field(description="Error detail")
+    detail: str = Field(None, description="Error detail")
     instance: Optional[str] = Field(None, description="Requested instance")
     correlation_id: Optional[str] = Field(
         description="Optional correlation id", default_factory=get_correlation_id
     )
     errors: list[Any] = Field([], description="List of any additional errors")
 
-    @field_validator("detail", mode="before")
-    @classmethod
-    def validate_detail(cls, v: Any) -> str:
-        return v or "Internal Server Error"
+    @model_validator(mode="after")
+    def validate_model(self: Self) -> Self:
+        status = http.HTTPStatus(self.status)
+        if not self.title:
+            self.title = status.phrase
+        if not self.detail:
+            self.detail = status.description
+        return self
 
 
 def create_error_model(

@@ -4,6 +4,7 @@ import asyncio
 import functools
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate
 
 from fastapi_views.types import P
@@ -101,8 +102,8 @@ def catch_defined(func: ErrFn) -> ErrFn:
     return wrapped_sync
 
 
-get = functools.partial(route, methods=["GET"])
-post = functools.partial(route, methods=["POST"])
-put = functools.partial(route, methods=["PUT"])
-patch = functools.partial(route, methods=["PATCH"])
-delete = functools.partial(route, methods=["DELETE"], status_code=204)
+get = functools.partial(route, methods=["GET"], status_code=HTTP_200_OK)
+post = functools.partial(route, methods=["POST"], status_code=HTTP_201_CREATED)
+put = functools.partial(route, methods=["PUT"], status_code=HTTP_200_OK)
+patch = functools.partial(route, methods=["PATCH"], status_code=HTTP_200_OK)
+delete = functools.partial(route, methods=["DELETE"], status_code=HTTP_204_NO_CONTENT)

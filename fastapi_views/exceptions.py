@@ -19,9 +19,13 @@ class APIError(Exception):
     model: type[ErrorDetails] = ErrorDetails
 
     def __init__(
-        self, detail: str, headers: dict[str, str] | None = None, **kwargs: Any
+        self,
+        detail: str | None = None,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
     ) -> None:
-        self.detail = detail
+        if detail:
+            kwargs["detail"] = detail
         self.headers = headers
         self.kwargs = kwargs
 
@@ -31,7 +35,7 @@ class APIError(Exception):
 
     def as_model(self, **kwargs: Any) -> ErrorDetails:
         kwargs = {**self.kwargs, **kwargs}
-        return self.model(detail=self.detail, **kwargs)
+        return self.model(**kwargs)
 
 
 class NotFound(APIError):
