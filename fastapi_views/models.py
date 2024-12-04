@@ -65,9 +65,9 @@ class ErrorDetails(BaseSchema):
     type: Union[Url, Literal["about:blank"]] = Field(
         "about:blank", description="Error type"
     )
-    title: str = Field(None, description="Error title")
+    title: Optional[str] = Field(None, description="Error title")
     status: int = Field(HTTP_400_BAD_REQUEST, description="Error status")
-    detail: str = Field(None, description="Error detail")
+    detail: Optional[str] = Field(None, description="Error detail")
     instance: Optional[str] = Field(None, description="Requested instance")
     correlation_id: Optional[str] = Field(
         description="Optional correlation id", default_factory=get_correlation_id
