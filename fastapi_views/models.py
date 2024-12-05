@@ -85,9 +85,8 @@ class ErrorDetails(BaseSchema):
 
 
 def create_error_model(status: int, type: str) -> type[ErrorDetails]:
-    http_status = http.HTTPStatus(status)
-    name = http_status.phrase.replace(" ", "")
-    title = http_status.description
+    title = http.HTTPStatus(status).phrase
+    name = title.replace(" ", "")
     return create_model(
         name,
         __base__=ErrorDetails,
