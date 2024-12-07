@@ -11,7 +11,6 @@ def add_prometheus_middleware(
 
     kwargs.setdefault("group_paths", True)
     kwargs.setdefault("app_name", app.title.lower().replace(" ", "_"))
-    kwargs.setdefault("skip_paths", ["/healthz", "/docs", "/openapi.json", "/metrics"])
     kwargs.setdefault("labels", {"server": socket.gethostname()})
     kwargs.setdefault("always_use_int_status", True)
     kwargs.setdefault("filter_unhandled_paths", False)

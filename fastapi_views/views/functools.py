@@ -4,6 +4,7 @@ import asyncio
 import functools
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
+from starlette.status import HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate
 
 from fastapi_views.types import P
@@ -35,7 +36,7 @@ override = annotate
 
 
 def errors(*exceptions: type[APIError]) -> dict[int, dict[str, type[ErrorDetails]]]:
-    return {e.get_status(): {"model": e.model} for e in exceptions}
+    return {e.get_status(): {"model": e.model} for e in exceptions if e.model}
 
 
 def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:
@@ -105,4 +106,4 @@ get = functools.partial(route, methods=["GET"])
 post = functools.partial(route, methods=["POST"])
 put = functools.partial(route, methods=["PUT"])
 patch = functools.partial(route, methods=["PATCH"])
-delete = functools.partial(route, methods=["DELETE"], status_code=204)
+delete = functools.partial(route, methods=["DELETE"], status_code=HTTP_204_NO_CONTENT)
