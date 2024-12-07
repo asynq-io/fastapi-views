@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar
+import http
+from typing import Any
+
+from starlette.status import HTTP_400_BAD_REQUEST
 
 from .models import (
     BadRequestErrorDetails,
@@ -16,33 +19,41 @@ from .models import (
 
 
 class APIError(Exception):
-    model: type[ErrorDetails] = ErrorDetails
-    _registry: ClassVar[dict[int, type[ErrorDetails]]] = {}
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        cls._registry[cls.get_status()] = cls.model
+    model: type[ErrorDetails] | None = None
 
     def __init__(
         self,
         detail: str | None = None,
+        *,
+        status: int | None = None,
         headers: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> None:
+        if status:
+            kwargs["status"] = status
+
         if detail:
             kwargs["detail"] = detail
+
+        if self.model is None:
+            kwargs.setdefault("status", HTTP_400_BAD_REQUEST)
+            status_code = http.HTTPStatus(kwargs["status"])
+            kwargs.setdefault("title", status_code.phrase)
+            kwargs.setdefault("detail", status_code.description)
+
         self.headers = headers
         self.kwargs = kwargs
 
     @classmethod
     def get_status(cls) -> int:
+        if cls.model is None:
+            msg = "Get status called on APIError without model"
+            raise TypeError(msg)
         return cls.model.model_fields["status"].get_default()
 
-    def as_model(self, **kwargs: Any) -> ErrorDetails:
-        kwargs = {**self.kwargs, **kwargs}
-        status = kwargs.get("status", self.get_status())
-        model = self._registry.get(status, self.model)
-        return model(**kwargs)
+    def as_model(self) -> ErrorDetails:
+        model = self.model or ErrorDetails
+        return model(**self.kwargs)
 
 
 class NotFound(APIError):

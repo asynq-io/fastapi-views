@@ -36,7 +36,7 @@ override = annotate
 
 
 def errors(*exceptions: type[APIError]) -> dict[int, dict[str, type[ErrorDetails]]]:
-    return {e.get_status(): {"model": e.model} for e in exceptions}
+    return {e.get_status(): {"model": e.model} for e in exceptions if e.model}
 
 
 def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:

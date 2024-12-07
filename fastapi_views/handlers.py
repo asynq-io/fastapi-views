@@ -15,9 +15,7 @@ logger = getLogger("exceptions.handler")
 
 
 def http_exception_handler(request: Request, exc: HTTPException) -> Response:
-    error = APIError(
-        detail=exc.detail, status=exc.status_code, instance=request.url.path
-    ).as_model()
+    error = APIError(status=exc.status_code, instance=request.url.path).as_model()
     return Response(
         content=error.model_dump_json(),
         status_code=error.status,

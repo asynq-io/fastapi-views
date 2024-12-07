@@ -8,7 +8,6 @@ from pydantic import (
     ConfigDict,
     Field,
     create_model,
-    model_validator,
 )
 from pydantic.alias_generators import to_camel
 from pydantic_core import Url
@@ -65,34 +64,31 @@ class ErrorDetails(BaseSchema):
     type: Union[Url, Literal["about:blank"]] = Field(
         "about:blank", description="Error type"
     )
-    title: Optional[str] = Field(None, description="Error title")
-    status: int = Field(HTTP_400_BAD_REQUEST, description="Error status")
-    detail: Optional[str] = Field(None, description="Error detail")
+    title: str = Field(description="Error title")
+    status: int = Field(description="Error status")
+    detail: str = Field(description="Error detail")
     instance: Optional[str] = Field(None, description="Requested instance")
     correlation_id: Optional[str] = Field(
         description="Optional correlation id", default_factory=get_correlation_id
     )
     errors: list[Any] = Field([], description="List of any additional errors")
 
-    @model_validator(mode="after")
-    def validate_model(self: Self) -> Self:
-        status = http.HTTPStatus(self.status)
-        if not self.title:
-            self.title = status.phrase
-        if not self.detail:
-            self.detail = status.description
-        return self
 
-
-def create_error_model(status: int, type: str) -> type[ErrorDetails]:
-    title = http.HTTPStatus(status).phrase
+def create_error_model(
+    status: int, type: str, **extra_fields: Any
+) -> type[ErrorDetails]:
+    status_code = http.HTTPStatus(status)
+    title = status_code.phrase
     name = title.replace(" ", "")
+    detail = status_code.description
     return create_model(
         name,
         __base__=ErrorDetails,
         title=(Literal[title], Field(title, description="Error title")),
         status=(Literal[status], Field(status, description="Error status")),
         type=(Literal[type], Field(type, description="Error type")),
+        detail=(str, Field(detail, description="Error detail")),
+        **extra_fields,
     )
 
 
