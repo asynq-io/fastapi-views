@@ -117,8 +117,8 @@ class View(ABC):
         kwargs["responses"] = {
             e.get_status(): {"model": e.model} for e in cls.errors
         } | kwargs.get("responses", {})
-        status_code = kwargs.get("status_code", HTTP_200_OK)
-        if not is_body_allowed_for_status_code(status_code):
+        status_code = kwargs.get("status_code")
+        if status_code and not is_body_allowed_for_status_code(status_code):
             kwargs["response_model"] = None
         return kwargs
 
@@ -148,7 +148,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     """
 
     content_type: str = "application/json"
-    validate_response: bool = False
+    validate_response: bool = True
     from_attributes: Optional[bool] = None
     response_schema: Optional[T] = None
     serializer_options: ClassVar[SerializerOptions] = {
@@ -158,6 +158,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     default_errors: tuple[type[APIError], ...] = (BadRequest,)
 
     def __init__(self, request: Request, response: Response) -> None:
+        self.validation_context = None
         response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 
@@ -205,7 +206,9 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             serializer = self.get_serializer(action)
             if self.validate_response:
                 content = serializer.validate_python(
-                    content, from_attributes=self.from_attributes
+                    content,
+                    from_attributes=self.from_attributes,
+                    context=self.validation_context,
                 )
             content = serializer.dump_json(content, **self.serializer_options)
         return super().get_response(content, status_code=status_code)

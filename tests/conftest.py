@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from fastapi_views import ViewRouter
 from fastapi_views.models import BaseSchema
@@ -28,15 +28,14 @@ def app():
     return FastAPI()
 
 
-@pytest_asyncio.fixture(scope="session")
-async def asgi_lifespan(app):
-    async with LifespanManager(app, startup_timeout=30):
-        yield
-
-
 @pytest_asyncio.fixture(scope="function")
 async def client(app) -> AsyncGenerator[AsyncClient, None]:
-    async with AsyncClient(app=app, base_url="http://test") as test_client:
+    async with (
+        LifespanManager(app, startup_timeout=30),
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as test_client,
+    ):
         yield test_client
 
 
