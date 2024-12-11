@@ -158,6 +158,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     default_errors: tuple[type[APIError], ...] = (BadRequest,)
 
     def __init__(self, request: Request, response: Response) -> None:
+        self.validation_context = None
         response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 
@@ -205,7 +206,9 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             serializer = self.get_serializer(action)
             if self.validate_response:
                 content = serializer.validate_python(
-                    content, from_attributes=self.from_attributes
+                    content,
+                    from_attributes=self.from_attributes,
+                    context=self.validation_context,
                 )
             content = serializer.dump_json(content, **self.serializer_options)
         return super().get_response(content, status_code=status_code)
