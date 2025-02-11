@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
-@dataclass(kw_only=True)
+@dataclass
 class FieldOperation:
     field: str
 
@@ -12,18 +12,18 @@ class FieldOperation:
         self.field = f"{prefix}__{self.field}"
 
 
-@dataclass(kw_only=True)
+@dataclass
 class FilterOperation(FieldOperation):
     operator: str
     values: Any
 
 
-@dataclass(kw_only=True)
+@dataclass
 class SortOperation(FieldOperation):
     desc: bool = False
 
 
-@dataclass(kw_only=True)
+@dataclass
 class LogicalOperation:
     operator: Literal["and", "or"]
     values: list[FilterOperation] | list[LogicalOperation]
