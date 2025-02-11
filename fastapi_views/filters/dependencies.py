@@ -14,7 +14,7 @@ FilterT = TypeVar("FilterT", bound=BaseFilter)
 
 def FilterDepends(model: type[FilterT]) -> FilterT:  # noqa: N802
     class FilterWrapper(model):  # type: ignore[valid-type, misc]
-        def __new__(cls, *args: Any, **kwargs: Any) -> FilterT:
+        def __new__(cls, *args: Any, **kwargs: Any) -> FilterT:  # type: ignore[misc, unused-ignore]
             try:
                 return model(*args, **kwargs)
             except ValidationError as e:
