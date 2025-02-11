@@ -70,7 +70,7 @@ class View(ABC):
         cls, func: Callable[Concatenate["View", P], Any]
     ) -> Callable[Concatenate["View", P], Any]:
         options = getattr(func, "kwargs", {})
-        status_code = options.get("status_code", None)
+        status_code = options.get("status_code", HTTP_200_OK)
 
         async def _async_endpoint(
             self: View, *args: P.args, **kwargs: P.kwargs
@@ -202,7 +202,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         status_code: int = HTTP_200_OK,
         action: Optional[Action] = None,
     ) -> Response:
-        if not isinstance(content, (str, bytes, Response)):
+        if action and not isinstance(content, (str, bytes, Response)):
             serializer = self.get_serializer(action)
             if self.validate_response:
                 content = serializer.validate_python(
