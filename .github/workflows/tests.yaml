@@ -25,7 +25,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install Hatch
         run: pipx install hatch
-      - name: Ruff
+      - name: Lint
         if: matrix.python-version == '3.13'
         run: hatch run default:check
       - name: Pytest
