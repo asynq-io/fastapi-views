@@ -33,7 +33,7 @@ from .mixins import DetailViewMixin, ErrorHandlerMixin
 Endpoint = Callable[..., Union[Response, Awaitable[Response]]]
 T = TypeVar("T")
 TypeAdapterMap = dict[T, TypeAdapter[T]]
-AnyTypeAdapter = TypeAdapter(Any)
+AnyTypeAdapter: TypeAdapter[T] = TypeAdapter(Any)
 
 
 class View(ABC):
