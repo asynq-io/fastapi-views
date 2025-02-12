@@ -56,8 +56,7 @@ class UserFilter(Filter):
 class AsyncListView(AsyncListAPIView):
 
     async def list(self, filter: Filter = FilterDepends(UserFilter), resolver: SQLAlchemyFilterResolver = Depends()):
-        queryset = select(UserModel)
-        queryset = resolver.apply_filter(filter, queryset)
+        queryset = resolver.apply_filter(filter, select(UserModel))
         # applies ordering, pagination, searching etc.
         async with self.db_session() as session:
             users = await session.execute(queryset)
