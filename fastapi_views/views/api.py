@@ -265,11 +265,12 @@ class AsyncListAPIView(BaseListAPIView, ABC, Generic[P]):
 
     @classmethod
     def get_list_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="list")
+
         async def endpoint(
             self: AsyncListAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
             objects = await self.list(*args, **kwargs)
-            schema = self.get_response_schema(action="list")
             return self.get_response(objects, status_code=HTTP_200_OK, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.list)
@@ -285,9 +286,10 @@ class ListAPIView(BaseListAPIView, ABC, Generic[P]):
 
     @classmethod
     def get_list_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="list")
+
         def endpoint(self: ListAPIView, *args: P.args, **kwargs: P.kwargs) -> Response:
             objects = self.list(*args, **kwargs)
-            schema = self.get_response_schema(action="list")
             return self.get_response(objects, status_code=HTTP_200_OK, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.list)
@@ -322,13 +324,14 @@ class RetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
 
     @classmethod
     def get_retrieve_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="retrieve")
+
         def endpoint(
             self: RetrieveAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
             obj = self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            schema = self.get_response_schema(action="retrieve")
             return self.get_response(obj, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.retrieve)
@@ -344,13 +347,14 @@ class AsyncRetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
 
     @classmethod
     def get_retrieve_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="retrieve")
+
         async def endpoint(
             self: AsyncRetrieveAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
             obj = await self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            schema = self.get_response_schema(action="retrieve")
             return self.get_response(obj, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.retrieve)
@@ -391,6 +395,8 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
 
     @classmethod
     def get_create_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="create")
+
         def endpoint(
             self: CreateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -399,7 +405,6 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
             if location:
                 self.response.headers["location"] = location
             if self.return_on_create:
-                schema = self.get_response_schema(action="create")
                 return self.get_response(obj, status_code=status_code, schema=schema)
             return Response(status_code=status_code)
 
@@ -416,6 +421,8 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
 
     @classmethod
     def get_create_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="create")
+
         async def endpoint(
             self: AsyncCreateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -424,7 +431,6 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
             if location:
                 self.response.headers["location"] = location
             if self.return_on_create:
-                schema = self.get_response_schema(action="create")
                 return self.get_response(obj, status_code=status_code, schema=schema)
             return Response(status_code=status_code)
 
@@ -464,6 +470,8 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_update_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="update")
+
         def endpoint(
             self: UpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -472,7 +480,6 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
                 return Response(status_code=status_code)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            schema = self.get_response_schema(action="update")
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -488,6 +495,8 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_update_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="update")
+
         async def endpoint(
             self: AsyncUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -496,7 +505,6 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
                 return Response(status_code=status_code)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            schema = self.get_response_schema(action="update")
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -534,6 +542,8 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_partial_update_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="partial_update")
+
         def endpoint(
             self: PartialUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -541,7 +551,6 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
             if self.return_on_update:
-                schema = self.get_response_schema(action="partial_update")
                 return self.get_response(obj, schema=schema)
             return Response(status_code=HTTP_200_OK)
 
@@ -558,6 +567,8 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_partial_update_endpoint(cls) -> Endpoint:
+        schema = cls.get_response_schema(action="partial_update")
+
         async def endpoint(
             self: AsyncPartialUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
@@ -565,7 +576,6 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
             if self.return_on_update:
-                schema = self.get_response_schema(action="partial_update")
                 return self.get_response(obj, schema=schema)
             return Response(status_code=HTTP_200_OK)
 

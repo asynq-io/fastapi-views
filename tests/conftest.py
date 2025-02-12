@@ -41,8 +41,12 @@ async def client(app) -> AsyncGenerator[AsyncClient, None]:
         yield test_client
 
 
-class DummySerializer(BaseSchema):
+class DummySchema(BaseSchema):
     x: str
+
+
+class ExtendDummySchema(DummySchema):
+    y: Optional[str] = None
 
 
 @pytest.fixture(scope="session")
@@ -65,7 +69,7 @@ def view_as_fixture(name: str, prefix: str = "/test"):
 
 @view_as_fixture("list_view")
 class TestListView(AsyncListAPIView):
-    response_schema = DummySerializer
+    response_schema = DummySchema
 
     async def list(self) -> Any:
         return [{"x": "test"}]
@@ -74,10 +78,10 @@ class TestListView(AsyncListAPIView):
 @view_as_fixture("retrieve_view")
 class TestRetrieveView(AsyncRetrieveAPIView):
     detail_route = ""
-    response_schema = DummySerializer
+    response_schema = DummySchema
 
     async def retrieve(self) -> Optional[Any]:
-        return DummySerializer(x="test")
+        return ExtendDummySchema(x="test")
 
 
 @view_as_fixture("destroy_view")
@@ -90,14 +94,14 @@ class TestDestroyView(AsyncDestroyAPIView):
 
 @view_as_fixture("create_view")
 class TestCreateView(AsyncCreateAPIView):
-    response_schema = DummySerializer
+    response_schema = DummySchema
 
     async def create(self) -> Any:
-        return DummySerializer(x="test")
+        return ExtendDummySchema(x="test")
 
 
 @view_as_fixture("custom_retrieve_view")
 class TestCustomView(APIView):
     @get(path="/custom")
-    async def custom_get(self) -> DummySerializer:
-        return DummySerializer(x="test")
+    async def custom_get(self) -> DummySchema:
+        return ExtendDummySchema(x="test")
