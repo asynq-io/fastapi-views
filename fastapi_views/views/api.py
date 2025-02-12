@@ -33,7 +33,7 @@ from .mixins import DetailViewMixin, ErrorHandlerMixin
 Endpoint = Callable[..., Union[Response, Awaitable[Response]]]
 T = TypeVar("T")
 TypeAdapterMap = dict[T, TypeAdapter[T]]
-AnyTypeAdapter: TypeAdapter[T] = TypeAdapter(Any)
+AnyTypeAdapter: TypeAdapter[Any] = TypeAdapter(Any)
 
 
 class View(ABC):
@@ -89,7 +89,7 @@ class View(ABC):
             self._serializers[schema] = TypeAdapter(schema)
         return self._serializers[schema]
 
-    def get_json_content(self, content: Any, serializer: TypeAdapter[T]) -> Any:
+    def get_json_content(self, content: Any, serializer: TypeAdapter[Any]) -> Any:
         if self.validate_response:
             content = serializer.validate_python(
                 content,
@@ -223,7 +223,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     def get_response_schema(cls, action: Optional[Action] = None) -> Optional[T]:  # noqa: ARG003
         return cls.response_schema
 
-    def get_json_content(self, content: Any, serializer: TypeAdapter[T]) -> Any:
+    def get_json_content(self, content: Any, serializer: TypeAdapter[Any]) -> Any:
         if self.validate_response:
             content = serializer.validate_python(
                 content,
