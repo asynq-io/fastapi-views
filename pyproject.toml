@@ -74,6 +74,7 @@ dependencies = [
     "mkdocs-autorefs",
     "mkdocstrings[python]",
     "watchdog",
+    "ipython",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
@@ -134,9 +135,12 @@ ignore = [
     "FBT003",
     "ISC001",
     "N818",
+    "PD011",
     "PLR0913",
     "PLR2004",
+    "PLW2901",
     "PTH123",
+    "RUF012",
     "S108",
 ]
 

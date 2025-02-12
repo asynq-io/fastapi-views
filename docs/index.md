@@ -83,3 +83,4 @@ configure_app(app)
 - Optional Opentelemetry instrumentation with `correlation_id` in error responses
 - CLI for generating OpenAPI documentation file
 - Pagination types & schemas
+- Advanced drf-like filters
