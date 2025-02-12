@@ -10,7 +10,9 @@ from httpx import ASGITransport, AsyncClient
 
 from fastapi_views import ViewRouter
 from fastapi_views.models import BaseSchema
+from fastapi_views.views import get
 from fastapi_views.views.api import (
+    APIView,
     AsyncCreateAPIView,
     AsyncDestroyAPIView,
     AsyncListAPIView,
@@ -91,4 +93,11 @@ class TestCreateView(AsyncCreateAPIView):
     response_schema = DummySerializer
 
     async def create(self) -> Any:
+        return DummySerializer(x="test")
+
+
+@view_as_fixture("custom_retrieve_view")
+class TestCustomView(APIView):
+    @get(path="/custom")
+    async def custom_get(self) -> DummySerializer:
         return DummySerializer(x="test")
