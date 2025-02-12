@@ -22,6 +22,7 @@ nav:
   - "Usage":
       - "Basic": usage/basic.md
       - "Viewset": usage/viewset.md
+      - "Filters": usage/filters.md
       - "Opentelemetry": usage/opentelemetry.md
   - "Reference":
       - "APIViews": reference/views.md
