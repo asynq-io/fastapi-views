@@ -33,3 +33,10 @@ async def test_create_api_view(client, dummy_data):
 async def test_destroy_api_view(client):
     response = await client.delete("/test")
     assert response.status_code == 204
+
+
+@pytest.mark.usefixtures("custom_retrieve_view")
+async def test_custom_retrieve_api_view(client, dummy_data):
+    response = await client.get("/test/custom")
+    assert response.json() == dummy_data
+    validate_response_meta(response)
