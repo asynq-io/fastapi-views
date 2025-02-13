@@ -1,12 +1,12 @@
 from collections.abc import MutableSequence
-from typing import Any, ClassVar, Union
+from typing import Any, ClassVar, Union, cast
 
 from fastapi import Query
 from pydantic import BaseModel, field_validator
 
 from fastapi_views.pagination import PageNumber, PageSize
 
-from .operations import FilterOperation, LogicalOperation, SortOperation
+from .operations import FilterOperation, LogicalOperation, Operator, SortOperation
 from .types import SearchQuery, Sort
 
 
@@ -45,6 +45,7 @@ class ModelFilter(BaseFilter):
                     field_name, _, op = field_name.partition("__")
                 else:
                     op = "eq"
+                op = cast(Operator, op)
                 operation = FilterOperation(field=field_name, operator=op, values=value)
                 filters.append(operation)
 

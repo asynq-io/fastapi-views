@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar
 from fastapi_views.filters.models import OrderingFilter, PaginationFilter
 from fastapi_views.filters.operations import (
     LogicalOperation,
+    Operator,
     SortOperation,
 )
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class ObjectFilterResolver(FilterResolver[list[Any]]):
-    operators: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
+    operators: ClassVar[dict[Operator, Callable[[Any, Any], bool]]] = {
         "is_null": lambda a, b: operator.is_(a, None)
         if b
         else operator.is_not(a, None),
