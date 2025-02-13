@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Union
 
+Operator = Literal[
+    "eq", "ne", "lt", "le", "gt", "ge", "in", "not_in", "is_null", "like", "ilike"
+]
+LogicalOperator = Literal["and", "or"]
+
 
 @dataclass
 class FieldOperation:
@@ -14,7 +19,7 @@ class FieldOperation:
 
 @dataclass
 class FilterOperation(FieldOperation):
-    operator: str
+    operator: Operator
     values: Any
 
 
@@ -25,7 +30,7 @@ class SortOperation(FieldOperation):
 
 @dataclass
 class LogicalOperation:
-    operator: Literal["and", "or"]
+    operator: LogicalOperator
     values: list[FilterOperation] | list[LogicalOperation]
 
     def set_prefix(self, prefix: str) -> None:
