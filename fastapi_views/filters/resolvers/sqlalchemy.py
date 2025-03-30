@@ -7,7 +7,6 @@ from fastapi_views.filters.models import OrderingFilter, PaginationFilter
 from fastapi_views.filters.operations import (
     FilterOperation,
     LogicalOperation,
-    LogicalOperator,
     Operation,
     SortOperation,
 )
@@ -33,8 +32,6 @@ class SQLAlchemyFilterResolver(FilterResolver):
         "is_null": lambda a, b: a.is_(None) if b else a.is_not(None),
         "like": lambda a, b: a.like(f"%{b}%"),
         "ilike": lambda a, b: a.ilike(f"%{b}%"),
-    }
-    logical_operators: ClassVar[dict[LogicalOperator, Callable[[Any, Any], Any]]] = {
         "and": and_,
         "or": or_,
     }
@@ -68,15 +65,16 @@ class SQLAlchemyFilterResolver(FilterResolver):
 
     def resolve(self, operation: Operation, **context: Any) -> Any:
         if isinstance(operation, LogicalOperation):
-            fn = self.logical_operators[operation.operator]
+            fn = self.operators[operation.operator]
             return fn(*(self.resolve(f, **context) for f in operation.values))
 
         column = self.resolve_model_field(operation, **context)
+
         if isinstance(operation, SortOperation):
             return column.desc() if operation.desc else column
 
-        operator_func = self.operators[operation.operator]
-        return operator_func(column, operation.values)
+        fn = self.operators[operation.operator]
+        return fn(column, operation.values)
 
     def apply_filter(
         self,
