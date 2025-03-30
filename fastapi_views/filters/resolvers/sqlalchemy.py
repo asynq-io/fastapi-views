@@ -1,12 +1,7 @@
 from __future__ import annotations
 
+from operator import and_, or_
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal
-
-try:
-    from sqlalchemy import and_, or_
-except ImportError:
-    from operator import and_, or_
-
 
 from fastapi_views.filters.models import OrderingFilter, PaginationFilter
 from fastapi_views.filters.operations import (
@@ -74,11 +69,12 @@ class SQLAlchemyFilterResolver(FilterResolver):
             return fn(*(self.resolve(f, **context) for f in operation.values))
 
         column = self.resolve_model_field(operation, **context)
+
         if isinstance(operation, SortOperation):
             return column.desc() if operation.desc else column
 
-        operator_func = self.operators[operation.operator]
-        return operator_func(column, operation.values)
+        fn = self.operators[operation.operator]
+        return fn(column, operation.values)
 
     def apply_filter(
         self,

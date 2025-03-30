@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Union
+from typing import Any, Union
 
 
 @dataclass
@@ -25,7 +25,7 @@ class SortOperation(FieldOperation):
 
 @dataclass
 class LogicalOperation:
-    operator: Literal["and", "or"]
+    operator: str
     values: list[FilterOperation] | list[LogicalOperation]
 
     def set_prefix(self, prefix: str) -> None:
