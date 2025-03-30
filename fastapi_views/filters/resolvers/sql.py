@@ -9,7 +9,6 @@ from fastapi_views.filters.operations import (
     LogicalOperation,
     LogicalOperator,
     Operation,
-    Operator,
     SortOperation,
 )
 
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
 class SQLAlchemyFilterResolver(FilterResolver):
     _cache: dict[str, Any] = {}
     filter_model: Any
-    operators: ClassVar[dict[Operator, Callable[[Any, Any], Any]]] = {
+    operators: ClassVar[dict[str, Callable[[Any, Any], Any]]] = {
         "eq": lambda a, b: a == b,
         "ne": lambda a, b: a != b,
         "lt": lambda a, b: a < b,
