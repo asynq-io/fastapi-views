@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Union
 
-Operator = Literal[
-    "eq", "ne", "lt", "le", "gt", "ge", "in", "not_in", "is_null", "like", "ilike"
-]
 LogicalOperator = Literal["and", "or"]
 
 
@@ -19,7 +16,7 @@ class FieldOperation:
 
 @dataclass
 class FilterOperation(FieldOperation):
-    operator: Operator
+    operator: str
     values: Any
 
 
