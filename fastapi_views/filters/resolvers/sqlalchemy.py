@@ -36,14 +36,13 @@ class SQLAlchemyFilterResolver(FilterResolver):
         "or": or_,
     }
 
-    @classmethod
-    def _get_model_cls(cls, name: str) -> Any:
-        if name in cls._cache:
-            return cls._cache[name]
-        for mapper in cls.filter_model.registry.mappers:
+    def _get_model_cls(self, name: str) -> Any:
+        if name in self._cache:
+            return self._cache[name]
+        for mapper in self.filter_model.registry.mappers:
             model_class = mapper.class_
             if model_class.__tablename__ == name:
-                cls._cache[name] = model_class
+                self._cache[name] = model_class
                 return model_class
         return None
 
