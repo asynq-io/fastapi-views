@@ -186,13 +186,16 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
 
     content_type: str = "application/json"
     response_schema: Optional[T] = None
-    serializer_options: ClassVar[SerializerOptions] = {
+    default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
     default_errors: tuple[type[APIError], ...] = (BadRequest,)
 
     def __init__(self, request: Request, response: Response) -> None:
         self.validation_context = None
+        self.serializer_options: SerializerOptions = dict(
+            **self.default_serializer_options
+        )
         response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 
