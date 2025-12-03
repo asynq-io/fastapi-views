@@ -105,10 +105,13 @@ class DetailGenericView(GenericView, Generic[PK]):
     def _patch_pk_param(cls, func: Callable) -> None:
         func.__annotations__["pk"] = Annotated[BaseModel, Depends(cls.primary_key)]
 
+    def get_kwargs(self, action: Action | None = None) -> dict[str, Any]:
+        return {}
+
     def get_primary_key(
         self, primary_key: PK, action: Action | None = None
     ) -> tuple[tuple[Any, ...], dict[str, Any]]:
-        return (), primary_key.model_dump()
+        return (), primary_key.model_dump() | self.get_kwargs(action)
 
 
 class BaseGenericListAPIView(GenericView):
@@ -135,7 +138,7 @@ class BaseGenericListAPIView(GenericView):
 
         filter_ = cls.filter or BaseFilter
 
-        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]
+        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]  # type: ignore[assignment, unused-ignore]
 
 
 class AsyncGenericListAPIView(

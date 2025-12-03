@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
@@ -15,7 +15,9 @@ class CreateItem(BaseModel):
 
 
 class FakeRepo:
-    pass
+    """
+    Repository class, assuming all required methods like .get(), .create() are implemented
+    """
 
 
 class MyGenericViewSet(AsyncGenericViewSet):
@@ -23,14 +25,8 @@ class MyGenericViewSet(AsyncGenericViewSet):
     response_schema = Item
     create_schema = CreateItem
     update_schema = CreateItem
-    primary_key = Id
     filter = Filter
-
-    def __init__(
-        self, request: Request, response: Response, repository=Depends(FakeRepo)
-    ) -> None:
-        super().__init__(request, response)
-        self.repository = repository
+    repository = FakeRepo()  # type: ignore[assignment]
 
 
 router = ViewRouter(prefix="/items")
