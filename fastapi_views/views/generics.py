@@ -104,10 +104,6 @@ class AsyncGenericListAPIView(AsyncListAPIView, GenericView):
         return self.repository.get_filtered_page(filter)
 
 
-CreateSchemaT = TypeVar("CreateSchemaT", bound=BaseModel)
-UpdateSchemaT = TypeVar("UpdateSchemaT", bound=BaseModel)
-
-
 class AsyncGenericCreateAPIView(GenericView[M], AsyncCreateAPIView):
     create_schema: type[BaseModel]
 
