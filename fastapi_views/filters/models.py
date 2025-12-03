@@ -76,7 +76,7 @@ class OrderingFilter(BaseFilter):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         cls.special_fields = cls.special_fields | {"sort"}
-        if "sort" in cls.model_fields:
+        if "sort" in cls.model_fields and cls.ordering_fields:
             cls.model_fields["sort"].default = Query(
                 None,
                 description=f"List of fields to sort by. \
