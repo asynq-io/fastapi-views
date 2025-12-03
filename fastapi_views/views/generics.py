@@ -6,9 +6,9 @@ from fastapi import Depends
 from pydantic import BaseModel
 from typing_extensions import TypeVar
 
-from fastapi_views.exceptions import Conflict, NotFound
+from fastapi_views.exceptions import Conflict
 from fastapi_views.filters.dependencies import FilterDepends
-from fastapi_views.filters.models import Filter
+from fastapi_views.filters.models import BaseFilter, Filter
 from fastapi_views.pagination import NumberedPage
 from fastapi_views.views.api import APIView
 
@@ -18,6 +18,11 @@ from .api import (
     AsyncListAPIView,
     AsyncRetrieveAPIView,
     AsyncUpdateAPIView,
+    CreateAPIView,
+    DestroyAPIView,
+    ListAPIView,
+    RetrieveAPIView,
+    UpdateAPIView,
 )
 
 M_co = TypeVar("M_co", covariant=True)
@@ -28,6 +33,36 @@ if TYPE_CHECKING:
     from fastapi_views.types import Action
 
 
+M = TypeVar("M")
+PK = TypeVar("PK", bound=BaseModel)
+
+
+class Id(BaseModel):
+    id: int
+
+
+class Page(Generic[M_co]):
+    items: Sequence[M_co]
+
+
+class Repository(Protocol[M_co]):
+    """Interface for repository pattern"""
+
+    def create(self, **kwargs: Any) -> M_co | None: ...
+
+    def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
+
+    def get_filtered_page(self, filter: Filter) -> Page[M_co]: ...
+
+    def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
+
+    def delete(self, *args: Any, **kwargs: Any) -> None: ...
+
+    def update_one(
+        self, values: dict[str, Any], *args: Any, **kwargs: Any
+    ) -> M_co | None: ...
+
+
 class AsyncRepository(Protocol[M_co]):
     """Interface for repository pattern"""
 
@@ -35,7 +70,7 @@ class AsyncRepository(Protocol[M_co]):
 
     async def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    async def get_filtered_page(self, filter: Filter) -> None: ...
+    async def get_filtered_page(self, filter: Filter) -> Page[M_co]: ...
 
     async def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -46,12 +81,15 @@ class AsyncRepository(Protocol[M_co]):
     ) -> M_co | None: ...
 
 
-M = TypeVar("M")
+class WithRepositoryMixin(Generic[M]):
+    repository: Repository[M]
 
 
-class GenericView(APIView, Generic[M]):
+class WithAsyncRepositoryMixin(Generic[M]):
     repository: AsyncRepository[M]
 
+
+class GenericView(APIView):
     @classmethod
     def _patch_schema(cls, func: Callable, action: Action | None = None) -> None:
         name = action or func.__name__
@@ -60,14 +98,7 @@ class GenericView(APIView, Generic[M]):
         func.__annotations__[param] = schema
 
 
-class Id(BaseModel):
-    id: int
-
-
-PK = TypeVar("PK", bound=BaseModel)
-
-
-class DetailGenericView(GenericView[M], Generic[M, PK]):
+class DetailGenericView(GenericView, Generic[PK]):
     primary_key: type[PK]
 
     @classmethod
@@ -80,31 +111,53 @@ class DetailGenericView(GenericView[M], Generic[M, PK]):
         return (), primary_key.model_dump()
 
 
-class AsyncGenericListAPIView(AsyncListAPIView, GenericView):
+class BaseGenericListAPIView(GenericView):
     response_schema_as_list: bool = False
-    filter: type[BaseModel] | None = None
+    filter: type[BaseModel] | None
+    paginated: bool = True
+
+    if TYPE_CHECKING:
+        list: Callable
 
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
         if action == "list":
-            return NumberedPage[cls.response_schema]  # type: ignore[name-defined]
+            if cls.paginated:
+                return NumberedPage[cls.response_schema]  # type: ignore[name-defined]
+            return list[cls.response_schema]  # type: ignore[name-defined]
         return cls.response_schema
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
 
-        if cls.filter is None:
+        if not hasattr(cls, "filter"):
             return
 
-        cls.list.__annotations__["filter"] = Annotated[
-            Filter, FilterDepends(cls.filter)
-        ]
+        filter_ = cls.filter or BaseFilter
 
-    async def list(self: AsyncGenericListAPIView, filter: Filter) -> Any:
-        return self.repository.get_filtered_page(filter)
+        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]
 
 
-class AsyncGenericCreateAPIView(GenericView[M], AsyncCreateAPIView):
+class AsyncGenericListAPIView(
+    AsyncListAPIView, BaseGenericListAPIView, WithAsyncRepositoryMixin
+):
+    async def list(self, filter: Filter) -> Sequence[M] | Page[M]:
+        if self.paginated:
+            return await self.repository.get_filtered_page(filter)
+        return await self.repository.list(**filter.model_dump())
+
+
+class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
+    def list(self, filter: Filter) -> Sequence[M] | Page[M]:
+        if self.paginated:
+            return self.repository.get_filtered_page(filter)
+        return self.repository.list(**filter.model_dump())
+
+
+class BaseGenericCreateAPIView(GenericView):
+    if TYPE_CHECKING:
+        create: Callable
+
     create_schema: type[BaseModel]
 
     def __init_subclass__(cls) -> None:
@@ -115,6 +168,10 @@ class AsyncGenericCreateAPIView(GenericView[M], AsyncCreateAPIView):
 
         cls._patch_schema(cls.create)
 
+
+class AsyncGenericCreateAPIView(
+    GenericView, AsyncCreateAPIView, WithAsyncRepositoryMixin[M]
+):
     async def create(self, create_schema: BaseModel) -> Any:
         data = create_schema.model_dump()
         await self.before_create(data)
@@ -132,7 +189,28 @@ class AsyncGenericCreateAPIView(GenericView[M], AsyncCreateAPIView):
         pass
 
 
-class AsyncGenericRetrieveAPIView(DetailGenericView[M, PK], AsyncRetrieveAPIView):
+class GenericCreateAPIView(GenericView, CreateAPIView, WithRepositoryMixin[M]):
+    def create(self, create_schema: BaseModel) -> Any:
+        data = create_schema.model_dump()
+        self.before_create(data)
+        obj: M | None = self.repository.create(**data)
+        if obj is None:
+            msg = f"{self.get_name()} already exists"
+            raise Conflict(msg)
+        self.after_create(obj)
+        return obj
+
+    def before_create(self, data: dict[str, Any]) -> None:
+        pass
+
+    def after_create(self, obj: M) -> None:
+        pass
+
+
+class BaseGenericRetrieveAPIView(DetailGenericView[PK]):
+    if TYPE_CHECKING:
+        retrieve: Callable
+
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
 
@@ -140,12 +218,27 @@ class AsyncGenericRetrieveAPIView(DetailGenericView[M, PK], AsyncRetrieveAPIView
             return
         cls._patch_pk_param(cls.retrieve)
 
+
+class AsyncGenericRetrieveAPIView(
+    BaseGenericRetrieveAPIView[PK], AsyncRetrieveAPIView, WithAsyncRepositoryMixin[M]
+):
     async def retrieve(self, pk: PK) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="retrieve")
         return await self.repository.get(*args, **kwargs)
 
 
-class AsyncGenericUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIView):
+class GenericRetrieveAPIView(
+    BaseGenericRetrieveAPIView[PK], RetrieveAPIView, WithRepositoryMixin[M]
+):
+    def retrieve(self, pk: PK) -> M | None:
+        args, kwargs = self.get_primary_key(pk, action="retrieve")
+        return self.repository.get(*args, **kwargs)
+
+
+class BaseGenericUpdateAPIView(DetailGenericView[PK]):
+    if TYPE_CHECKING:
+        update: Callable
+
     update_schema: type[BaseModel]
 
     def __init_subclass__(cls) -> None:
@@ -156,14 +249,17 @@ class AsyncGenericUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIView):
         cls._patch_pk_param(cls.update)
         cls._patch_schema(cls.update)
 
+
+class AsyncGenericUpdateAPIView(
+    BaseGenericUpdateAPIView[PK], AsyncUpdateAPIView, WithAsyncRepositoryMixin[M]
+):
     async def update(self, pk: PK, update_schema: BaseModel) -> M:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = update_schema.model_dump()
         await self.before_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
         if obj is None:
-            msg = f"{self.get_name()} does not exist"
-            raise NotFound(msg)
+            self.raise_not_found_error()
         await self.after_update(obj)
         return obj
 
@@ -174,7 +270,30 @@ class AsyncGenericUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIView):
         pass
 
 
-class AsyncGenericPartialUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIView):
+class GenericUpdateAPIView(
+    BaseGenericUpdateAPIView[PK], UpdateAPIView, WithRepositoryMixin[M]
+):
+    def update(self, pk: PK, update_schema: BaseModel) -> M:
+        args, kwargs = self.get_primary_key(pk, action="update")
+        data = update_schema.model_dump()
+        self.before_update(data)
+        obj = self.repository.update_one(data, *args, **kwargs)
+        if obj is None:
+            self.raise_not_found_error()
+        self.after_update(obj)
+        return obj
+
+    def before_update(self, data: dict[str, Any]) -> None:
+        pass
+
+    def after_update(self, obj: M) -> None:
+        pass
+
+
+class BaseGenericPartialUpdateAPIView(DetailGenericView[PK]):
+    if TYPE_CHECKING:
+        partial_update: Callable
+
     partial_update_schema: type[BaseModel]
 
     def __init_subclass__(cls) -> None:
@@ -185,14 +304,17 @@ class AsyncGenericPartialUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIV
         cls._patch_pk_param(cls.partial_update)
         cls._patch_schema(cls.partial_update)
 
+
+class AsyncGenericPartialUpdateAPIView(
+    BaseGenericPartialUpdateAPIView[PK], AsyncUpdateAPIView, WithAsyncRepositoryMixin[M]
+):
     async def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = partial_update_schema.model_dump(exclude_unset=True)
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
         if obj is None:
-            msg = f"{self.get_name()} does not exist"
-            raise NotFound(msg)
+            self.raise_not_found_error()
         await self.after_partial_update(obj)
         return obj
 
@@ -203,7 +325,30 @@ class AsyncGenericPartialUpdateAPIView(DetailGenericView[M, PK], AsyncUpdateAPIV
         pass
 
 
-class AsyncGenericDestroyAPIView(DetailGenericView[M, PK], AsyncDestroyAPIView):
+class GenericPartialUpdateAPIView(
+    BaseGenericPartialUpdateAPIView[PK], UpdateAPIView, WithRepositoryMixin[M]
+):
+    def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
+        args, kwargs = self.get_primary_key(pk, action="update")
+        data = partial_update_schema.model_dump(exclude_unset=True)
+        self.before_partial_update(data)
+        obj = self.repository.update_one(data, *args, **kwargs)
+        if obj is None:
+            self.raise_not_found_error()
+        self.after_partial_update(obj)
+        return obj
+
+    def before_partial_update(self, data: dict[str, Any]) -> None:
+        pass
+
+    def after_partial_update(self, new_obj: M) -> None:
+        pass
+
+
+class BaseGenericDestroyAPIView(DetailGenericView[PK]):
+    if TYPE_CHECKING:
+        destroy: Callable
+
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
 
@@ -212,9 +357,21 @@ class AsyncGenericDestroyAPIView(DetailGenericView[M, PK], AsyncDestroyAPIView):
 
         cls._patch_pk_param(cls.destroy)
 
+
+class AsyncGenericDestroyAPIView(
+    BaseGenericDestroyAPIView[PK], AsyncDestroyAPIView, WithAsyncRepositoryMixin
+):
     async def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
         await self.repository.delete(*args, **kwargs)
+
+
+class GenericDestroyAPIView(
+    BaseGenericDestroyAPIView[PK], DestroyAPIView, WithRepositoryMixin
+):
+    def destroy(self, pk: PK) -> Any:
+        args, kwargs = self.get_primary_key(pk, action="destroy")
+        self.repository.delete(*args, **kwargs)
 
 
 class AsyncGenericViewSet(
@@ -224,5 +381,16 @@ class AsyncGenericViewSet(
     AsyncGenericUpdateAPIView,
     AsyncGenericPartialUpdateAPIView,
     AsyncGenericDestroyAPIView,
+):
+    pass
+
+
+class GenericViewSet(
+    GenericListAPIView,
+    GenericRetrieveAPIView,
+    GenericCreateAPIView,
+    GenericUpdateAPIView,
+    GenericPartialUpdateAPIView,
+    GenericDestroyAPIView,
 ):
     pass
