@@ -138,7 +138,7 @@ class BaseGenericListAPIView(GenericView):
 
         filter_ = cls.filter or BaseFilter
 
-        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]  # type: ignore[assignment, unused-ignore]
+        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]  # type: ignore[type-var, unused-ignore]
 
 
 class AsyncGenericListAPIView(
@@ -385,7 +385,7 @@ class AsyncGenericViewSet(
     AsyncGenericPartialUpdateAPIView,
     AsyncGenericDestroyAPIView,
 ):
-    pass
+    """AsyncGenericViewSet"""
 
 
 class GenericViewSet(
@@ -396,4 +396,4 @@ class GenericViewSet(
     GenericPartialUpdateAPIView,
     GenericDestroyAPIView,
 ):
-    pass
+    """GenericViewSet"""
