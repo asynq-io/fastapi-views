@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Generator
+from copy import deepcopy
 from typing import (
     Any,
     Callable,
@@ -193,9 +194,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
 
     def __init__(self, request: Request, response: Response) -> None:
         self.validation_context = None
-        self.serializer_options: SerializerOptions = dict(
-            **self.default_serializer_options
-        )
+        self.serializer_options = deepcopy(self.default_serializer_options)
         response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 

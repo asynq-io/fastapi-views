@@ -115,11 +115,11 @@ class DetailGenericView(GenericView, Generic[PK]):
 
 
 class BaseGenericListAPIView(GenericView):
-    response_schema_as_list: bool = False
-    filter: type[BaseModel] | None
-
     if TYPE_CHECKING:
         list: Callable
+
+    response_schema_as_list: bool = False
+    filter: type[BaseModel] | None
 
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
@@ -134,11 +134,11 @@ class BaseGenericListAPIView(GenericView):
 
         if not hasattr(cls, "filter"):
             return
+        filter_ = cls.filter or BaseFilter
 
-        if cls.filter is not None:
-            cls.list.__annotations__["filter"] = Annotated[
-                BaseFilter, FilterDepends(cls.filter)  # type: ignore[type-var, unused-ignore]
-            ]
+        cls.list.__annotations__["filter"] = Annotated[
+            BaseFilter, FilterDepends(filter_)  # type: ignore[type-var, unused-ignore]
+        ]
 
 
 class AsyncGenericListAPIView(
@@ -173,12 +173,12 @@ class BaseGenericCreateAPIView(GenericView):
 
 
 class AsyncGenericCreateAPIView(
-    GenericView, AsyncCreateAPIView, WithAsyncRepositoryMixin[M]
+    BaseGenericCreateAPIView, AsyncCreateAPIView, WithAsyncRepositoryMixin[M]
 ):
-    async def create(self, create_schema: BaseModel) -> Any:
+    async def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
         await self.before_create(data)
-        obj: M | None = await self.repository.create(**data)
+        obj = await self.repository.create(**data)
         if obj is None:
             msg = f"{self.get_name()} already exists"
             raise Conflict(msg)
@@ -192,11 +192,13 @@ class AsyncGenericCreateAPIView(
         pass
 
 
-class GenericCreateAPIView(GenericView, CreateAPIView, WithRepositoryMixin[M]):
-    def create(self, create_schema: BaseModel) -> Any:
+class GenericCreateAPIView(
+    BaseGenericCreateAPIView, CreateAPIView, WithRepositoryMixin[M]
+):
+    def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
         self.before_create(data)
-        obj: M | None = self.repository.create(**data)
+        obj = self.repository.create(**data)
         if obj is None:
             msg = f"{self.get_name()} already exists"
             raise Conflict(msg)
