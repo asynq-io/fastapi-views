@@ -8,7 +8,7 @@ from typing_extensions import TypeVar
 
 from fastapi_views.exceptions import Conflict
 from fastapi_views.filters.dependencies import FilterDepends
-from fastapi_views.filters.models import BaseFilter, Filter
+from fastapi_views.filters.models import BaseFilter, PaginationFilter
 from fastapi_views.pagination import NumberedPage
 from fastapi_views.views.api import APIView
 
@@ -52,7 +52,7 @@ class Repository(Protocol[M_co]):
 
     def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    def get_filtered_page(self, filter: Filter) -> Page[M_co]: ...
+    def get_filtered_page(self, filter: PaginationFilter) -> Page[M_co]: ...
 
     def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -70,7 +70,7 @@ class AsyncRepository(Protocol[M_co]):
 
     async def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    async def get_filtered_page(self, filter: Filter) -> Page[M_co]: ...
+    async def get_filtered_page(self, filter: PaginationFilter) -> Page[M_co]: ...
 
     async def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -117,7 +117,6 @@ class DetailGenericView(GenericView, Generic[PK]):
 class BaseGenericListAPIView(GenericView):
     response_schema_as_list: bool = False
     filter: type[BaseModel] | None
-    paginated: bool = True
 
     if TYPE_CHECKING:
         list: Callable
@@ -125,7 +124,7 @@ class BaseGenericListAPIView(GenericView):
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
         if action == "list":
-            if cls.paginated:
+            if cls.filter and issubclass(cls.filter, PaginationFilter):
                 return NumberedPage[cls.response_schema]  # type: ignore[name-defined]
             return list[cls.response_schema]  # type: ignore[name-defined]
         return cls.response_schema
@@ -136,23 +135,24 @@ class BaseGenericListAPIView(GenericView):
         if not hasattr(cls, "filter"):
             return
 
-        filter_ = cls.filter or BaseFilter
-
-        cls.list.__annotations__["filter"] = Annotated[Filter, FilterDepends(filter_)]  # type: ignore[type-var, unused-ignore]
+        if cls.filter is not None:
+            cls.list.__annotations__["filter"] = Annotated[
+                BaseFilter, FilterDepends(cls.filter)  # type: ignore[type-var, unused-ignore]
+            ]
 
 
 class AsyncGenericListAPIView(
     AsyncListAPIView, BaseGenericListAPIView, WithAsyncRepositoryMixin
 ):
-    async def list(self, filter: Filter) -> Sequence[M] | Page[M]:
-        if self.paginated:
+    async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        if isinstance(filter, PaginationFilter):
             return await self.repository.get_filtered_page(filter)
         return await self.repository.list(**filter.model_dump())
 
 
 class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
-    def list(self, filter: Filter) -> Sequence[M] | Page[M]:
-        if self.paginated:
+    def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        if isinstance(filter, PaginationFilter):
             return self.repository.get_filtered_page(filter)
         return self.repository.list(**filter.model_dump())
 
