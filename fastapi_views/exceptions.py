@@ -20,6 +20,7 @@ from .models import (
 
 class APIError(Exception):
     model: type[ErrorDetails] | None = None
+    default_kwargs: dict[str, Any] = {}
 
     def __init__(
         self,
@@ -42,7 +43,7 @@ class APIError(Exception):
             kwargs.setdefault("detail", status_code.description)
 
         self.headers = headers
-        self.kwargs = kwargs
+        self.kwargs = self.default_kwargs | kwargs
 
     @classmethod
     def get_status(cls) -> int:

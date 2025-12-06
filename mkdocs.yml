@@ -22,11 +22,13 @@ nav:
   - "Usage":
       - "Basic": usage/basic.md
       - "Viewset": usage/viewset.md
+      - "Generics": usage/generics.md
       - "Filters": usage/filters.md
       - "Opentelemetry": usage/opentelemetry.md
   - "Reference":
       - "APIViews": reference/views.md
       - "View sets": reference/viewsets.md
+      - "Generic views": reference/generics.md
 
 markdown_extensions:
   - pymdownx.highlight:

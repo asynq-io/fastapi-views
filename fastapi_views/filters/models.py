@@ -25,7 +25,7 @@ class ModelFilter(BaseFilter):
     def get_filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
         filters = super().get_filters()
 
-        for field_name in self.model_fields:
+        for field_name in type(self).model_fields:
             if field_name in self.special_fields:
                 continue
 

@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict, TypeVar
-
-from typing_extensions import ParamSpec
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
 
 if TYPE_CHECKING:
     from pydantic.main import IncEx
 
 Entity = TypeVar("Entity", bound=Any)
 Action = Literal["create", "list", "retrieve", "update", "destroy", "partial_update"]
-
-P = ParamSpec("P")
-F = Callable[[P.args, P.kwargs], Any]
 
 
 class SerializerOptions(TypedDict, total=False):

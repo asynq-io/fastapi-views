@@ -16,11 +16,13 @@ from .api import (
     AsyncCreateAPIView,
     AsyncDestroyAPIView,
     AsyncListAPIView,
+    AsyncPartialUpdateAPIView,
     AsyncRetrieveAPIView,
     AsyncUpdateAPIView,
     CreateAPIView,
     DestroyAPIView,
     ListAPIView,
+    PartialUpdateAPIView,
     RetrieveAPIView,
     UpdateAPIView,
 )
@@ -46,8 +48,6 @@ class Page(Generic[M_co]):
 
 
 class Repository(Protocol[M_co]):
-    """Interface for repository pattern"""
-
     def create(self, **kwargs: Any) -> M_co | None: ...
 
     def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
@@ -64,8 +64,6 @@ class Repository(Protocol[M_co]):
 
 
 class AsyncRepository(Protocol[M_co]):
-    """Interface for repository pattern"""
-
     async def create(self, **kwargs: Any) -> M_co | None: ...
 
     async def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
@@ -144,6 +142,8 @@ class BaseGenericListAPIView(GenericView):
 class AsyncGenericListAPIView(
     AsyncListAPIView, BaseGenericListAPIView, WithAsyncRepositoryMixin
 ):
+    """AsyncGenericListAPIView"""
+
     async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
         if isinstance(filter, PaginationFilter):
             return await self.repository.get_filtered_page(filter)
@@ -151,6 +151,8 @@ class AsyncGenericListAPIView(
 
 
 class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
+    """GenericListAPIView"""
+
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
         if isinstance(filter, PaginationFilter):
             return self.repository.get_filtered_page(filter)
@@ -175,6 +177,8 @@ class BaseGenericCreateAPIView(GenericView):
 class AsyncGenericCreateAPIView(
     BaseGenericCreateAPIView, AsyncCreateAPIView, WithAsyncRepositoryMixin[M]
 ):
+    """AsyncGenericCreateAPIView"""
+
     async def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
         await self.before_create(data)
@@ -195,6 +199,8 @@ class AsyncGenericCreateAPIView(
 class GenericCreateAPIView(
     BaseGenericCreateAPIView, CreateAPIView, WithRepositoryMixin[M]
 ):
+    """GenericCreateAPIView"""
+
     def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
         self.before_create(data)
@@ -227,6 +233,8 @@ class BaseGenericRetrieveAPIView(DetailGenericView[PK]):
 class AsyncGenericRetrieveAPIView(
     BaseGenericRetrieveAPIView[PK], AsyncRetrieveAPIView, WithAsyncRepositoryMixin[M]
 ):
+    """AsyncGenericRetrieveAPIView"""
+
     async def retrieve(self, pk: PK) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="retrieve")
         return await self.repository.get(*args, **kwargs)
@@ -235,6 +243,8 @@ class AsyncGenericRetrieveAPIView(
 class GenericRetrieveAPIView(
     BaseGenericRetrieveAPIView[PK], RetrieveAPIView, WithRepositoryMixin[M]
 ):
+    """GenericRetrieveAPIView"""
+
     def retrieve(self, pk: PK) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="retrieve")
         return self.repository.get(*args, **kwargs)
@@ -258,6 +268,8 @@ class BaseGenericUpdateAPIView(DetailGenericView[PK]):
 class AsyncGenericUpdateAPIView(
     BaseGenericUpdateAPIView[PK], AsyncUpdateAPIView, WithAsyncRepositoryMixin[M]
 ):
+    """AsyncGenericUpdateAPIView"""
+
     async def update(self, pk: PK, update_schema: BaseModel) -> M:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = update_schema.model_dump()
@@ -278,6 +290,8 @@ class AsyncGenericUpdateAPIView(
 class GenericUpdateAPIView(
     BaseGenericUpdateAPIView[PK], UpdateAPIView, WithRepositoryMixin[M]
 ):
+    """GenericUpdateAPIView"""
+
     def update(self, pk: PK, update_schema: BaseModel) -> M:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = update_schema.model_dump()
@@ -311,8 +325,12 @@ class BaseGenericPartialUpdateAPIView(DetailGenericView[PK]):
 
 
 class AsyncGenericPartialUpdateAPIView(
-    BaseGenericPartialUpdateAPIView[PK], AsyncUpdateAPIView, WithAsyncRepositoryMixin[M]
+    BaseGenericPartialUpdateAPIView[PK],
+    AsyncPartialUpdateAPIView,
+    WithAsyncRepositoryMixin[M],
 ):
+    """AsyncGenericPartialUpdateAPIView"""
+
     async def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = partial_update_schema.model_dump(exclude_unset=True)
@@ -331,8 +349,10 @@ class AsyncGenericPartialUpdateAPIView(
 
 
 class GenericPartialUpdateAPIView(
-    BaseGenericPartialUpdateAPIView[PK], UpdateAPIView, WithRepositoryMixin[M]
+    BaseGenericPartialUpdateAPIView[PK], PartialUpdateAPIView, WithRepositoryMixin[M]
 ):
+    """GenericPartialUpdateAPIView"""
+
     def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = partial_update_schema.model_dump(exclude_unset=True)
@@ -366,6 +386,8 @@ class BaseGenericDestroyAPIView(DetailGenericView[PK]):
 class AsyncGenericDestroyAPIView(
     BaseGenericDestroyAPIView[PK], AsyncDestroyAPIView, WithAsyncRepositoryMixin
 ):
+    """AsyncGenericDestroyAPIView"""
+
     async def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
         await self.repository.delete(*args, **kwargs)
@@ -374,6 +396,8 @@ class AsyncGenericDestroyAPIView(
 class GenericDestroyAPIView(
     BaseGenericDestroyAPIView[PK], DestroyAPIView, WithRepositoryMixin
 ):
+    """GenericDestroyAPIView"""
+
     def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
         self.repository.delete(*args, **kwargs)

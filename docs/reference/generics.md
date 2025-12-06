@@ -1,5 +1,4 @@
-::: fastapi_views.views.viewsets
+::: fastapi_views.views.generics
     handler: python
     options:
         show_root_heading: false
-        show_source: true
