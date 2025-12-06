@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Callable, Generic, Protocol
+from typing import TYPE_CHECKING, Annotated, Any, Callable, Generic, Protocol, TypeVar
 
 from fastapi import Depends
 from pydantic import BaseModel
-from typing_extensions import TypeVar
 
 from fastapi_views.exceptions import Conflict
 from fastapi_views.filters.dependencies import FilterDepends

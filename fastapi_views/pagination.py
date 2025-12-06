@@ -1,6 +1,6 @@
 import base64
 import os
-from typing import Annotated, Generic, Optional, TypeVar
+from typing import Annotated, Generic, Optional, TypeAlias, TypeVar
 
 from annotated_types import Interval
 from pydantic import AfterValidator, Field, PlainSerializer, PositiveInt
@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 MAX_PAGE_SIZE = int(os.getenv("MAX_PAGE_SIZE", "500"))
 
-PageNumber = PositiveInt
+PageNumber: TypeAlias = PositiveInt
 PageSize = Annotated[int, Interval(gt=0, le=MAX_PAGE_SIZE)]
 
 
