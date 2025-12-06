@@ -1,5 +1,5 @@
 from collections.abc import MutableSequence
-from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
+from typing import Any, ClassVar, Optional, Union
 
 from fastapi import Query
 from pydantic import BaseModel, field_validator
@@ -62,10 +62,7 @@ class ModelFilter(BaseFilter):
         return filters
 
 
-PageType = TypeVar("PageType")
-
-
-class BasePaginationFilter(BaseFilter, Generic[PageType]):
+class BasePaginationFilter(BaseFilter):
     special_fields = {"page_size"}
 
     page_size: PageSize = 100
