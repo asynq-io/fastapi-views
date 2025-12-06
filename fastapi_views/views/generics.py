@@ -8,8 +8,14 @@ from typing_extensions import TypeVar
 
 from fastapi_views.exceptions import Conflict
 from fastapi_views.filters.dependencies import FilterDepends
-from fastapi_views.filters.models import BaseFilter, BasePaginationFilter
-from fastapi_views.views.api import APIView, T
+from fastapi_views.filters.models import (
+    BaseFilter,
+    BasePaginationFilter,
+    PaginationFilter,
+    TokenPaginationFilter,
+)
+from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.views.api import APIView
 
 from .api import (
     AsyncCreateAPIView,
@@ -31,7 +37,6 @@ M_co = TypeVar("M_co", covariant=True)
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from fastapi_views.pagination import BasePage
     from fastapi_views.types import Action
 
 
@@ -87,7 +92,7 @@ class WithAsyncRepositoryMixin(Generic[M]):
     repository: AsyncRepository[M]
 
 
-class GenericView(APIView[T]):
+class GenericView(APIView):
     @classmethod
     def _patch_schema(cls, func: Callable, action: Action | None = None) -> None:
         name = action or func.__name__
@@ -112,20 +117,23 @@ class DetailGenericView(GenericView, Generic[PK]):
         return (), primary_key.model_dump() | self.get_kwargs(action)
 
 
-class BaseGenericListAPIView(GenericView[T]):
+class BaseGenericListAPIView(GenericView):
     if TYPE_CHECKING:
         list: Callable
 
     response_schema_as_list: bool = False
     filter: type[BaseModel] | None
-    pagination_class: type[BasePage[T]] | None = None
 
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
         if action == "list":
-            if cls.pagination_class is not None:
-                return cls.pagination_class[cls.response_schema]  # type: ignore[index]
-            return list[cls.response_schema]  # type: ignore[name-defined]
+            container_cls = list
+            if cls.filter is not None:
+                if issubclass(cls.filter, PaginationFilter):
+                    container_cls = NumberedPage
+                elif issubclass(cls.filter, TokenPaginationFilter):
+                    container_cls = TokenPage
+            return container_cls[cls.response_schema]
         return cls.response_schema
 
     def __init_subclass__(cls) -> None:
