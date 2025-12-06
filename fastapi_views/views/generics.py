@@ -127,7 +127,7 @@ class BaseGenericListAPIView(GenericView):
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
         if action == "list":
-            container_cls = list
+            container_cls: Any = list
             if cls.filter is not None:
                 if issubclass(cls.filter, PaginationFilter):
                     container_cls = NumberedPage
