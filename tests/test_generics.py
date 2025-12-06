@@ -14,7 +14,7 @@ from .utils import view_as_fixture
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from fastapi_views.filters.models import PaginationFilter
+    from fastapi_views.filters.models import BasePaginationFilter
 
 
 class ItemId(BaseModel):
@@ -44,7 +44,9 @@ class ItemRepository:
     async def get(self, **kwargs: Any) -> dict[str, Any] | None:
         return self._data.get(kwargs["id"])
 
-    async def get_filtered_page(self, filter: PaginationFilter) -> Page[dict[str, Any]]:
+    async def get_filtered_page(
+        self, filter: BasePaginationFilter
+    ) -> Page[dict[str, Any]]:
         raise NotImplementedError
 
     async def list(self) -> Sequence[dict[str, Any]]:
