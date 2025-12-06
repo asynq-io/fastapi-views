@@ -36,6 +36,7 @@ M_co = TypeVar("M_co", covariant=True)
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from fastapi_views.pagination import BasePage
     from fastapi_views.types import Action
 
 
@@ -91,7 +92,7 @@ class WithAsyncRepositoryMixin(Generic[M]):
     repository: AsyncRepository[M]
 
 
-class GenericView(APIView):
+class GenericView(APIView[T]):
     @classmethod
     def _patch_schema(cls, func: Callable, action: Action | None = None) -> None:
         name = action or func.__name__
@@ -116,12 +117,13 @@ class DetailGenericView(GenericView, Generic[PK]):
         return (), primary_key.model_dump() | self.get_kwargs(action)
 
 
-class BaseGenericListAPIView(GenericView):
+class BaseGenericListAPIView(GenericView[T]):
     if TYPE_CHECKING:
         list: Callable
 
     response_schema_as_list: bool = False
     filter: type[BaseModel] | None
+    pagination_class: type[BasePage[T]] | None = None
 
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
