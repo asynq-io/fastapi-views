@@ -3,7 +3,11 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal, Protocol
 
-from fastapi_views.filters.models import OrderingFilter, PaginationFilter
+from fastapi_views.filters.models import (
+    OrderingFilter,
+    PaginationFilter,
+    TokenPaginationFilter,
+)
 from fastapi_views.filters.operations import (
     FilterOperation,
     LogicalOperation,
@@ -120,8 +124,13 @@ class SQLAlchemyFilterResolver(FilterResolver):
 
             queryset = queryset.order_by(*order_by)
 
-        if isinstance(filter, PaginationFilter) and "paginate" not in excluded:
-            queryset = queryset.offset(filter.offset).limit(filter.limit)
+        if "paginate" not in excluded:
+            if isinstance(filter, PaginationFilter):
+                queryset = queryset.offset(filter.offset).limit(filter.limit)
+            elif isinstance(filter, TokenPaginationFilter):
+                queryset = self.apply_token_pagination(
+                    queryset, filter.page_token, filter.page_size
+                )
 
         return queryset
 
@@ -135,3 +144,10 @@ class SQLAlchemyFilterResolver(FilterResolver):
         if extra:
             order_by.extend(extra)
         return order_by
+
+    def apply_token_pagination(
+        self, queryset: Any, page: str | None, page_size: int
+    ) -> Any:
+        # warning: sqlalchemy itself does not implement token based pagination,
+        # it is up to user to implement it using something like sqlakeyset: https://github.com/djrobstep/sqlakeyset
+        raise NotImplementedError

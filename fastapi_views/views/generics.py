@@ -8,9 +8,8 @@ from typing_extensions import TypeVar
 
 from fastapi_views.exceptions import Conflict
 from fastapi_views.filters.dependencies import FilterDepends
-from fastapi_views.filters.models import BaseFilter, PaginationFilter
-from fastapi_views.pagination import NumberedPage
-from fastapi_views.views.api import APIView
+from fastapi_views.filters.models import BaseFilter, BasePaginationFilter
+from fastapi_views.views.api import APIView, T
 
 from .api import (
     AsyncCreateAPIView,
@@ -32,6 +31,7 @@ M_co = TypeVar("M_co", covariant=True)
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from fastapi_views.pagination import BasePage
     from fastapi_views.types import Action
 
 
@@ -52,7 +52,7 @@ class Repository(Protocol[M_co]):
 
     def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    def get_filtered_page(self, filter: PaginationFilter) -> Page[M_co]: ...
+    def get_filtered_page(self, filter: BasePaginationFilter) -> Page[M_co]: ...
 
     def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -68,7 +68,7 @@ class AsyncRepository(Protocol[M_co]):
 
     async def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    async def get_filtered_page(self, filter: PaginationFilter) -> Page[M_co]: ...
+    async def get_filtered_page(self, filter: BasePaginationFilter) -> Page[M_co]: ...
 
     async def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -87,7 +87,7 @@ class WithAsyncRepositoryMixin(Generic[M]):
     repository: AsyncRepository[M]
 
 
-class GenericView(APIView):
+class GenericView(APIView[T]):
     @classmethod
     def _patch_schema(cls, func: Callable, action: Action | None = None) -> None:
         name = action or func.__name__
@@ -112,18 +112,19 @@ class DetailGenericView(GenericView, Generic[PK]):
         return (), primary_key.model_dump() | self.get_kwargs(action)
 
 
-class BaseGenericListAPIView(GenericView):
+class BaseGenericListAPIView(GenericView[T]):
     if TYPE_CHECKING:
         list: Callable
 
     response_schema_as_list: bool = False
     filter: type[BaseModel] | None
+    pagination_class: type[BasePage[T]] | None = None
 
     @classmethod
     def get_response_schema(cls, action: Action | None = None) -> Any:
         if action == "list":
-            if cls.filter and issubclass(cls.filter, PaginationFilter):
-                return NumberedPage[cls.response_schema]  # type: ignore[name-defined]
+            if cls.pagination_class is not None:
+                return cls.pagination_class[cls.response_schema]  # type: ignore[index]
             return list[cls.response_schema]  # type: ignore[name-defined]
         return cls.response_schema
 
@@ -145,7 +146,7 @@ class AsyncGenericListAPIView(
     """AsyncGenericListAPIView"""
 
     async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, BasePaginationFilter):
             return await self.repository.get_filtered_page(filter)
         return await self.repository.list(**filter.model_dump())
 
@@ -154,7 +155,7 @@ class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixi
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, BasePaginationFilter):
             return self.repository.get_filtered_page(filter)
         return self.repository.list(**filter.model_dump())
 

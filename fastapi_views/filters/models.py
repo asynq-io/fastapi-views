@@ -1,10 +1,10 @@
 from collections.abc import MutableSequence
-from typing import Any, ClassVar, Union
+from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
 
 from fastapi import Query
 from pydantic import BaseModel, field_validator
 
-from fastapi_views.pagination import PageNumber, PageSize
+from fastapi_views.pagination import PageNumber, PageSize, PageToken
 
 from .operations import FilterOperation, LogicalOperation, SortOperation
 from .types import SearchQuery, Sort
@@ -12,6 +12,17 @@ from .types import SearchQuery, Sort
 
 class BaseFilter(BaseModel):
     special_fields: ClassVar[set[str]] = set()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+
+        parent_special_fields: set[str] = set()
+
+        for base in cls.__mro__[1:]:
+            special_fields: set[str] = getattr(base, "special_fields", set())
+            parent_special_fields |= special_fields
+
+        cls.special_fields |= parent_special_fields
 
     @property
     def filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
@@ -51,13 +62,19 @@ class ModelFilter(BaseFilter):
         return filters
 
 
-class PaginationFilter(BaseFilter):
-    page: PageNumber = 1
+PageType = TypeVar("PageType")
+
+
+class BasePaginationFilter(BaseFilter, Generic[PageType]):
+    special_fields = {"page_size"}
+
     page_size: PageSize = 100
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        cls.special_fields = cls.special_fields | {"page", "page_size"}
+
+class PaginationFilter(BasePaginationFilter):
+    special_fields = {"page"}
+
+    page: PageNumber = 1
 
     @property
     def offset(self) -> int:
@@ -68,14 +85,21 @@ class PaginationFilter(BaseFilter):
         return self.page_size
 
 
+class TokenPaginationFilter(BasePaginationFilter):
+    special_fields = {"page_token"}
+
+    page_token: Optional[PageToken] = None
+
+
 class OrderingFilter(BaseFilter):
+    special_fields = {"sort"}
+
     ordering_fields: ClassVar[set[str]] = set()
 
     sort: Sort
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls.special_fields = cls.special_fields | {"sort"}
         if "sort" in cls.model_fields and cls.ordering_fields:
             cls.model_fields["sort"].default = Query(
                 None,
@@ -114,12 +138,9 @@ class OrderingFilter(BaseFilter):
 
 
 class SearchFilter(BaseFilter):
+    special_fields = {"query"}
     search_fields: ClassVar[set[str]] = set()
     query: SearchQuery
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        cls.special_fields = cls.special_fields | {"query"}
-        super().__init_subclass__(**kwargs)
 
     def get_filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
         filters = super().get_filters()
