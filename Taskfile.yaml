@@ -1,35 +1,9 @@
-version: '3'
-
+version: "3"
 
 tasks:
   test:
     desc: "Run pytest"
-    cmds:
-      - poetry run pytest -v
-
-  lint:
-    desc: "Run black & flake8"
-    cmds:
-      - poetry run black .
-      - poetry run flake8 .
-
+    cmd: uv run pytest -vvv ./tests
   version:
-    desc: Print current version
-    silent: true
-    cmds:
-      - poetry run semantic-release print-version --current
-
-  patch:
-    desc: Bump patch version
-    cmds:
-      - poetry run semantic-release version --patch
-
-  minor:
-    desc: Bump minor version
-    cmds:
-      - poetry run semantic-release version --minor
-
-  semrel:
-    desc: Automatically generate next version from commit message
-    cmds:
-      - poetry run semantic-release version
+    desc: "Bump version"
+    cmd: uv version --bump {{.CLI_ARGS}}
