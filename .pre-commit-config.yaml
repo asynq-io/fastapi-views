@@ -28,3 +28,8 @@ repos:
     hooks:
       - id: mypy
         args: ["--install-types", "--non-interactive"]
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.13
+    hooks:
+      - id: uv-lock
