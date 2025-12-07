@@ -21,7 +21,7 @@ Sort = Annotated[
 ]
 
 Fields = Annotated[
-    set[T] | None,
+    Optional[set[T]],
     Field(Query(None, description="List of fields to include in response")),
 ]
 AnyFields = Fields[str]

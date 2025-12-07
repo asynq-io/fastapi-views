@@ -1,9 +1,10 @@
 import base64
 import os
-from typing import Annotated, Generic, Optional, TypeAlias, TypeVar
+from typing import Annotated, Generic, Optional, TypeVar
 
 from annotated_types import Interval
 from pydantic import AfterValidator, Field, PlainSerializer, PositiveInt
+from typing_extensions import TypeAlias
 
 from .models import BaseSchema
 
