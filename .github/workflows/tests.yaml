@@ -49,7 +49,7 @@ jobs:
           uv run ruff format ./fastapi_views --check
       - name: Mypy
         if: matrix.python-version == '3.14'
-        run: uv run mypy --install-types --non-interactive ./fastapi_views
+        run: uv run mypy ./fastapi_views
       - name: Bandit
         if: matrix.python-version == '3.14'
         run: uv run bandit --skip B101 -r ./fastapi_views
