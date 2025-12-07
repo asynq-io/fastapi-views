@@ -77,6 +77,7 @@ lint = [
     "mypy>=1.18.1",
     "ruff>=0.12.10",
     "bandit>=1.8.6",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 
 docs = [
