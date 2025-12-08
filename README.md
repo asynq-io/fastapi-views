@@ -87,6 +87,7 @@ configure_app(app)
 - Class Based Views
   - APIViews
   - ViewSets
+  - Generic Views & ViewSets
 - Both async and sync function support
 - No dependencies on ORM
 - OpenAPI operation id simplification

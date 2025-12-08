@@ -2,31 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
 from starlette.status import HTTP_204_NO_CONTENT
-from typing_extensions import Concatenate
-
-from fastapi_views.types import P
-from fastapi_views.views.mixins import ErrorHandlerMixin
+from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict
 
 if TYPE_CHECKING:
     from fastapi_views.exceptions import APIError
-    from fastapi_views.models import ErrorDetails
     from fastapi_views.views.api import View
+    from fastapi_views.views.mixins import ErrorHandlerMixin
 
 VIEWSET_ROUTE_FLAG = "_is_viewset_route"
 
-ErrFn = Callable[Concatenate[ErrorHandlerMixin, P], Any]
+_P = ParamSpec("_P")
 
 V = TypeVar("V", bound="View")
 
-EndpointFn = Callable[Concatenate[V, P], Any]
+EndpointFn = Callable[Concatenate[V, _P], Any]
 
 
 def annotate(**kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
-        func.kwargs = kwargs  # type: ignore[attr-defined]
+        func.__setattr__("kwargs", kwargs)
         return func
 
     return wrapper
@@ -35,8 +33,24 @@ def annotate(**kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
 override = annotate
 
 
-def errors(*exceptions: type[APIError]) -> dict[int, dict[str, type[ErrorDetails]]]:
-    return {e.get_status(): {"model": e.model} for e in exceptions if e.model}
+class Responses(TypedDict):
+    model: Any
+    description: NotRequired[str | None]
+
+
+def errors(*exceptions: type[APIError]) -> dict[int, Responses]:
+    status_to_exc: dict[int, list[type[APIError]]] = defaultdict(list)
+    for e in exceptions:
+        status = e.get_status()
+        status_to_exc[status].append(e)
+    responses: dict[int, Responses] = {}
+    for status, excs in status_to_exc.items():
+        if len(excs) == 1:
+            exc = excs[0]
+            responses[status] = {"model": exc.model, "description": exc.__doc__}
+        else:
+            responses[status] = {"model": Union[tuple(e.model for e in excs)]}
+    return responses
 
 
 def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:
@@ -53,11 +67,16 @@ def route(path: str, **kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
 
 def catch(
     exc_type: type[Exception] | tuple[type[Exception]], **kw: Any
-) -> Callable[[ErrFn], ErrFn]:
-    def wrapper(func: ErrFn) -> ErrFn:
+) -> Callable[
+    [Callable[Concatenate[ErrorHandlerMixin, _P], Any]],
+    Callable[Concatenate[ErrorHandlerMixin, _P], Any],
+]:
+    def wrapper(
+        func: Callable[Concatenate[ErrorHandlerMixin, _P], Any],
+    ) -> Callable[Concatenate[ErrorHandlerMixin, _P], Any]:
         @functools.wraps(func)
         async def wrapped_async(
-            self: ErrorHandlerMixin, *args: P.args, **kwargs: P.kwargs
+            self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
         ) -> Any:
             try:
                 return await func(self, *args, **kwargs)
@@ -66,7 +85,7 @@ def catch(
 
         @functools.wraps(func)
         def wrapped_sync(
-            self: ErrorHandlerMixin, *args: P.args, **kwargs: P.kwargs
+            self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
         ) -> Any:
             try:
                 return func(self, *args, **kwargs)
@@ -80,10 +99,12 @@ def catch(
     return wrapper
 
 
-def catch_defined(func: ErrFn) -> ErrFn:
+def catch_defined(
+    func: Callable[Concatenate[ErrorHandlerMixin, _P], Any],
+) -> Callable[Concatenate[ErrorHandlerMixin, _P], Any]:
     @functools.wraps(func)
     async def wrapped_async(
-        self: ErrorHandlerMixin, *args: P.args, **kwargs: P.kwargs
+        self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
     ) -> Any:
         try:
             return await func(self, *args, **kwargs)
@@ -91,7 +112,9 @@ def catch_defined(func: ErrFn) -> ErrFn:
             self.handle_error(e)
 
     @functools.wraps(func)
-    def wrapped_sync(self: ErrorHandlerMixin, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def wrapped_sync(
+        self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
+    ) -> Any:
         try:
             return func(self, *args, **kwargs)
         except self.get_exception_class() as e:

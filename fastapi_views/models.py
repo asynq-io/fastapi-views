@@ -24,7 +24,7 @@ from starlette.status import (
 )
 from typing_extensions import Self
 
-from .opentelemetry import get_correlation_id
+from .opentelemetry import get_correlation_id, has_opentelemetry
 
 
 class BaseSchema(BaseModel):
@@ -68,25 +68,40 @@ class ErrorDetails(BaseSchema):
     status: int = Field(description="Error status")
     detail: str = Field(description="Error detail")
     instance: Optional[str] = Field(None, description="Requested instance")
-    correlation_id: Optional[str] = Field(
-        description="Optional correlation id", default_factory=get_correlation_id
-    )
+
+    if has_opentelemetry():
+        correlation_id: Optional[str] = Field(
+            description="Optional correlation id", default_factory=get_correlation_id
+        )
     errors: list[Any] = Field([], description="List of any additional errors")
 
 
+def const_type(
+    value: Any, description: Optional[str] = None, **kwargs: Any
+) -> tuple[Any, Any]:
+    return (Literal[value], Field(value, description=description, **kwargs))
+
+
 def create_error_model(
-    status: int, type: str, **extra_fields: Any
+    status: int,
+    type: str = "about:blank",
+    name: Optional[str] = None,
+    __doc__: Optional[str] = None,
+    __base__: type[ErrorDetails] = ErrorDetails,
+    **extra_fields: Any,
 ) -> type[ErrorDetails]:
     status_code = http.HTTPStatus(status)
     title = status_code.phrase
-    name = title.replace(" ", "")
+    if name is None:
+        name = title.replace(" ", "")
     detail = status_code.description
     return create_model(
         name,
-        __base__=ErrorDetails,
-        title=(Literal[title], Field(title, description="Error title")),
-        status=(Literal[status], Field(status, description="Error status")),
-        type=(Literal[type], Field(type, description="Error type")),
+        __base__=__base__,
+        __doc__=__doc__,
+        title=const_type(title, "Error title"),
+        status=const_type(status, "Error status"),
+        type=const_type(type, "Error type"),
         detail=(str, Field(detail, description="Error detail")),
         **extra_fields,
     )

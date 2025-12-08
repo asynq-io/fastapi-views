@@ -13,6 +13,15 @@ def get_correlation_id() -> str | None:
     return CORRELATION_ID.get()
 
 
+def has_opentelemetry() -> bool:
+    try:
+        import opentelemetry.instrumentation.fastapi  # noqa: F401
+    except ImportError:
+        return False
+    else:
+        return True
+
+
 def maybe_instrument_app(app: FastAPI, **options: Any) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Generator
+from copy import deepcopy
 from typing import (
     Any,
     Callable,
@@ -17,7 +18,7 @@ from fastapi import Depends, Request, Response
 from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from typing_extensions import Concatenate
+from typing_extensions import Concatenate, ParamSpec
 
 from fastapi_views.exceptions import (
     APIError,
@@ -25,12 +26,13 @@ from fastapi_views.exceptions import (
     Conflict,
     NotFound,
 )
-from fastapi_views.types import Action, P, SerializerOptions
+from fastapi_views.types import Action, SerializerOptions
 
 from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DetailViewMixin, ErrorHandlerMixin
 
 Endpoint = Callable[..., Union[Response, Awaitable[Response]]]
+P = ParamSpec("P")
 T = TypeVar("T")
 TypeAdapterMap = dict[T, TypeAdapter[T]]
 AnyTypeAdapter: TypeAdapter[Any] = TypeAdapter(Any)
@@ -193,9 +195,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
 
     def __init__(self, request: Request, response: Response) -> None:
         self.validation_context = None
-        self.serializer_options: SerializerOptions = dict(
-            **self.default_serializer_options
-        )
+        self.serializer_options = deepcopy(self.default_serializer_options)
         response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 
