@@ -26,6 +26,8 @@ classifiers = [
 "Framework :: Pydantic :: 1",
 "Framework :: Pydantic :: 2",
 "Intended Audience :: Developers",
+"Programming Language :: Python :: Implementation :: CPython",
+"Programming Language :: Python :: Implementation :: PyPy",
 "Programming Language :: Python :: 3 :: Only",
 "Programming Language :: Python :: 3.8",
 "Programming Language :: Python :: 3.9",
