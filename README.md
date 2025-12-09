@@ -26,6 +26,13 @@ Repository: https://github.com/asynq-io/fastapi-views
 pip install fastapi-views
 ```
 
+## Optional dependencies
+Avaliable extensions: `uvloop`, `prometheus`, `uvicorn`, `opentelemetry`, `cli`
+
+```shell
+pip install 'fastapi-views[all]'
+```
+
 ## Usage
 
 ```python

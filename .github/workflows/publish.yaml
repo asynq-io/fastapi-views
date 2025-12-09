@@ -13,12 +13,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
-      - name: Install dependencies
-        run: pipx install hatch
-      - name: Build
-        run: hatch build
-      - name: Publish
-        uses: pypa/gh-action-pypi-publish@v1.13.0
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          password: ${{ secrets.PYPI_TOKEN }}
+          version: "0.8.13"
+      - name: Build
+        run: uv build
+      - name: Publish
+        run: uv publish --token ${{ secrets.PYPI_TOKEN }}

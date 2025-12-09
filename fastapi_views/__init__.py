@@ -1,6 +1,10 @@
-from ._version import __version__
+from importlib.metadata import version
+
 from .config import configure_app
 from .router import ViewRouter
+
+__version__ = version(__name__)
+
 
 __all__ = [
     "ViewRouter",
