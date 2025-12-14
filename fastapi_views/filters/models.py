@@ -1,5 +1,5 @@
 from collections.abc import MutableSequence
-from typing import Any, ClassVar, Optional, Union
+from typing import Any, ClassVar, Literal, Optional, Union
 
 from fastapi import Query
 from pydantic import BaseModel, field_validator
@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator
 from fastapi_views.pagination import PageNumber, PageSize, PageToken
 
 from .operations import FilterOperation, LogicalOperation, SortOperation
-from .types import SearchQuery, Sort
+from .types import AnyFields, SearchQuery, Sort
 
 
 class BaseFilter(BaseModel):
@@ -156,13 +156,35 @@ class SearchFilter(BaseFilter):
         return filters
 
 
+# consider implementing projection at queryset level via custom OperationType
+class FieldsFilter(BaseFilter):
+    special_fields = {"fields"}
+    fields_from: ClassVar[Optional[type[BaseModel]]] = None
+
+    fields: AnyFields
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        if cls.fields_from:
+            cls.model_fields["fields"].annotation = set[  # type: ignore[misc]
+                Literal[tuple(cls.fields_from.model_fields)]
+            ]
+        super().__init_subclass__(**kwargs)
+
+    def get_fields(self) -> Optional[set[str]]:
+        # consider implementing advanced include/exclude (subfields) later on
+        return self.fields
+
+
 class Filter(
     PaginationFilter,
     OrderingFilter,
     SearchFilter,
+    FieldsFilter,
     ModelFilter,
 ):
     pass
 
 
-AnyFilter = Union[BaseFilter, SearchFilter, OrderingFilter, PaginationFilter]
+AnyFilter = Union[
+    BaseFilter, SearchFilter, OrderingFilter, PaginationFilter, FieldsFilter
+]
