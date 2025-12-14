@@ -165,8 +165,8 @@ class FieldsFilter(BaseFilter):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         if cls.fields_from:
-            annotation = set[Literal[tuple(cls.fields_from.model_fields)]]  # type: ignore[valid-type,misc]
-            cls.model_fields["fields"].annotation = annotation
+            fields = tuple(cls.fields_from.model_fields)
+            cls.model_fields["fields"].annotation = set[Literal[fields]]  # type: ignore[valid-type]
         super().__init_subclass__(**kwargs)
 
     def get_fields(self) -> Optional[set[str]]:
