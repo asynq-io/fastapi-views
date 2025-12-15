@@ -156,7 +156,8 @@ class SearchFilter(BaseFilter):
         return filters
 
 
-# consider implementing projection at queryset level via custom OperationType
+# consider implementing projection at queryset level using new OperationType
+# but this will require importing sqlalchemy load_only or leaving abstractmethod
 class FieldsFilter(BaseFilter):
     special_fields = {"fields"}
     fields_from: ClassVar[Optional[type[BaseModel]]] = None
@@ -170,7 +171,8 @@ class FieldsFilter(BaseFilter):
         super().__init_subclass__(**kwargs)
 
     def get_fields(self) -> Optional[set[str]]:
-        # consider implementing advanced include/exclude (subfields) later on
+        # consider implementing advanced include/exclude (subfields)
+        # using '__ ' syntax later on, for now only top-level fields are supported
         return self.fields
 
 
