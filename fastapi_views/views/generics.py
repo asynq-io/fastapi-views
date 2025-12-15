@@ -10,6 +10,7 @@ from fastapi_views.filters.dependencies import FilterDepends
 from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
+    FieldsFilter,
     PaginationFilter,
     TokenPaginationFilter,
 )
@@ -146,6 +147,17 @@ class BaseGenericListAPIView(GenericView):
             BaseFilter, FilterDepends(filter_)  # type: ignore[type-var, unused-ignore]
         ]
 
+    def _apply_fields_filter(self, filter: BaseFilter) -> None:
+        if isinstance(filter, FieldsFilter):
+            fields = filter.get_fields()
+            if not fields:
+                return
+            response_schema = self.get_response_schema("list")
+            key = "__all__"
+            if issubclass(response_schema, (PaginationFilter, TokenPaginationFilter)):
+                key = "items"
+            self.serializer_options["include"] = {key: fields}
+
 
 class AsyncGenericListAPIView(
     AsyncListAPIView, BaseGenericListAPIView, WithAsyncRepositoryMixin
@@ -153,18 +165,22 @@ class AsyncGenericListAPIView(
     """AsyncGenericListAPIView"""
 
     async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        self._apply_fields_filter(filter)
         if isinstance(filter, BasePaginationFilter):
             return await self.repository.get_filtered_page(filter)
-        return await self.repository.list(**filter.model_dump())
+        return await self.repository.list(
+            **filter.model_dump(exclude=filter.special_fields)
+        )
 
 
 class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        self._apply_fields_filter(filter)
         if isinstance(filter, BasePaginationFilter):
             return self.repository.get_filtered_page(filter)
-        return self.repository.list(**filter.model_dump())
+        return self.repository.list(**filter.model_dump(exclude=filter.special_fields))
 
 
 class BaseGenericCreateAPIView(GenericView):
