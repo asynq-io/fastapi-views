@@ -183,7 +183,10 @@ class Filter(
     FieldsFilter,
     ModelFilter,
 ):
-    pass
+    """
+    Main filter class that implements all the functionalities:
+    pagination, ordering, search, fields and custom attributes filter
+    """
 
 
 AnyFilter = Union[

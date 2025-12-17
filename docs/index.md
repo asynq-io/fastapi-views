@@ -66,6 +66,19 @@ class MyViewSet(AsyncAPIViewSet):
     async def destroy(self, id: UUID) -> None:
         self.items.pop(id, None)
 
+# Generics viewsets generate crud automatically using repository pattern
+# for more complete example check out examples/generics
+from fastapi_views.filters import Filter
+
+class ItemGenericViewSet(AsyncGenericViewSet):
+    api_component_name = "Item"
+    primary_key = ItemId
+    response_schema = ItemSchema
+    create_schema = UpdateItemSchema
+    update_schema = UpdateItemSchema
+    partial_update_schema = UpdateItemSchema
+    filter = Filter
+    repository = ItemRepository()  # to implement
 
 router = ViewRouter(prefix="/items")
 router.register_view(MyViewSet)
