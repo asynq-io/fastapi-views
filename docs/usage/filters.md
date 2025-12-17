@@ -5,6 +5,7 @@
 - `OrderingFilter` - class for ordering by fields
 - `SearchFilter` - class for searching by fields
 - `PaginationFilter` - class for pagination
+- `FieldsFilter` - class for filtering out response fields
 - `Filter` - All of the above
 
 

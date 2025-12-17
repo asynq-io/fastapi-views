@@ -79,6 +79,17 @@ class MyViewSet(AsyncAPIViewSet):
     async def destroy(self, id: UUID) -> None:
         self.items.pop(id, None)
 
+# Generics viewsets generate crud automatically using repository pattern
+# for more complete example check out examples/generics
+class ItemGenericViewSet(AsyncGenericViewSet):
+    api_component_name = "Item"
+    primary_key = ItemId
+    response_schema = Item
+    create_schema = UpdateItemSchema
+    update_schema = UpdateItemSchema
+    partial_update_schema = UpdateItemSchema
+    filter = None
+    repository = ItemRepository()  # to implement
 
 router = ViewRouter(prefix="/items")
 router.register_view(MyViewSet)
@@ -104,3 +115,4 @@ configure_app(app)
 - Optional Opentelemetry instrumentation with `correlation_id` in error responses
 - CLI for generating OpenAPI documentation file
 - Pagination types & schemas
+- Advanced drf-like filters
