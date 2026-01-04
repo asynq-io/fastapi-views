@@ -116,3 +116,4 @@ configure_app(app)
 - CLI for generating OpenAPI documentation file
 - Pagination types & schemas
 - Advanced drf-like filters
+- Server Side Events

@@ -38,12 +38,12 @@ class APIModel(BaseModel):
 
 class BasicAPIView(APIView):
     """
-    API view that populates
+    API View with custom methods
     """
 
     response_schema = APIModel
 
-    @get("")
+    @get()
     async def get_item(self):
         # automatically converted to APIModel
         return {"id": 1, "name": "example"}

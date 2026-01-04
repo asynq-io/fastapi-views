@@ -3,12 +3,19 @@ from __future__ import annotations
 import asyncio
 import functools
 from collections import defaultdict
+from collections.abc import AsyncIterable, Iterable
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
-from starlette.status import HTTP_204_NO_CONTENT
+from fastapi.responses import StreamingResponse
+from starlette.concurrency import iterate_in_threadpool
+from starlette.status import HTTP_200_OK, HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict
 
+from fastapi_views.models import AnyJsonServerSideEvent
+
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Awaitable, Iterator
+
     from fastapi_views.exceptions import APIError
     from fastapi_views.views.api import View
     from fastapi_views.views.mixins import ErrorHandlerMixin
@@ -57,10 +64,71 @@ def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:
     return override(responses=errors(*exceptions))
 
 
-def route(path: str, **kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
+def route(path: str = "", **kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
         setattr(func, VIEWSET_ROUTE_FLAG, True)
         return override(path=path, **kwargs)(func)
+
+    return wrapper
+
+
+def serialize_sse(id: Any, event: Any, data: Any) -> str:
+    return f"id: {id}\r\nevent: {event}\r\ndata: {data}\r\n\n"
+
+
+async def _wrapped_events(
+    iterable: Iterable[tuple[str, str, str]] | AsyncIterable[tuple[str, str, Any]],
+) -> AsyncIterator[str]:
+    if isinstance(iterable, AsyncIterable):
+        async_iterable = iterable
+    else:
+        async_iterable = iterate_in_threadpool(iterable)
+    async for id, event, data in async_iterable:
+        yield serialize_sse(id, event, data)
+
+
+def sse_route(path: str = "", **kwargs: Any) -> Any:
+    kwargs.setdefault("status_code", HTTP_200_OK)
+    kwargs.setdefault("methods", ["GET"])
+    kwargs.update(
+        {
+            "response_class": StreamingResponse,
+            "responses": {
+                kwargs["status_code"]: {
+                    "content": {
+                        "text/event-stream": {
+                            "schema": AnyJsonServerSideEvent.get_openapi_schema(
+                                title="ServerSideEvent"
+                            )
+                        }
+                    }
+                }
+            },
+        }
+    )
+
+    def wrapper(
+        func: Callable[
+            Concatenate[V, _P],
+            AsyncIterator[tuple[str, str, str]],
+        ]
+        | Callable[Concatenate[V, _P], Iterator[tuple[str, str, str]]],
+    ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
+        @functools.wraps(func)
+        async def wrapped(
+            self: V, *args: _P.args, **kwargs: _P.kwargs
+        ) -> StreamingResponse:
+            async_iterator = _wrapped_events(func(self, *args, **kwargs))
+            return StreamingResponse(
+                async_iterator,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "Connection": "keep-alive",
+                },
+            )
+
+        return route(path, **kwargs)(wrapped)
 
     return wrapper
 

@@ -10,7 +10,6 @@ Action = Literal["create", "list", "retrieve", "update", "destroy", "partial_upd
 
 
 class SerializerOptions(TypedDict, total=False):
-    indent: int | None
     include: IncEx | None
     exclude: IncEx | None
     by_alias: bool
