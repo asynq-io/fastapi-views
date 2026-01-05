@@ -8,15 +8,16 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import iterate_in_threadpool
-from starlette.status import HTTP_200_OK, HTTP_204_NO_CONTENT
-from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
+from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict, Unpack
 
-from fastapi_views.models import AnyJsonServerSideEvent
+from fastapi_views.models import JsonServerSideEvent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Iterator
 
     from fastapi_views.exceptions import APIError
+    from fastapi_views.types import BaseRouteOptions, PathRouteOptions, RouteOptions
     from fastapi_views.views.api import View
     from fastapi_views.views.mixins import ErrorHandlerMixin
 
@@ -29,7 +30,7 @@ V = TypeVar("V", bound="View")
 EndpointFn = Callable[Concatenate[V, _P], Any]
 
 
-def annotate(**kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
+def annotate(**kwargs: Unpack[PathRouteOptions]) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
         func.__setattr__("kwargs", kwargs)
         return func
@@ -45,12 +46,12 @@ class Responses(TypedDict):
     description: NotRequired[str | None]
 
 
-def errors(*exceptions: type[APIError]) -> dict[int, Responses]:
+def errors(*exceptions: type[APIError]) -> dict[int | str, dict[str, Any]]:
     status_to_exc: dict[int, list[type[APIError]]] = defaultdict(list)
     for e in exceptions:
         status = e.get_status()
         status_to_exc[status].append(e)
-    responses: dict[int, Responses] = {}
+    responses: dict[int | str, dict[str, Any]] = {}
     for status, excs in status_to_exc.items():
         if len(excs) == 1:
             exc = excs[0]
@@ -64,7 +65,9 @@ def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:
     return override(responses=errors(*exceptions))
 
 
-def route(path: str = "", **kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
+def route(
+    path: str = "", **kwargs: Unpack[RouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
         setattr(func, VIEWSET_ROUTE_FLAG, True)
         return override(path=path, **kwargs)(func)
@@ -73,7 +76,7 @@ def route(path: str = "", **kwargs: Any) -> Callable[[EndpointFn], EndpointFn]:
 
 
 def serialize_sse(id: Any, event: Any, data: Any) -> str:
-    return f"id: {id}\r\nevent: {event}\r\ndata: {data}\r\n\n"
+    return f"id: {id}\nevent: {event}\ndata: {data}\n\n"
 
 
 async def _wrapped_events(
@@ -87,17 +90,18 @@ async def _wrapped_events(
         yield serialize_sse(id, event, data)
 
 
-def sse_route(path: str = "", **kwargs: Any) -> Any:
+def sse_route(path: str = "", **kwargs: Unpack[RouteOptions]) -> Any:
+    status_code = kwargs.get("status_code", HTTP_200_OK)
     kwargs.setdefault("status_code", HTTP_200_OK)
     kwargs.setdefault("methods", ["GET"])
     kwargs.update(
         {
             "response_class": StreamingResponse,
             "responses": {
-                kwargs["status_code"]: {
+                status_code: {
                     "content": {
                         "text/event-stream": {
-                            "schema": AnyJsonServerSideEvent.get_openapi_schema(
+                            "schema": JsonServerSideEvent.get_openapi_schema(
                                 title="ServerSideEvent"
                             )
                         }
@@ -193,8 +197,33 @@ def catch_defined(
     return wrapped_sync
 
 
-get = functools.partial(route, methods=["GET"])
-post = functools.partial(route, methods=["POST"])
-put = functools.partial(route, methods=["PUT"])
-patch = functools.partial(route, methods=["PATCH"])
-delete = functools.partial(route, methods=["DELETE"], status_code=HTTP_204_NO_CONTENT)
+def get(
+    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
+    return route(path, methods=["GET"], **kwargs)
+
+
+def post(
+    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
+    kwargs.setdefault("status_code", HTTP_201_CREATED)
+    return route(path, methods=["POST"], **kwargs)
+
+
+def put(
+    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
+    return route(path, methods=["PUT"], **kwargs)
+
+
+def patch(
+    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
+    return route(path, methods=["PATCH"], **kwargs)
+
+
+def delete(
+    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+) -> Callable[[EndpointFn], EndpointFn]:
+    kwargs.setdefault("status_code", HTTP_204_NO_CONTENT)
+    return route(path, methods=["DELETE"], **kwargs)

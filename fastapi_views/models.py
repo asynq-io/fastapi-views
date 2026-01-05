@@ -70,7 +70,7 @@ class ServerSideEvent(BaseSchema, Generic[D]):
         return schema_dump
 
 
-class AnyJsonServerSideEvent(ServerSideEvent[Union[dict[str, Any], Any]]):
+class JsonServerSideEvent(ServerSideEvent[dict[str, Any]]):
     pass
 
 

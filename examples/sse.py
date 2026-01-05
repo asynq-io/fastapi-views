@@ -18,7 +18,7 @@ class APIModel(BaseModel):
 
 class SSEView(ServerSideEventsAPIView):
     """
-    API view that populates
+    Automatic server side event view based on `events` method
     """
 
     response_schema = APIModel
@@ -28,7 +28,7 @@ class SSEView(ServerSideEventsAPIView):
         await asyncio.sleep(2)
         yield "data.received", {"id": 2, "name": "test2"}
 
-    @sse_route("/v1")
+    @sse_route("/custom-function")
     async def function_sse_route(self):
         yield "1", "data.received", {"id": 1, "name": "test"}
         await asyncio.sleep(2)
