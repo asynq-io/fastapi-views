@@ -1,9 +1,7 @@
-import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any, Optional
 
 import pytest
-import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -21,9 +19,9 @@ from fastapi_views.views.api import (
 from .utils import view_as_fixture
 
 
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    return asyncio.get_event_loop()
+@pytest.fixture(autouse=True, scope="session")
+def anyio_backend():
+    return "asyncio"
 
 
 @pytest.fixture
@@ -31,7 +29,7 @@ def app():
     return FastAPI()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture
 async def client(app) -> AsyncGenerator[AsyncClient, None]:
     async with (
         LifespanManager(app, startup_timeout=30),

@@ -68,7 +68,6 @@ test = [
     "asgi-lifespan",
     "httpx",
     "pytest",
-    "pytest-asyncio",
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
@@ -98,7 +97,6 @@ build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 addopts = "--cov=./fastapi_views"
 testpaths = ["./tests"]
 filterwarnings = "ignore::DeprecationWarning"
