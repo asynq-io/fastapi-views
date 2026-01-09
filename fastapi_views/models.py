@@ -1,7 +1,7 @@
 import http
 from datetime import datetime
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import (
     BaseModel,
@@ -55,22 +55,28 @@ class IdCreatedUpdatedSchema(IdSchema, CreatedUpdatedSchema):
 D = TypeVar("D", bound=Any)
 
 
+def _str_uuid() -> str:
+    return str(uuid4())
+
+
 class ServerSideEvent(BaseSchema, Generic[D]):
-    id: str
+    id: str = Field(default_factory=_str_uuid)
     event: str
     data: D
+    retry: Optional[int] = None
 
     @classmethod
-    def get_openapi_schema(cls, title: str = "ServerSideEvent") -> dict[str, Any]:
+    def get_openapi_schema(cls, title: Optional[str] = None) -> dict[str, Any]:
         schema_dump = cls.model_json_schema(
             ref_template="#/components/schemas/{model}", mode="serialization"
         )
-        schema_dump["title"] = title
         schema_dump.pop("$defs", None)
+        if title:
+            schema_dump["title"] = title
         return schema_dump
 
 
-class JsonServerSideEvent(ServerSideEvent[dict[str, Any]]):
+class AnyServerSideEvent(ServerSideEvent[Any]):
     pass
 
 

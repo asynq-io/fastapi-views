@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
+from fastapi_views.models import ServerSideEvent
 from fastapi_views.views import ServerSideEventsAPIView, sse_route
 
 ## APIView
@@ -16,6 +17,10 @@ class APIModel(BaseModel):
     name: str
 
 
+class APIModelSSE(ServerSideEvent[APIModel]):
+    pass
+
+
 class SSEView(ServerSideEventsAPIView):
     """
     Automatic server side event view based on `events` method
@@ -23,16 +28,16 @@ class SSEView(ServerSideEventsAPIView):
 
     response_schema = APIModel
 
-    async def events(self) -> AsyncIterator[tuple[str, Any]]:
-        yield "data.received", {"id": 1, "name": "test"}
+    async def events(self) -> AsyncIterator[Any]:
+        yield {"event": "data", "data": {"id": 1, "name": "test"}}
         await asyncio.sleep(2)
-        yield "data.received", {"id": 2, "name": "test2"}
+        yield {"event": "data", "data": {"id": 2, "name": "test2"}}
 
-    @sse_route("/custom-function")
-    async def function_sse_route(self):
-        yield "1", "data.received", {"id": 1, "name": "test"}
+    @sse_route("/custom-function", response_model=APIModel)
+    async def function_sse_route(self) -> AsyncIterator[Any]:
+        yield {"event": "data", "data": {"id": 1, "name": "test"}}
         await asyncio.sleep(2)
-        yield "2", "data.received", {"id": 2, "name": "test2"}
+        yield {"event": "data", "data": {"id": 2, "name": "test2"}}
 
 
 router = ViewRouter()

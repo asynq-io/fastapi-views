@@ -676,8 +676,13 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
         )
         yield from super().get_api_actions(prefix)
 
-    def generate_id(self) -> str:
+    @property
+    def event_id(self) -> str:
         return str(uuid4())
+
+    @property
+    def retry(self) -> Optional[int]:
+        return None
 
     @classmethod
     def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
@@ -702,13 +707,11 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
     ) -> AsyncIterator[str]:
         schema = self.get_response_schema()
         serializer = self.get_serializer(schema)
+
         async for event, data in self.events(*args, **kwargs):
-            event_id = self.generate_id()
             data = self.get_json_content(data, serializer).decode("utf-8")
-            yield serialize_sse(event_id, event, data)
+            yield serialize_sse(self.event_id, event, data, self.retry)
 
     @abstractmethod
-    def events(
-        self, *args: P.args, **kwargs: P.kwargs
-    ) -> AsyncIterator[tuple[str, Any]]:
+    def events(self, *args: P.args, **kwargs: P.kwargs) -> AsyncIterator[Any]:
         raise NotImplementedError

@@ -7,24 +7,29 @@ from collections.abc import AsyncIterable, Iterable
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
 from fastapi.responses import StreamingResponse
+from pydantic.type_adapter import TypeAdapter
 from starlette.concurrency import iterate_in_threadpool
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict, Unpack
 
-from fastapi_views.models import JsonServerSideEvent
+from fastapi_views.models import AnyServerSideEvent, ServerSideEvent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Iterator
 
     from fastapi_views.exceptions import APIError
-    from fastapi_views.types import BaseRouteOptions, PathRouteOptions, RouteOptions
+    from fastapi_views.types import (
+        BaseRouteOptions,
+        PathRouteOptions,
+        RouteOptions,
+        SerializerOptions,
+    )
     from fastapi_views.views.api import View
     from fastapi_views.views.mixins import ErrorHandlerMixin
 
 VIEWSET_ROUTE_FLAG = "_is_viewset_route"
 
 _P = ParamSpec("_P")
-
 V = TypeVar("V", bound="View")
 
 EndpointFn = Callable[Concatenate[V, _P], Any]
@@ -75,38 +80,47 @@ def route(
     return wrapper
 
 
-def serialize_sse(id: Any, event: Any, data: Any) -> str:
-    return f"id: {id}\nevent: {event}\ndata: {data}\n\n"
+def serialize_sse(id: Any, event: Any, data: Any, retry: int | None = None) -> str:
+    line = f"id: {id}\nevent: {event}\ndata: {data}\n"
+    if retry is not None:
+        line += f"retry: {retry}\n"
+    return f"{line}]\n"
 
 
 async def _wrapped_events(
-    iterable: Iterable[tuple[str, str, str]] | AsyncIterable[tuple[str, str, Any]],
+    iterable: Iterable[Any] | AsyncIterable[Any],
+    data_serializer: TypeAdapter[Any],
+    **options: Unpack[SerializerOptions],
 ) -> AsyncIterator[str]:
     if isinstance(iterable, AsyncIterable):
         async_iterable = iterable
     else:
         async_iterable = iterate_in_threadpool(iterable)
-    async for id, event, data in async_iterable:
-        yield serialize_sse(id, event, data)
+    async for item in async_iterable:
+        sse = AnyServerSideEvent.model_validate(item)
+        validated_data = data_serializer.validate_python(sse.data)
+        data = data_serializer.dump_json(validated_data, **options)
+        yield serialize_sse(sse.id, sse.event, data, sse.retry)
 
 
-def sse_route(path: str = "", **kwargs: Unpack[RouteOptions]) -> Any:
+def sse_route(
+    path: str = "",
+    serializer_options: SerializerOptions | None = None,
+    **kwargs: Unpack[RouteOptions],
+) -> Any:
     status_code = kwargs.get("status_code", HTTP_200_OK)
     kwargs.setdefault("status_code", HTTP_200_OK)
     kwargs.setdefault("methods", ["GET"])
+    response_model = kwargs.pop("response_model", Any)
+    schema = ServerSideEvent[response_model].get_openapi_schema(  # type: ignore[valid-type]
+        title=f"{response_model.__name__.title()}ServerSideEvent"
+    )
+    data_serializer = TypeAdapter(response_model)
     kwargs.update(
         {
             "response_class": StreamingResponse,
             "responses": {
-                status_code: {
-                    "content": {
-                        "text/event-stream": {
-                            "schema": JsonServerSideEvent.get_openapi_schema(
-                                title="ServerSideEvent"
-                            )
-                        }
-                    }
-                }
+                status_code: {"content": {"text/event-stream": {"schema": schema}}}
             },
         }
     )
@@ -114,15 +128,19 @@ def sse_route(path: str = "", **kwargs: Unpack[RouteOptions]) -> Any:
     def wrapper(
         func: Callable[
             Concatenate[V, _P],
-            AsyncIterator[tuple[str, str, str]],
+            AsyncIterator[Any],
         ]
-        | Callable[Concatenate[V, _P], Iterator[tuple[str, str, str]]],
+        | Callable[Concatenate[V, _P], Iterator[Any]],
     ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
         @functools.wraps(func)
         async def wrapped(
             self: V, *args: _P.args, **kwargs: _P.kwargs
         ) -> StreamingResponse:
-            async_iterator = _wrapped_events(func(self, *args, **kwargs))
+            async_iterator = _wrapped_events(
+                func(self, *args, **kwargs),
+                data_serializer,
+                **(serializer_options or {}),
+            )
             return StreamingResponse(
                 async_iterator,
                 media_type="text/event-stream",
