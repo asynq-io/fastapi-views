@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Collection, Generator
+from collections.abc import AsyncIterator, Awaitable, Generator
 from typing import (
     Any,
     Callable,
@@ -656,8 +656,6 @@ class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
 
 
 class ServerSideEventsAPIView(APIView, Generic[P]):
-    sse_methods: Collection[str] = ["GET"]
-
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("events", HTTP_200_OK)
@@ -666,7 +664,8 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
         yield cls.get_api_action(
             prefix=prefix,
             endpoint=cls.get_events_endpoint(status_code),
-            methods=cls.sse_methods,
+            methods=["GET"],
+            action="events",
             status_code=status_code,
             response_class=StreamingResponse,
             responses={
@@ -705,7 +704,7 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
     async def _serialized_events(
         self, *args: P.args, **kwargs: P.kwargs
     ) -> AsyncIterator[str]:
-        schema = self.get_response_schema()
+        schema = self.get_response_schema("events")
         serializer = self.get_serializer(schema)
 
         async for event, data in self.events(*args, **kwargs):

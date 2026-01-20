@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from starlette.routing import BaseRoute
 
 Entity = TypeVar("Entity", bound=Any)
-Action = Literal["create", "list", "retrieve", "update", "destroy", "partial_update"]
+Action = Literal[
+    "create", "list", "retrieve", "update", "destroy", "partial_update", "events"
+]
 
 
 class SerializerOptions(TypedDict, total=False):

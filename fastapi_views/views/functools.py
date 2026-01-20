@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import functools
+import inspect
 from collections import defaultdict
 from collections.abc import AsyncIterable, Iterable
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
@@ -118,6 +118,7 @@ def sse_route(
     data_serializer = TypeAdapter(response_model)
     kwargs.update(
         {
+            "response_model": None,
             "response_class": StreamingResponse,
             "responses": {
                 status_code: {"content": {"text/event-stream": {"schema": schema}}}
@@ -182,7 +183,7 @@ def catch(
             except exc_type as e:
                 self.handle_error(e, **kw)
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return wrapped_async
         return wrapped_sync
 
@@ -210,7 +211,7 @@ def catch_defined(
         except self.get_exception_class() as e:
             self.handle_error(e)
 
-    if asyncio.iscoroutinefunction(func):
+    if inspect.iscoroutinefunction(func):
         return wrapped_async
     return wrapped_sync
 

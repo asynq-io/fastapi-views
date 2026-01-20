@@ -9,8 +9,6 @@ from fastapi_views import ViewRouter, configure_app
 from fastapi_views.models import ServerSideEvent
 from fastapi_views.views import ServerSideEventsAPIView, sse_route
 
-## APIView
-
 
 class APIModel(BaseModel):
     id: int
