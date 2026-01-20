@@ -80,30 +80,35 @@ class ItemGenericViewSet(AsyncGenericViewSet):
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_list_generic(client):
     response = await client.get("/items")
     assert response.status_code == 200
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_create_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == 201
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_retrieve_not_found_generic(client):
     with pytest.raises(NotFound):
         await client.get(f"/items/{uuid4()}")
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_destroy_generic(client):
     response = await client.delete(f"/items/{uuid4()}")
     assert response.status_code == 204
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == 201
@@ -117,6 +122,7 @@ async def test_update_generic(client):
 
 
 @pytest.mark.usefixtures("items_generic")
+@pytest.mark.anyio
 async def test_partial_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == 201

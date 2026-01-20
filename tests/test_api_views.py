@@ -9,6 +9,7 @@ def validate_response_meta(response: Response, status_code: int = 200):
 
 
 @pytest.mark.usefixtures("list_view")
+@pytest.mark.anyio
 async def test_list_api_view(client, dummy_data):
     response = await client.get("/test")
     assert response.json() == [dummy_data]
@@ -16,6 +17,7 @@ async def test_list_api_view(client, dummy_data):
 
 
 @pytest.mark.usefixtures("retrieve_view")
+@pytest.mark.anyio
 async def test_retrieve_api_view(client, dummy_data):
     response = await client.get("/test")
     assert response.json() == dummy_data
@@ -23,6 +25,7 @@ async def test_retrieve_api_view(client, dummy_data):
 
 
 @pytest.mark.usefixtures("create_view")
+@pytest.mark.anyio
 async def test_create_api_view(client, dummy_data):
     response = await client.post("/test")
     assert response.json() == dummy_data
@@ -30,12 +33,14 @@ async def test_create_api_view(client, dummy_data):
 
 
 @pytest.mark.usefixtures("destroy_view")
+@pytest.mark.anyio
 async def test_destroy_api_view(client):
     response = await client.delete("/test")
     assert response.status_code == 204
 
 
 @pytest.mark.usefixtures("custom_retrieve_view")
+@pytest.mark.anyio
 async def test_custom_retrieve_api_view(client, dummy_data):
     response = await client.get("/test/custom")
     assert response.json() == dummy_data
