@@ -52,7 +52,7 @@ class APIError(Exception):
     status: ClassVar[int] = HTTP_400_BAD_REQUEST
     title: ClassVar[str]
     type: ClassVar[str]
-    detail: ClassVar[str | None]
+    detail: ClassVar[str | None] = None
 
     def __init__(
         self,
