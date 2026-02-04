@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import http
 import re
-from typing import Any, ClassVar, Literal, TypedDict
+from typing import Any, ClassVar, TypedDict
 
-from pydantic import Field, create_model
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
@@ -17,42 +16,7 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from .models import ErrorDetails
-
-
-def const_type(
-    value: Any, description: str | None = None, **kwargs: Any
-) -> tuple[Any, Any]:
-    return (Literal[value], Field(value, description=description, **kwargs))
-
-
-def create_error_model(
-    status: int,
-    type: str = "about:blank",
-    name: str | None = None,
-    title: str | None = None,
-    detail: str | None = None,
-    __doc__: str | None = None,
-    __base__: type[ErrorDetails] = ErrorDetails,
-    **extra_fields: Any,
-) -> type[ErrorDetails]:
-    status_code = http.HTTPStatus(status)
-    if title is None:
-        title = status_code.phrase
-    if name is None:
-        name = title.replace(" ", "")
-    if detail is None:
-        detail = status_code.description
-    return create_model(
-        name,
-        __base__=__base__,
-        __doc__=__doc__,
-        title=const_type(title, "Error title"),
-        status=const_type(status, "Error status"),
-        type=const_type(type, "Error type"),
-        detail=(str, Field(detail, description="Error detail")),
-        **extra_fields,
-    )
+from .models import ErrorDetails, const_type, create_error_model
 
 
 def _camel_to_title(name: str) -> str:
@@ -103,11 +67,12 @@ class APIError(Exception):
             kwargs["detail"] = detail
 
         if self.model is ErrorDetails:
-            status = http.HTTPStatus(HTTP_400_BAD_REQUEST)
+            status_code = kwargs.get("status", HTTP_400_BAD_REQUEST)
+            status = http.HTTPStatus(status_code)
             kwargs.setdefault("status", status.value)
             kwargs.setdefault("title", status.phrase)
             kwargs.setdefault("detail", status.description)
-            kwargs.setdefault("type", _RFC_TYPE_MAP.get(status, "about:blank"))
+            kwargs.setdefault("type", _RFC_TYPE_MAP.get(status_code, "about:blank"))
         self._model_instance = self.model(**kwargs)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

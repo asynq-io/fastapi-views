@@ -1,3 +1,4 @@
+import http
 from datetime import datetime
 from typing import Any, Generic, Literal, Optional, TypeVar, Union
 from uuid import UUID, uuid4
@@ -6,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    create_model,
 )
 from pydantic.alias_generators import to_camel
 from pydantic_core import Url
@@ -90,3 +92,38 @@ class ErrorDetails(BaseSchema):
         )
 
     errors: list[Any] = Field([], description="List of any additional errors")
+
+
+def const_type(
+    value: Any, description: Optional[str] = None, **kwargs: Any
+) -> tuple[Any, Any]:
+    return (Literal[value], Field(value, description=description, **kwargs))
+
+
+def create_error_model(
+    status: int,
+    type: str = "about:blank",
+    name: Optional[str] = None,
+    title: Optional[str] = None,
+    detail: Optional[str] = None,
+    __doc__: Optional[str] = None,
+    __base__: type[ErrorDetails] = ErrorDetails,
+    **extra_fields: Any,
+) -> type[ErrorDetails]:
+    status_code = http.HTTPStatus(status)
+    if title is None:
+        title = status_code.phrase
+    if name is None:
+        name = title.replace(" ", "")
+    if detail is None:
+        detail = status_code.description
+    return create_model(
+        name,
+        __base__=__base__,
+        __doc__=__doc__,
+        title=const_type(title, "Error title"),
+        status=const_type(status, "Error status"),
+        type=const_type(type, "Error type"),
+        detail=(str, Field(detail, description="Error detail")),
+        **extra_fields,
+    )
