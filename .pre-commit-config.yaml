@@ -2,10 +2,14 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      - id: check-added-large-files
-      - id: check-docstring-first
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+      - id: check-toml
       - id: check-json
       - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-added-large-files
+      - id: check-docstring-first
       - id: debug-statements
       - id: end-of-file-fixer
       - id: trailing-whitespace
