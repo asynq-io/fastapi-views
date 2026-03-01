@@ -28,7 +28,8 @@ def docs(
     app: str = typer.Argument(..., help="FastAPI application object"),
     out: Path = typer.Option("./openapi.json", help="Output file path"),
     format: str = typer.Option(
-        "json", help="Output format. Valid options are 'yaml' and 'json'(default)"
+        "json",
+        help="Output format. Valid options are 'yaml' and 'json'(default)",
     ),
 ) -> None:
     app_obj = import_from_string(app)

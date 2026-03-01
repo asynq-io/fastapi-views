@@ -19,7 +19,7 @@ resource = Resource(
         "service.name": "test-api",
         "service.version": "0.1.0",
         "service.instance.id": socket.gethostname(),
-    }
+    },
 )
 provider = TracerProvider(resource=resource)
 trace.set_tracer_provider(provider)

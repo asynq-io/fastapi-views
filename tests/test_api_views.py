@@ -1,8 +1,9 @@
 import pytest
 from httpx import Response
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 
-def validate_response_meta(response: Response, status_code: int = 200):
+def validate_response_meta(response: Response, status_code: int = HTTP_200_OK):
     assert response.status_code == status_code
     assert response.headers["Content-Type"] == "application/json"
     assert "Content-Length" in response.headers
@@ -29,14 +30,14 @@ async def test_retrieve_api_view(client, dummy_data):
 async def test_create_api_view(client, dummy_data):
     response = await client.post("/test")
     assert response.json() == dummy_data
-    validate_response_meta(response, 201)
+    validate_response_meta(response, HTTP_201_CREATED)
 
 
 @pytest.mark.usefixtures("destroy_view")
 @pytest.mark.anyio
 async def test_destroy_api_view(client):
     response = await client.delete("/test")
-    assert response.status_code == 204
+    assert response.status_code == HTTP_204_NO_CONTENT
 
 
 @pytest.mark.usefixtures("custom_retrieve_view")

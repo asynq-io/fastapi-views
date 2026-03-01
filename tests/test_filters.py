@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar
 
 import pytest
 
@@ -14,11 +16,11 @@ class User:
 
 
 class UserFilter(Filter):
-    ordering_fields = {"name", "age"}
-    search_fields = {"name"}
+    ordering_fields: ClassVar[set[str]] = {"name", "age"}
+    search_fields: ClassVar[set[str]] = {"name"}
 
-    name: Optional[str] = None
-    age: Optional[int] = None
+    name: str | None = None
+    age: str | None = None
 
 
 @pytest.fixture
@@ -46,12 +48,12 @@ def test_model_filter(users, resolver: ObjectFilterResolver):
 
 
 def test_order_by_filter(users, resolver):
-    filter = get_user_filter(sort=["name", "-age"])
-    ordered_users = resolver.apply_filter(filter, users)
+    filter_ = get_user_filter(sort=["name", "-age"])
+    ordered_users = resolver.apply_filter(filter_, users)
     assert ordered_users == [User("Alice", 35), User("Jane", 30), User("John", 25)]
 
 
 def test_search_users(users, resolver):
-    filter = get_user_filter(query="J", sort=["name"])
-    filtered_users = resolver.apply_filter(filter, users)
+    filter_ = get_user_filter(query="J", sort=["name"])
+    filtered_users = resolver.apply_filter(filter_, users)
     assert filtered_users == [User("Jane", 30), User("John", 25)]

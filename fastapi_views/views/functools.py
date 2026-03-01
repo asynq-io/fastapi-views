@@ -3,14 +3,14 @@ from __future__ import annotations
 import functools
 import inspect
 from collections import defaultdict
-from collections.abc import AsyncIterable, Iterable
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
+from collections.abc import AsyncIterable, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Concatenate, TypeVar, Union
 
 from fastapi.responses import StreamingResponse
 from pydantic.type_adapter import TypeAdapter
 from starlette.concurrency import iterate_in_threadpool
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from typing_extensions import Concatenate, NotRequired, ParamSpec, TypedDict, Unpack
+from typing_extensions import NotRequired, ParamSpec, TypedDict, Unpack
 
 from fastapi_views.models import AnyServerSideEvent, ServerSideEvent
 
@@ -62,7 +62,7 @@ def errors(*exceptions: type[APIError]) -> dict[int | str, dict[str, Any]]:
             exc = excs[0]
             responses[status] = {"model": exc.model, "description": exc.__doc__}
         else:
-            responses[status] = {"model": Union[tuple(e.model for e in excs)]}
+            responses[status] = {"model": Union[tuple(e.model for e in excs)]}  # noqa: UP007
     return responses
 
 
@@ -71,7 +71,8 @@ def throws(*exceptions: type[APIError]) -> Callable[..., EndpointFn]:
 
 
 def route(
-    path: str = "", **kwargs: Unpack[RouteOptions]
+    path: str = "",
+    **kwargs: Unpack[RouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
         setattr(func, VIEWSET_ROUTE_FLAG, True)
@@ -113,7 +114,7 @@ def sse_route(
     kwargs.setdefault("methods", ["GET"])
     response_model = kwargs.pop("response_model", Any)
     schema = ServerSideEvent[response_model].get_openapi_schema(  # type: ignore[valid-type]
-        title=f"{response_model.__name__.title()}ServerSideEvent"
+        title=f"{response_model.__name__.title()}ServerSideEvent",
     )
     data_serializer = TypeAdapter(response_model)
     kwargs.update(
@@ -121,9 +122,9 @@ def sse_route(
             "response_model": None,
             "response_class": StreamingResponse,
             "responses": {
-                status_code: {"content": {"text/event-stream": {"schema": schema}}}
+                status_code: {"content": {"text/event-stream": {"schema": schema}}},
             },
-        }
+        },
     )
 
     def wrapper(
@@ -135,7 +136,9 @@ def sse_route(
     ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
         @functools.wraps(func)
         async def wrapped(
-            self: V, *args: _P.args, **kwargs: _P.kwargs
+            self: V,
+            *args: _P.args,
+            **kwargs: _P.kwargs,
         ) -> StreamingResponse:
             async_iterator = _wrapped_events(
                 func(self, *args, **kwargs),
@@ -157,7 +160,8 @@ def sse_route(
 
 
 def catch(
-    exc_type: type[Exception] | tuple[type[Exception]], **kw: Any
+    exc_type: type[Exception] | tuple[type[Exception]],
+    **kw: Any,
 ) -> Callable[
     [Callable[Concatenate[ErrorHandlerMixin, _P], Any]],
     Callable[Concatenate[ErrorHandlerMixin, _P], Any],
@@ -167,7 +171,9 @@ def catch(
     ) -> Callable[Concatenate[ErrorHandlerMixin, _P], Any]:
         @functools.wraps(func)
         async def wrapped_async(
-            self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
+            self: ErrorHandlerMixin,
+            *args: _P.args,
+            **kwargs: _P.kwargs,
         ) -> Any:
             try:
                 return await func(self, *args, **kwargs)
@@ -176,7 +182,9 @@ def catch(
 
         @functools.wraps(func)
         def wrapped_sync(
-            self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
+            self: ErrorHandlerMixin,
+            *args: _P.args,
+            **kwargs: _P.kwargs,
         ) -> Any:
             try:
                 return func(self, *args, **kwargs)
@@ -195,7 +203,9 @@ def catch_defined(
 ) -> Callable[Concatenate[ErrorHandlerMixin, _P], Any]:
     @functools.wraps(func)
     async def wrapped_async(
-        self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
+        self: ErrorHandlerMixin,
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> Any:
         try:
             return await func(self, *args, **kwargs)
@@ -204,7 +214,9 @@ def catch_defined(
 
     @functools.wraps(func)
     def wrapped_sync(
-        self: ErrorHandlerMixin, *args: _P.args, **kwargs: _P.kwargs
+        self: ErrorHandlerMixin,
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> Any:
         try:
             return func(self, *args, **kwargs)
@@ -217,32 +229,37 @@ def catch_defined(
 
 
 def get(
-    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+    path: str = "",
+    **kwargs: Unpack[BaseRouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     return route(path, methods=["GET"], **kwargs)
 
 
 def post(
-    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+    path: str = "",
+    **kwargs: Unpack[BaseRouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     kwargs.setdefault("status_code", HTTP_201_CREATED)
     return route(path, methods=["POST"], **kwargs)
 
 
 def put(
-    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+    path: str = "",
+    **kwargs: Unpack[BaseRouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     return route(path, methods=["PUT"], **kwargs)
 
 
 def patch(
-    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+    path: str = "",
+    **kwargs: Unpack[BaseRouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     return route(path, methods=["PATCH"], **kwargs)
 
 
 def delete(
-    path: str = "", **kwargs: Unpack[BaseRouteOptions]
+    path: str = "",
+    **kwargs: Unpack[BaseRouteOptions],
 ) -> Callable[[EndpointFn], EndpointFn]:
     kwargs.setdefault("status_code", HTTP_204_NO_CONTENT)
     return route(path, methods=["DELETE"], **kwargs)

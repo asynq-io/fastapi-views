@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import base64
 import os
-from typing import Annotated, Generic, Optional, TypeVar
+from typing import Annotated, Generic, TypeAlias, TypeVar
 
 from annotated_types import Interval
 from pydantic import AfterValidator, Field, PlainSerializer, PositiveInt
-from typing_extensions import TypeAlias
 
 from .models import BaseSchema
 
@@ -39,12 +40,12 @@ class BasePage(BaseSchema, Generic[T]):
 
 
 class TokenPage(BasePage[T]):
-    next_page: Optional[PageToken] = Field(None, description="Next page token")
-    previous_page: Optional[PageToken] = Field(None, description="Previous page token")
+    next_page: PageToken | None = Field(None, description="Next page token")
+    previous_page: PageToken | None = Field(None, description="Previous page token")
 
 
 class NumberedPage(BasePage[T]):
     current_page: int = Field(description="Number of current page")
     page_size: int = Field(description="Number of items returned")
-    total_pages: Optional[int] = Field(None, description="Total pages available")
-    total_items: Optional[int] = Field(None, description="Total items available")
+    total_pages: int | None = Field(None, description="Total pages available")
+    total_items: int | None = Field(None, description="Total items available")

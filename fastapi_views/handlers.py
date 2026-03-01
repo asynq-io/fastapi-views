@@ -37,7 +37,8 @@ def api_error_handler(request: Request, exc: APIError) -> Response:
 
 
 def request_validation_handler(
-    request: Request, exc: RequestValidationError
+    request: Request,
+    exc: RequestValidationError,
 ) -> Response:
     model = BadRequestErrorDetails.new(
         "Request validation error",

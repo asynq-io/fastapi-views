@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Callable, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Protocol, TypeVar
 
 from fastapi import Depends
 from pydantic import BaseModel
@@ -35,7 +35,7 @@ from .api import (
 M_co = TypeVar("M_co", covariant=True)
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from fastapi_views.types import Action
 
@@ -64,7 +64,10 @@ class Repository(Protocol[M_co]):
     def delete(self, *args: Any, **kwargs: Any) -> None: ...
 
     def update_one(
-        self, values: dict[str, Any], *args: Any, **kwargs: Any
+        self,
+        values: dict[str, Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> M_co | None: ...
 
 
@@ -80,7 +83,10 @@ class AsyncRepository(Protocol[M_co]):
     async def delete(self, *args: Any, **kwargs: Any) -> None: ...
 
     async def update_one(
-        self, values: dict[str, Any], *args: Any, **kwargs: Any
+        self,
+        values: dict[str, Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> M_co | None: ...
 
 
@@ -108,11 +114,13 @@ class DetailGenericView(GenericView, Generic[PK]):
     def _patch_pk_param(cls, func: Callable) -> None:
         func.__annotations__["pk"] = Annotated[BaseModel, Depends(cls.primary_key)]
 
-    def get_kwargs(self, action: Action | None = None) -> dict[str, Any]:
+    def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
         return {}
 
     def get_primary_key(
-        self, primary_key: PK, action: Action | None = None
+        self,
+        primary_key: PK,
+        action: Action | None = None,
     ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         return (), primary_key.model_dump() | self.get_kwargs(action)
 
@@ -144,7 +152,8 @@ class BaseGenericListAPIView(GenericView):
         filter_ = cls.filter or BaseFilter
 
         cls.list.__annotations__["filter"] = Annotated[
-            BaseFilter, FilterDepends(filter_)  # type: ignore[type-var, unused-ignore]
+            BaseFilter,
+            FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
         ]
 
     def _apply_fields_filter(self, filter: BaseFilter) -> None:
@@ -160,7 +169,9 @@ class BaseGenericListAPIView(GenericView):
 
 
 class AsyncGenericListAPIView(
-    AsyncListAPIView, BaseGenericListAPIView, WithAsyncRepositoryMixin
+    AsyncListAPIView,
+    BaseGenericListAPIView,
+    WithAsyncRepositoryMixin,
 ):
     """AsyncGenericListAPIView"""
 
@@ -169,7 +180,7 @@ class AsyncGenericListAPIView(
         if isinstance(filter, BasePaginationFilter):
             return await self.repository.get_filtered_page(filter)
         return await self.repository.list(
-            **filter.model_dump(exclude=filter.special_fields)
+            **filter.model_dump(exclude=filter.special_fields),
         )
 
 
@@ -199,7 +210,9 @@ class BaseGenericCreateAPIView(GenericView):
 
 
 class AsyncGenericCreateAPIView(
-    BaseGenericCreateAPIView, AsyncCreateAPIView, WithAsyncRepositoryMixin[M]
+    BaseGenericCreateAPIView,
+    AsyncCreateAPIView,
+    WithAsyncRepositoryMixin[M],
 ):
     """AsyncGenericCreateAPIView"""
 
@@ -221,7 +234,9 @@ class AsyncGenericCreateAPIView(
 
 
 class GenericCreateAPIView(
-    BaseGenericCreateAPIView, CreateAPIView, WithRepositoryMixin[M]
+    BaseGenericCreateAPIView,
+    CreateAPIView,
+    WithRepositoryMixin[M],
 ):
     """GenericCreateAPIView"""
 
@@ -255,7 +270,9 @@ class BaseGenericRetrieveAPIView(DetailGenericView[PK]):
 
 
 class AsyncGenericRetrieveAPIView(
-    BaseGenericRetrieveAPIView[PK], AsyncRetrieveAPIView, WithAsyncRepositoryMixin[M]
+    BaseGenericRetrieveAPIView[PK],
+    AsyncRetrieveAPIView,
+    WithAsyncRepositoryMixin[M],
 ):
     """AsyncGenericRetrieveAPIView"""
 
@@ -265,7 +282,9 @@ class AsyncGenericRetrieveAPIView(
 
 
 class GenericRetrieveAPIView(
-    BaseGenericRetrieveAPIView[PK], RetrieveAPIView, WithRepositoryMixin[M]
+    BaseGenericRetrieveAPIView[PK],
+    RetrieveAPIView,
+    WithRepositoryMixin[M],
 ):
     """GenericRetrieveAPIView"""
 
@@ -290,7 +309,9 @@ class BaseGenericUpdateAPIView(DetailGenericView[PK]):
 
 
 class AsyncGenericUpdateAPIView(
-    BaseGenericUpdateAPIView[PK], AsyncUpdateAPIView, WithAsyncRepositoryMixin[M]
+    BaseGenericUpdateAPIView[PK],
+    AsyncUpdateAPIView,
+    WithAsyncRepositoryMixin[M],
 ):
     """AsyncGenericUpdateAPIView"""
 
@@ -312,7 +333,9 @@ class AsyncGenericUpdateAPIView(
 
 
 class GenericUpdateAPIView(
-    BaseGenericUpdateAPIView[PK], UpdateAPIView, WithRepositoryMixin[M]
+    BaseGenericUpdateAPIView[PK],
+    UpdateAPIView,
+    WithRepositoryMixin[M],
 ):
     """GenericUpdateAPIView"""
 
@@ -373,7 +396,9 @@ class AsyncGenericPartialUpdateAPIView(
 
 
 class GenericPartialUpdateAPIView(
-    BaseGenericPartialUpdateAPIView[PK], PartialUpdateAPIView, WithRepositoryMixin[M]
+    BaseGenericPartialUpdateAPIView[PK],
+    PartialUpdateAPIView,
+    WithRepositoryMixin[M],
 ):
     """GenericPartialUpdateAPIView"""
 
@@ -408,7 +433,9 @@ class BaseGenericDestroyAPIView(DetailGenericView[PK]):
 
 
 class AsyncGenericDestroyAPIView(
-    BaseGenericDestroyAPIView[PK], AsyncDestroyAPIView, WithAsyncRepositoryMixin
+    BaseGenericDestroyAPIView[PK],
+    AsyncDestroyAPIView,
+    WithAsyncRepositoryMixin,
 ):
     """AsyncGenericDestroyAPIView"""
 
@@ -418,7 +445,9 @@ class AsyncGenericDestroyAPIView(
 
 
 class GenericDestroyAPIView(
-    BaseGenericDestroyAPIView[PK], DestroyAPIView, WithRepositoryMixin
+    BaseGenericDestroyAPIView[PK],
+    DestroyAPIView,
+    WithRepositoryMixin,
 ):
     """GenericDestroyAPIView"""
 

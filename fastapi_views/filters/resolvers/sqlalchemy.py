@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol
 
 from fastapi_views.filters.models import (
     OrderingFilter,
@@ -18,15 +18,13 @@ from fastapi_views.filters.operations import (
 from .abc import FilterResolver
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from fastapi_views.filters.models import AnyFilter
 
 
 class Column(Protocol):
-    """
-    This is sqlalchemy.Column protocol, the real Column instance is injected as `self` parameter
-    """
+    """This is sqlalchemy.Column protocol, the real Column instance is injected as `self` parameter"""
 
     def in_(self, values: Sequence[Any]) -> Any:
         return self.in_(values)
@@ -46,12 +44,12 @@ class Column(Protocol):
     def ilike(self, value: str) -> Any:
         return self.ilike(f"%{value}%")
 
-    def is_null(self, value: bool) -> Any:
+    def is_null(self, value: bool) -> Any:  # noqa: FBT001
         return self.is_(None) if value else self.is_not(None)
 
 
 class SQLAlchemyFilterResolver(FilterResolver):
-    _cache: dict[str, Any] = {}
+    _cache: ClassVar[dict[str, Any]] = {}
     filter_model: Any
     operators: ClassVar[dict[str, Callable[[Any, Any], Any]]] = {
         "eq": operator.eq,
@@ -80,7 +78,9 @@ class SQLAlchemyFilterResolver(FilterResolver):
         return None
 
     def resolve_model_field(
-        self, operation: SortOperation | FilterOperation, **context: Any
+        self,
+        operation: SortOperation | FilterOperation,
+        **context: Any,
     ) -> Any:
         name = operation.field
         if "__" in name:
@@ -129,7 +129,9 @@ class SQLAlchemyFilterResolver(FilterResolver):
                 queryset = queryset.offset(filter.offset).limit(filter.limit)
             elif isinstance(filter, TokenPaginationFilter):
                 queryset = self.apply_token_pagination(
-                    queryset, filter.page_token, filter.page_size
+                    queryset,
+                    filter.page_token,
+                    filter.page_size,
                 )
 
         return queryset
@@ -138,7 +140,10 @@ class SQLAlchemyFilterResolver(FilterResolver):
         return [self.resolve(f, **context) for f in filter.filters]
 
     def get_order_by(
-        self, filter: OrderingFilter, extra: list[Any] | None = None, **context: Any
+        self,
+        filter: OrderingFilter,
+        extra: list[Any] | None = None,
+        **context: Any,
     ) -> list[Any]:
         order_by = [self.resolve(f, **context) for f in filter.order_by]
         if extra:
@@ -146,7 +151,10 @@ class SQLAlchemyFilterResolver(FilterResolver):
         return order_by
 
     def apply_token_pagination(
-        self, queryset: Any, page: str | None, page_size: int
+        self,
+        queryset: Any,
+        page: str | None,
+        page_size: int,
     ) -> Any:
         # warning: sqlalchemy itself does not implement token based pagination,
         # it is up to user to implement it using something like sqlakeyset: https://github.com/djrobstep/sqlakeyset

@@ -1,11 +1,15 @@
-from typing import ClassVar, Optional
-from uuid import UUID
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, ClassVar
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
 from fastapi_views.views.viewsets import AsyncAPIViewSet
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 
 class UpdateItemSchema(BaseModel):
@@ -31,7 +35,7 @@ class MyViewSet(AsyncAPIViewSet):
         self.items[item.id] = item
         return item
 
-    async def retrieve(self, id: UUID) -> Optional[ItemSchema]:
+    async def retrieve(self, id: UUID) -> ItemSchema | None:
         return self.items.get(id)
 
     async def update(self, id: UUID, item: UpdateItemSchema) -> ItemSchema:

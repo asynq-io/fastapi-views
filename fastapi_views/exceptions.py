@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import http
-from typing import Any
+from typing import Any, ClassVar
 
 from starlette.status import HTTP_400_BAD_REQUEST
 
@@ -20,7 +20,7 @@ from .models import (
 
 class APIError(Exception):
     model: type[ErrorDetails] | None = None
-    default_kwargs: dict[str, Any] = {}
+    default_kwargs: ClassVar[dict[str, Any]] = {}
 
     def __init__(
         self,

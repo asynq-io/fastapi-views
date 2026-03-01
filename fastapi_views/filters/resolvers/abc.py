@@ -17,6 +17,9 @@ class FilterResolver(ABC, Generic[Queryset]):
 
     @abstractmethod
     def apply_filter(
-        self, filter: AnyFilter, queryset: Queryset, **context: Any
+        self,
+        filter: AnyFilter,
+        queryset: Queryset,
+        **context: Any,
     ) -> Queryset:
         raise NotImplementedError

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn
 
 from starlette.status import HTTP_400_BAD_REQUEST
 

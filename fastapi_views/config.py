@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 def simplify_operation_ids(app: FastAPI) -> None:
-    """
-    Simplify operation IDs so that generated clients have simpler api function names
-    """
+    """Simplify operation IDs so that generated clients have simpler api function names"""
     for route in app.routes:
         if isinstance(route, APIRoute):
             route.operation_id = route.name.replace(" ", "")
@@ -53,6 +51,7 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
 
 def configure_app(
     app: FastAPI,
+    *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
     simplify_openapi_ids: bool = True,

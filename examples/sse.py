@@ -20,9 +20,7 @@ class APIModelSSE(ServerSideEvent[APIModel]):
 
 
 class SSEView(ServerSideEventsAPIView):
-    """
-    Automatic server side event view based on `events` method
-    """
+    """Automatic server side event view based on `events` method"""
 
     response_schema = APIModel
 

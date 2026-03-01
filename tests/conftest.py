@@ -1,5 +1,6 @@
-from collections.abc import AsyncGenerator
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from asgi_lifespan import LifespanManager
@@ -18,6 +19,9 @@ from fastapi_views.views.api import (
 
 from .utils import view_as_fixture
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
 
 @pytest.fixture(autouse=True, scope="session")
 def anyio_backend():
@@ -34,7 +38,8 @@ async def client(app) -> AsyncGenerator[AsyncClient, None]:
     async with (
         LifespanManager(app, startup_timeout=30),
         AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as test_client,
     ):
         yield test_client
@@ -45,7 +50,7 @@ class DummySchema(BaseSchema):
 
 
 class ExtendDummySchema(DummySchema):
-    y: Optional[str] = None
+    y: str | None = None
 
 
 @pytest.fixture(scope="session")
@@ -66,7 +71,7 @@ class TestRetrieveView(AsyncRetrieveAPIView):
     detail_route = ""
     response_schema = DummySchema
 
-    async def retrieve(self) -> Optional[Any]:
+    async def retrieve(self) -> Any:
         return ExtendDummySchema(x="test")
 
 
