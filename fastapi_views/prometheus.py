@@ -5,7 +5,9 @@ from fastapi import FastAPI
 
 
 def add_prometheus_middleware(
-    app: FastAPI, endpoint: str = "/metrics", **kwargs: Any
+    app: FastAPI,
+    endpoint: str = "/metrics",
+    **kwargs: Any,
 ) -> None:
     from starlette_exporter import PrometheusMiddleware, handle_metrics
 

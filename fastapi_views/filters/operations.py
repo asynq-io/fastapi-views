@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any
 
 
 @dataclass
@@ -33,4 +33,4 @@ class LogicalOperation:
             value.set_prefix(prefix)
 
 
-Operation = Union[FilterOperation, SortOperation, LogicalOperation]
+Operation = FilterOperation | SortOperation | LogicalOperation

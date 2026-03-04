@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from fastapi_views.exceptions import NotFound
 from fastapi_views.views.generics import AsyncGenericViewSet, Page
@@ -45,7 +46,8 @@ class ItemRepository:
         return self._data.get(kwargs["id"])
 
     async def get_filtered_page(
-        self, filter: BasePaginationFilter
+        self,
+        filter: BasePaginationFilter,
     ) -> Page[dict[str, Any]]:
         raise NotImplementedError
 
@@ -57,7 +59,9 @@ class ItemRepository:
         self._data.pop(item_id, None)
 
     async def update_one(
-        self, values: dict[str, Any], **kwargs: Any
+        self,
+        values: dict[str, Any],
+        **kwargs: Any,
     ) -> dict[str, Any] | None:
         item = self._data.get(kwargs["id"])
         if item is None:
@@ -83,14 +87,14 @@ class ItemGenericViewSet(AsyncGenericViewSet):
 @pytest.mark.anyio
 async def test_list_generic(client):
     response = await client.get("/items")
-    assert response.status_code == 200
+    assert response.status_code == HTTP_200_OK
 
 
 @pytest.mark.usefixtures("items_generic")
 @pytest.mark.anyio
 async def test_create_generic(client):
     response = await client.post("/items", json={"name": "test"})
-    assert response.status_code == 201
+    assert response.status_code == HTTP_201_CREATED
 
 
 @pytest.mark.usefixtures("items_generic")
@@ -104,18 +108,18 @@ async def test_retrieve_not_found_generic(client):
 @pytest.mark.anyio
 async def test_destroy_generic(client):
     response = await client.delete(f"/items/{uuid4()}")
-    assert response.status_code == 204
+    assert response.status_code == HTTP_204_NO_CONTENT
 
 
 @pytest.mark.usefixtures("items_generic")
 @pytest.mark.anyio
 async def test_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
-    assert response.status_code == 201
+    assert response.status_code == HTTP_201_CREATED
     data = response.json()
     item_id = data["id"]
     response2 = await client.put(f"/items/{item_id}", json={"name": "test2"})
-    assert response2.status_code == 200
+    assert response2.status_code == HTTP_200_OK
     data2 = response2.json()
     assert data2["id"] == item_id
     assert data2["name"] == "test2"
@@ -125,11 +129,11 @@ async def test_update_generic(client):
 @pytest.mark.anyio
 async def test_partial_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
-    assert response.status_code == 201
+    assert response.status_code == HTTP_201_CREATED
     data = response.json()
     item_id = data["id"]
     response2 = await client.patch(f"/items/{item_id}", json={"name": "test2"})
-    assert response2.status_code == 200
+    assert response2.status_code == HTTP_200_OK
     data2 = response2.json()
     assert data2["id"] == item_id
     assert data2["name"] == "test2"

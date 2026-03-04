@@ -53,7 +53,9 @@ class ItemRepository:
         self._data.pop(item_id, None)
 
     async def update_one(
-        self, values: dict[str, Any], **kwargs: Any
+        self,
+        values: dict[str, Any],
+        **kwargs: Any,
     ) -> dict[str, Any] | None:
         item = self._data.get(kwargs["id"])
         if item is None:
@@ -70,7 +72,7 @@ class ItemGenericViewSet(AsyncGenericViewSet):
     update_schema = CreateItem
     partial_update_schema = CreateItem
     filter = None
-    repository = ItemRepository()
+    repository = ItemRepository()  # type: ignore[assignment]
 
 
 router = ViewRouter(prefix="/items")

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Literal, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from enum import Enum
 
     from fastapi import Response, params
@@ -13,7 +13,13 @@ if TYPE_CHECKING:
 
 Entity = TypeVar("Entity", bound=Any)
 Action = Literal[
-    "create", "list", "retrieve", "update", "destroy", "partial_update", "events"
+    "create",
+    "list",
+    "retrieve",
+    "update",
+    "destroy",
+    "partial_update",
+    "events",
 ]
 
 

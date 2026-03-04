@@ -1,5 +1,5 @@
 from collections.abc import MutableSequence
-from typing import Any, ClassVar, Literal, Optional, Union
+from typing import Any, ClassVar, Literal
 
 from fastapi import Query
 from pydantic import BaseModel, field_validator
@@ -25,15 +25,15 @@ class BaseFilter(BaseModel):
         cls.special_fields |= parent_special_fields
 
     @property
-    def filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
+    def filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         return self.get_filters()
 
-    def get_filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
+    def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         return []
 
 
 class ModelFilter(BaseFilter):
-    def get_filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
+    def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         filters = super().get_filters()
 
         for field_name in type(self).model_fields:
@@ -85,7 +85,7 @@ class PaginationFilter(BasePaginationFilter):
 class TokenPaginationFilter(BasePaginationFilter):
     special_fields = {"page_token"}
 
-    page_token: Optional[PageToken] = None
+    page_token: PageToken | None = None
 
 
 class OrderingFilter(BaseFilter):
@@ -139,7 +139,7 @@ class SearchFilter(BaseFilter):
     search_fields: ClassVar[set[str]] = set()
     query: SearchQuery
 
-    def get_filters(self) -> MutableSequence[Union[FilterOperation, LogicalOperation]]:
+    def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         filters = super().get_filters()
 
         if self.query:
@@ -147,7 +147,9 @@ class SearchFilter(BaseFilter):
 
             for field_name in self.search_fields:
                 operation = FilterOperation(
-                    field=field_name, operator="ilike", values=self.query
+                    field=field_name,
+                    operator="ilike",
+                    values=self.query,
                 )
 
                 search_fields.append(operation)
@@ -160,7 +162,7 @@ class SearchFilter(BaseFilter):
 # but this will require importing sqlalchemy load_only or leaving abstractmethod
 class FieldsFilter(BaseFilter):
     special_fields = {"fields"}
-    fields_from: ClassVar[Optional[type[BaseModel]]] = None
+    fields_from: ClassVar[type[BaseModel] | None] = None
 
     fields: AnyFields
 
@@ -170,7 +172,7 @@ class FieldsFilter(BaseFilter):
             cls.model_fields["fields"].annotation = set[Literal[fields]]  # type: ignore[valid-type]
         super().__init_subclass__(**kwargs)
 
-    def get_fields(self) -> Optional[set[str]]:
+    def get_fields(self) -> set[str] | None:
         # consider implementing advanced include/exclude (subfields)
         # using '__ ' syntax later on, for now only top-level fields are supported
         return self.fields
@@ -183,12 +185,9 @@ class Filter(
     FieldsFilter,
     ModelFilter,
 ):
-    """
-    Main filter class that implements all the functionalities:
+    """Main filter class that implements all the functionalities:
     pagination, ordering, search, fields and custom attributes filter
     """
 
 
-AnyFilter = Union[
-    BaseFilter, SearchFilter, OrderingFilter, PaginationFilter, FieldsFilter
-]
+AnyFilter = BaseFilter | SearchFilter | OrderingFilter | PaginationFilter | FieldsFilter

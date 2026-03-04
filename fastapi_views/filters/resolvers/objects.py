@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from fastapi_views.filters.models import OrderingFilter, PaginationFilter
 from fastapi_views.filters.operations import (
@@ -12,7 +12,7 @@ from fastapi_views.filters.operations import (
 from .abc import FilterResolver
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from fastapi_views.filters.models import AnyFilter
     from fastapi_views.filters.operations import (
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 
 class ObjectFilterResolver(FilterResolver[list[Any]]):
     operators: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
-        "is_null": lambda a, b: operator.is_(a, None)
-        if b
-        else operator.is_not(a, None),
+        "is_null": lambda a, b: (
+            operator.is_(a, None) if b else operator.is_not(a, None)
+        ),
         "like": lambda a, b: operator.contains(a, b),
         "ilike": lambda a, b: operator.contains(a.lower(), b.lower()),
     }
@@ -42,7 +42,8 @@ class ObjectFilterResolver(FilterResolver[list[Any]]):
         if isinstance(operation, LogicalOperation):
             fn = all if operation.operator == "and" else any
             return self._apply(
-                *[self.resolve(f, **context) for f in operation.values], op=fn
+                *[self.resolve(f, **context) for f in operation.values],
+                op=fn,
             )
 
         getter = self.getter(operation.field)
@@ -61,14 +62,17 @@ class ObjectFilterResolver(FilterResolver[list[Any]]):
         return resolved
 
     def apply_filter(
-        self, filter: AnyFilter, queryset: list[Any], **context: Any
+        self,
+        filter: AnyFilter,
+        queryset: list[Any],
+        **context: Any,
     ) -> list[Any]:
-        f = self._apply(*[self.resolve(op) for op in filter.filters], op=all)
+        f = self._apply(*[self.resolve(op, **context) for op in filter.filters], op=all)
 
         queryset = [obj for obj in queryset if f(obj)]
         if isinstance(filter, OrderingFilter):
             for order_by in filter.order_by:
-                resolved = self.resolve(order_by)
+                resolved = self.resolve(order_by, **context)
                 queryset.sort(**resolved)
         if isinstance(filter, PaginationFilter):
             queryset = queryset[filter.offset : filter.offset + filter.limit]

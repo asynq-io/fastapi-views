@@ -1,35 +1,44 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v5.0.0
     hooks:
       - id: check-merge-conflict
       - id: mixed-line-ending
       - id: check-toml
+      - id: check-json
       - id: check-yaml
         args: [--allow-multiple-documents]
+      - id: check-added-large-files
+      - id: check-docstring-first
+      - id: debug-statements
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.12.10"
+  - repo: local
     hooks:
       - id: ruff
-        args: ["--fix"]
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
       - id: ruff-format
-
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.6
-    hooks:
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types: [python]
       - id: bandit
-        args: ["--skip", "B101"]
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.1
-    hooks:
+        name: bandit
+        entry: uv run bandit --skip B101
+        language: system
+        types: [python]
       - id: mypy
-        args: ["--install-types", "--non-interactive"]
-
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.8.13
-    hooks:
+        name: mypy
+        entry: uv run mypy .
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: uv-lock
+        name: uv-lock
+        entry: uv lock --check
+        language: system
+        pass_filenames: false

@@ -15,9 +15,7 @@ from fastapi_views.views import (
 
 
 class BasicView(View):
-    """
-    Low level view, that handles responses exactly like FastAPI
-    """
+    """Low level view, that handles responses exactly like FastAPI"""
 
     @get("")
     async def get_method(self):
@@ -37,9 +35,7 @@ class APIModel(BaseModel):
 
 
 class BasicAPIView(APIView):
-    """
-    API View with custom methods
-    """
+    """API View with custom methods"""
 
     response_schema = APIModel
 
@@ -65,7 +61,10 @@ class ReadAPIView(AsyncListAPIView, AsyncRetrieveAPIView):
     response_schema = APIModel
 
     def __init__(
-        self, request: Request, response: Response, db: Database = Depends(get_db)
+        self,
+        request: Request,
+        response: Response,
+        db: Database = Depends(get_db),
     ) -> None:
         super().__init__(request, response)
         self.db = db
