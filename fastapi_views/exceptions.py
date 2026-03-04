@@ -28,13 +28,13 @@ def _camel_to_title(name: str) -> str:
 _sentinel = object()
 
 _RFC_TYPE_MAP: dict[int, str] = {
-    HTTP_404_NOT_FOUND: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4",
-    HTTP_422_UNPROCESSABLE_ENTITY: "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
     HTTP_400_BAD_REQUEST: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1",
     HTTP_401_UNAUTHORIZED: "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1",
-    HTTP_409_CONFLICT: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
-    HTTP_429_TOO_MANY_REQUESTS: "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
     HTTP_403_FORBIDDEN: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
+    HTTP_404_NOT_FOUND: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4",
+    HTTP_409_CONFLICT: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
+    HTTP_422_UNPROCESSABLE_ENTITY: "https://datatracker.ietf.org/doc/html/rfc4918#section-11.2",
+    HTTP_429_TOO_MANY_REQUESTS: "https://datatracker.ietf.org/doc/html/rfc6585#section-4",
     HTTP_500_INTERNAL_SERVER_ERROR: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1",
     HTTP_503_SERVICE_UNAVAILABLE: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.4",
 }
