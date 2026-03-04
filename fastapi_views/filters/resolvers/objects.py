@@ -25,7 +25,7 @@ class ObjectFilterResolver(FilterResolver[list[Any]]):
         "is_null": lambda a, b: (
             operator.is_(a, None) if b else operator.is_not(a, None)
         ),
-        "like": lambda a, b: operator.contains(a, b),
+        "like": operator.contains,
         "ilike": lambda a, b: operator.contains(a.lower(), b.lower()),
     }
 
