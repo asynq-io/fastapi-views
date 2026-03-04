@@ -17,6 +17,7 @@ from typing_extensions import Self
 from .opentelemetry import get_correlation_id, has_opentelemetry
 
 if TYPE_CHECKING:
+    import builtins
     from datetime import datetime
 
     from pydantic_core import Url
@@ -115,12 +116,10 @@ def const_type(
 def create_error_model(
     status: int,
     type: str = "about:blank",
-    name: Optional[str] = None,
-    title: Optional[str] = None,
-    detail: Optional[str] = None,
-    __doc__: Optional[str] = None,
-    __base__: type[ErrorDetails] = ErrorDetails,
-    **extra_fields: Any,
+    name: str | None = None,
+    title: str | None = None,
+    detail: str | None = None,
+    **kwargs: Any,
 ) -> type[ErrorDetails]:
     status_code = http.HTTPStatus(status)
     if title is None:
@@ -129,13 +128,13 @@ def create_error_model(
         name = title.replace(" ", "")
     if detail is None:
         detail = status_code.description
+    __base__: builtins.type[ErrorDetails] = kwargs.pop("__base__", ErrorDetails)
     return create_model(
         name,
         __base__=__base__,
-        __doc__=__doc__,
         title=const_type(title, "Error title"),
         status=const_type(status, "Error status"),
         type=const_type(type, "Error type"),
         detail=(str, Field(detail, description="Error detail")),
-        **extra_fields,
+        **kwargs,
     )
