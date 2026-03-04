@@ -37,3 +37,4 @@ site/
 openapi.json
 openapi.yaml
 .ropeproject/
+.claude
