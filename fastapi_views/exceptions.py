@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import http
 import re
-from typing import Any, ClassVar, TypedDict
+from typing import Any, ClassVar
 
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -38,12 +38,6 @@ _RFC_TYPE_MAP: dict[int, str] = {
     HTTP_500_INTERNAL_SERVER_ERROR: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1",
     HTTP_503_SERVICE_UNAVAILABLE: "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.4",
 }
-
-
-class ApiErrorOptions(TypedDict, total=False):
-    instance: str | None
-    correlation_id: str | None
-    errors: list[Any]
 
 
 class APIError(Exception):
@@ -98,6 +92,10 @@ class APIError(Exception):
     def get_status(cls) -> int:
         return cls.status
 
+    @property
+    def status_code(self) -> int:
+        return self._model_instance.status
+
     def as_model(self) -> ErrorDetails:
         return self._model_instance
 
@@ -108,7 +106,7 @@ class APIError(Exception):
     @classmethod
     def _get_extra_fields(cls) -> dict[str, tuple[Any, Any]]:
         extra_fields: dict[str, Any] = {}
-        base_attrs = {"model", "status", "title", "type", "detail"}
+        base_attrs = {"type", "title", "status", "detail", "model"}
 
         annotations = getattr(cls, "__annotations__", {})
         for field_name, field_type in annotations.items():
@@ -119,6 +117,8 @@ class APIError(Exception):
             default = getattr(cls, field_name, _sentinel)
             if default is _sentinel:
                 extra_fields[field_name] = (field_type, ...)
+            elif isinstance(default, (list, dict, set)):
+                extra_fields[field_name] = (field_type, default)
             else:
                 # Use const_type for Literal fields (like error_code)
                 extra_fields[field_name] = const_type(default, field_name)
@@ -159,5 +159,5 @@ class InternalServerError(APIError):
 
 
 class Unavailable(APIError):
-    title = "Internal Server Error"
+    title = "Service Unavailable"
     status = HTTP_503_SERVICE_UNAVAILABLE
