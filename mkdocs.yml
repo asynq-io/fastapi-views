@@ -27,9 +27,14 @@ nav:
       - "Opentelemetry": usage/opentelemetry.md
       - "Server Side Events": usage/sse.md
   - "Reference":
-      - "APIViews": reference/views.md
-      - "View sets": reference/viewsets.md
-      - "Generic views": reference/generics.md
+      - "API Views": reference/views.md
+      - "ViewSets": reference/viewsets.md
+      - "Generic Views": reference/generics.md
+      - "Exceptions": reference/exceptions.md
+      - "Models": reference/models.md
+      - "Filters": reference/filters.md
+      - "Pagination": reference/pagination.md
+      - "Decorators": reference/decorators.md
 
 markdown_extensions:
   - pymdownx.highlight:
