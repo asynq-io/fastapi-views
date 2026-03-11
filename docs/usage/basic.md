@@ -55,6 +55,7 @@ Inject dependencies by overriding `__init__`:
 
 ```python
 from fastapi import Depends, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi_views.views import View, get
 
 class Database:
@@ -76,9 +77,8 @@ class UserView(View):
 
     @get("/{user_id}")
     async def get_user(self, user_id: int) -> Response:
-        import json
         user = self.db.get_user(user_id)
-        return Response(content=json.dumps(user), media_type="application/json")
+        return JSONResponse(user)
 ```
 
 ---

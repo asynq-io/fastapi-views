@@ -1,6 +1,6 @@
 # Models
 
-Shared Pydantic model base classes and the `ErrorDetails` / `ServerSideEvent` types. Import from `fastapi_views.models`.
+Shared Pydantic model base classes and the `ErrorDetails` / `ServerSentEvent` types. Import from `fastapi_views.models`.
 
 ## Base schemas
 
@@ -18,7 +18,7 @@ Shared Pydantic model base classes and the `ErrorDetails` / `ServerSideEvent` ty
 
 ## Server-Sent Events
 
-`ServerSideEvent[D]` is the generic model that wraps each SSE payload. Its `get_openapi_schema()` class method returns an OpenAPI-compatible schema dict used by `ServerSideEventsAPIView` when registering routes.
+`ServerSentEvent[D]` is the generic model that wraps each SSE payload. Its `get_openapi_schema()` class method returns an OpenAPI-compatible schema dict used by `ServerSentEventsAPIView` when registering routes.
 
 ---
 

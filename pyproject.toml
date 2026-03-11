@@ -69,6 +69,8 @@ test = [
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
+    "pytest-timeout",
+    "sqlalchemy>=2.0.48",
 ]
 
 lint = [
@@ -95,9 +97,9 @@ build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
+timeout = 3
 addopts = "--cov=./fastapi_views"
 testpaths = ["./tests"]
-filterwarnings = "ignore::DeprecationWarning"
 
 [tool.coverage.report]
 exclude_lines = [
@@ -135,6 +137,7 @@ select = ["ALL"]
 ignore = [
     "A002",
     "ANN401",
+    "COM812",
     "D",
     "B008",     # do not perform function calls in argument defaults
     "E501",     # line too long
@@ -146,7 +149,7 @@ ignore = [
 
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
+"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 "examples/*" = ["S101", "ANN001", "ANN201", "INP001", "T201", "EM101", "TRY003"]
 
 [tool.bandit]

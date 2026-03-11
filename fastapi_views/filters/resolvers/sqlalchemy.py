@@ -33,10 +33,10 @@ class Column(Protocol):
         return self.not_in_(values)
 
     def is_(self, value: Any) -> Any:
-        return self.is_(value)
+        return self.is_(value)  # pragma: no cover
 
     def is_not(self, value: Any) -> Any:
-        return self.is_not(value)
+        return self.is_not(value)  # pragma: no cover
 
     def like(self, value: str) -> Any:
         return self.like(f"%{value}%")

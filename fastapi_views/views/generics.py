@@ -164,7 +164,7 @@ class BaseGenericListAPIView(GenericView):
             response_schema = self.get_response_schema("list")
             key = "__all__"
             if issubclass(response_schema, (PaginationFilter, TokenPaginationFilter)):
-                key = "items"
+                key = "items"  # pragma: no cover
             self.serializer_options["include"] = {key: fields}
 
 
