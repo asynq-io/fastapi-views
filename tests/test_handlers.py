@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
 from asgi_lifespan import LifespanManager
@@ -14,7 +15,7 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
 )
 
-from fastapi_views.exceptions import APIError, BadRequest
+from fastapi_views.exceptions import APIError, BadRequest, InternalServerError
 from fastapi_views.handlers import (
     add_error_handlers,
     api_error_handler,
@@ -124,8 +125,6 @@ async def test_request_validation_handler(handler_client):
 
 @pytest.mark.anyio
 async def test_unhandled_exception_handler(handler_client):
-    from fastapi_views.exceptions import InternalServerError
-
     # exception_handler raises InternalServerError which propagates from the handler
     with pytest.raises(InternalServerError):
         await handler_client.get("/unhandled")
@@ -139,8 +138,6 @@ async def test_add_error_handlers_registers_all(handler_app):
 
 
 def test_api_error_handler_direct():
-    from unittest.mock import MagicMock
-
     request = MagicMock()
     request.url.path = "/test"
 
@@ -150,8 +147,6 @@ def test_api_error_handler_direct():
 
 
 def test_http_exception_handler_direct():
-    from unittest.mock import MagicMock
-
     request = MagicMock()
     request.url.path = "/test"
 
@@ -161,8 +156,6 @@ def test_http_exception_handler_direct():
 
 
 def test_api_error_handler_with_instance_already_set():
-    from unittest.mock import MagicMock
-
     request = MagicMock()
     request.url.path = "/test"
 

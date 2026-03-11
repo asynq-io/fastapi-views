@@ -12,9 +12,6 @@ from fastapi_views.cli import cli, import_from_string
 runner = CliRunner()
 
 
-# ---- import_from_string ----
-
-
 def test_import_from_string_success():
     result = import_from_string("fastapi:FastAPI")
     assert result is FastAPI
@@ -28,9 +25,6 @@ def test_import_from_string_missing_attribute():
 def test_import_from_string_missing_module():
     with pytest.raises(ModuleNotFoundError):
         import_from_string("nonexistent_module_xyz:Something")
-
-
-# ---- docs command ----
 
 
 def test_docs_json(tmp_path):

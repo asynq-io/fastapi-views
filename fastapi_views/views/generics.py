@@ -14,7 +14,7 @@ from fastapi_views.filters.models import (
     PaginationFilter,
     TokenPaginationFilter,
 )
-from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.pagination import BasePage, NumberedPage, TokenPage
 from fastapi_views.views.api import APIView
 
 from .api import (
@@ -163,8 +163,8 @@ class BaseGenericListAPIView(GenericView):
                 return
             response_schema = self.get_response_schema("list")
             key = "__all__"
-            if issubclass(response_schema, (PaginationFilter, TokenPaginationFilter)):
-                key = "items"  # pragma: no cover
+            if issubclass(response_schema, BasePage):
+                key = "items"
             self.serializer_options["include"] = {key: fields}
 
 

@@ -4,12 +4,16 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 
+from fastapi_views.filters.dependencies import FilterDepends, NestedFilter
 from fastapi_views.filters.models import (
     BaseFilter,
     FieldsFilter,
     Filter,
     ModelFilter,
+    OrderingFilter,
     PaginationFilter,
 )
 from fastapi_views.filters.operations import (
@@ -70,11 +74,6 @@ def test_search_users(users, resolver):
     assert filtered_users == [User("Jane", 30), User("John", 25)]
 
 
-# ---------------------------------------------------------------------------
-# filters/operations.py — set_prefix
-# ---------------------------------------------------------------------------
-
-
 def test_field_operation_set_prefix():
     op = FieldOperation(field="name")
     op.set_prefix("user")
@@ -88,11 +87,6 @@ def test_logical_operation_set_prefix():
     logical.set_prefix("person")
     assert inner1.field == "person__first_name"
     assert inner2.field == "person__last_name"
-
-
-# ---------------------------------------------------------------------------
-# filters/models.py — ModelFilter nested BaseFilter + __ operator field
-# ---------------------------------------------------------------------------
 
 
 def test_model_filter_nested_base_filter():
@@ -129,16 +123,7 @@ def test_model_filter_double_underscore_field():
     assert result[0].values == age_value
 
 
-# ---------------------------------------------------------------------------
-# filters/models.py — OrderingFilter invalid sort
-# ---------------------------------------------------------------------------
-
-
 def test_ordering_filter_invalid_sort():
-    from pydantic import ValidationError
-
-    from fastapi_views.filters.models import OrderingFilter
-
     class MyFilter(OrderingFilter):
         ordering_fields: ClassVar[set[str]] = {"name", "age"}
 
@@ -146,14 +131,7 @@ def test_ordering_filter_invalid_sort():
         MyFilter(sort=["invalid_field"])
 
 
-# ---------------------------------------------------------------------------
-# filters/models.py — FieldsFilter with fields_from + get_fields
-# ---------------------------------------------------------------------------
-
-
 def test_fields_filter_with_fields_from():
-    from pydantic import BaseModel
-
     class MyModel(BaseModel):
         name: str
         age: int
@@ -170,16 +148,7 @@ def test_fields_filter_get_fields_none():
     assert f.get_fields() is None
 
 
-# ---------------------------------------------------------------------------
-# filters/dependencies.py — FilterDepends ValidationError + NestedFilter
-# ---------------------------------------------------------------------------
-
-
 def test_filter_depends_validation_error():
-    from fastapi.exceptions import RequestValidationError
-
-    from fastapi_views.filters.dependencies import FilterDepends
-
     filter_wrapper = FilterDepends(PaginationFilter).dependency
 
     with pytest.raises(RequestValidationError):
@@ -187,8 +156,6 @@ def test_filter_depends_validation_error():
 
 
 def test_nested_filter_with_prefix():
-    from fastapi_views.filters.dependencies import NestedFilter
-
     class MyFilter(BaseFilter):
         name: str | None = None
 
@@ -198,8 +165,6 @@ def test_nested_filter_with_prefix():
 
 
 def test_nested_filter_without_prefix():
-    from fastapi_views.filters.dependencies import NestedFilter
-
     class SimpleFilter(BaseFilter):
         name: str | None = None
 

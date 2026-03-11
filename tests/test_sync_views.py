@@ -31,9 +31,6 @@ class DummySchema(BaseSchema):
     x: str
 
 
-# ---- ListAPIView (sync) ----
-
-
 @view_as_fixture("sync_list_view")
 class TestSyncListView(ListAPIView):
     response_schema = DummySchema
@@ -49,9 +46,6 @@ async def test_sync_list_view(client):
     assert response.status_code == HTTP_200_OK
     data = response.json()
     assert data == [{"x": "sync_item"}]
-
-
-# ---- RetrieveAPIView (sync) with raise_on_none ----
 
 
 @view_as_fixture("sync_retrieve_view")
@@ -103,9 +97,6 @@ class TestSyncRetrieveNoneOkView(RetrieveAPIView):
 async def test_sync_retrieve_none_ok(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
-
-
-# ---- CreateAPIView (sync) ----
 
 
 @view_as_fixture("sync_create_view")
@@ -177,9 +168,6 @@ async def test_sync_create_with_location(client):
     assert response.headers.get("location") == "/test/1"
 
 
-# ---- UpdateAPIView (sync) ----
-
-
 @view_as_fixture("sync_update_view")
 class TestSyncUpdateView(UpdateAPIView):
     detail_route = ""
@@ -230,9 +218,6 @@ class TestSyncUpdateNotFoundView(UpdateAPIView):
 async def test_sync_update_raises_not_found(client):
     with pytest.raises(NotFound):
         await client.put("/test")
-
-
-# ---- PartialUpdateAPIView (sync) ----
 
 
 @view_as_fixture("sync_patch_view")
@@ -287,9 +272,6 @@ async def test_sync_partial_update_raises_not_found(client):
         await client.patch("/test")
 
 
-# ---- DestroyAPIView (sync) ----
-
-
 @view_as_fixture("sync_destroy_view")
 class TestSyncDestroyView(DestroyAPIView):
     detail_route = ""
@@ -303,9 +285,6 @@ class TestSyncDestroyView(DestroyAPIView):
 async def test_sync_destroy_view(client):
     response = await client.delete("/test")
     assert response.status_code == HTTP_204_NO_CONTENT
-
-
-# ---- ServerSentEventsAPIView ----
 
 
 @view_as_fixture("sse_events_view")
@@ -327,9 +306,6 @@ async def test_sse_view_response(client):
     assert "event: data_event" in content
     assert "first" in content
     assert "second" in content
-
-
-# ---- View with bytes / Response return ----
 
 
 @view_as_fixture("bytes_view")
@@ -358,9 +334,6 @@ class TestResponseView(APIView):
 async def test_view_returns_response(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
-
-
-# ---- validate_response=False ----
 
 
 @view_as_fixture("no_validate_view")

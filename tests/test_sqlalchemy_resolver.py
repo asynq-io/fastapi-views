@@ -18,10 +18,6 @@ from fastapi_views.filters.operations import (
 )
 from fastapi_views.filters.resolvers.sqlalchemy import SQLAlchemyFilterResolver
 
-# ---------------------------------------------------------------------------
-# Mock SQLAlchemy-like objects (duck-typed, no real SA dependency needed)
-# ---------------------------------------------------------------------------
-
 
 class MockExpression:
     """Represents a compiled SQLAlchemy-like expression."""
@@ -161,11 +157,6 @@ class MockQueryset:
         return self
 
 
-# ---------------------------------------------------------------------------
-# Filter models
-# ---------------------------------------------------------------------------
-
-
 class ItemFilter(ModelFilter):
     name: str | None = None
     age: str | None = None
@@ -174,11 +165,6 @@ class ItemFilter(ModelFilter):
 class SearchableFilter(SearchFilter, OrderingFilter):
     ordering_fields: ClassVar[set[str]] = {"name", "age"}
     search_fields: ClassVar[set[str]] = {"name", "age"}
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -192,11 +178,6 @@ def resolver() -> SQLAlchemyFilterResolver:
 @pytest.fixture
 def qs() -> MockQueryset:
     return MockQueryset()
-
-
-# ---------------------------------------------------------------------------
-# resolve() - FilterOperation operators
-# ---------------------------------------------------------------------------
 
 
 def test_resolve_eq(resolver: SQLAlchemyFilterResolver) -> None:
@@ -274,10 +255,6 @@ def test_resolve_ilike(resolver: SQLAlchemyFilterResolver) -> None:
     assert "ILIKE" in str(result)
 
 
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-
-
 def test_resolve_sort_asc(resolver: SQLAlchemyFilterResolver) -> None:
     op = SortOperation(field="name", desc=False)
     result = resolver.resolve(op)
@@ -289,10 +266,6 @@ def test_resolve_sort_desc(resolver: SQLAlchemyFilterResolver) -> None:
     op = SortOperation(field="name", desc=True)
     result = resolver.resolve(op)
     assert "DESC" in str(result)
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 
 
 def test_resolve_logical_or(resolver: SQLAlchemyFilterResolver) -> None:
@@ -309,10 +282,6 @@ def test_resolve_logical_and(resolver: SQLAlchemyFilterResolver) -> None:
     logical = LogicalOperation(operator="and", values=[op1, op2])
     result = resolver.resolve(logical)
     assert "AND" in str(result)
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 
 
 def test_resolve_model_field_simple(resolver: SQLAlchemyFilterResolver) -> None:
@@ -346,10 +315,6 @@ def test_resolve_model_field_nested_from_registry(
     assert result is MockModel.name
 
 
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-
-
 def test_get_model_cls_from_registry(resolver: SQLAlchemyFilterResolver) -> None:
     SQLAlchemyFilterResolver._cache.clear()
     result = resolver._get_model_cls("users")
@@ -377,10 +342,6 @@ def test_get_model_cls_registry_lookup_cached(
     resolver._get_model_cls("items")  # First: populates cache
     cached_result = resolver._get_model_cls("items")  # Second: from cache
     assert cached_result is MockModel
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 
 
 def test_get_filters_single(resolver: SQLAlchemyFilterResolver) -> None:
@@ -424,10 +385,6 @@ def test_get_order_by_with_extra(resolver: SQLAlchemyFilterResolver) -> None:
     expected_order_by_count = 2
     assert len(order_by) == expected_order_by_count
     assert order_by[-1] is extra_col
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 
 
 def test_apply_filter_no_conditions(
@@ -500,11 +457,6 @@ def test_apply_filter_token_pagination_raises(
     f = TokenPaginationFilter(page_size=10)
     with pytest.raises(NotImplementedError):
         resolver.apply_filter(f, qs)
-
-
-# ---------------------------------------------------------------------------
-# apply_token_pagination() - raises NotImplementedError directly
-# ---------------------------------------------------------------------------
 
 
 def test_apply_token_pagination_raises(

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
 from starlette.status import (
     HTTP_200_OK,
@@ -14,7 +18,25 @@ from starlette.status import (
 )
 
 from fastapi_views.exceptions import NotFound
-from fastapi_views.views.generics import AsyncGenericViewSet, Page
+from fastapi_views.filters.models import (
+    FieldsFilter,
+    PaginationFilter,
+    TokenPaginationFilter,
+)
+from fastapi_views.handlers import add_error_handlers
+from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.router import ViewRouter
+from fastapi_views.views.generics import (
+    AsyncGenericCreateAPIView,
+    AsyncGenericListAPIView,
+    AsyncGenericPartialUpdateAPIView,
+    AsyncGenericUpdateAPIView,
+    AsyncGenericViewSet,
+    BaseGenericListAPIView,
+    GenericCreateAPIView,
+    GenericListAPIView,
+    Page,
+)
 
 from .utils import view_as_fixture
 
@@ -145,14 +167,7 @@ async def test_partial_update_generic(client):
     assert data2["name"] == "test2"
 
 
-# ---- get_response_schema with PaginationFilter / TokenPaginationFilter ----
-
-
 def test_generic_list_view_response_schema_pagination_filter():
-    from fastapi_views.filters.models import PaginationFilter
-    from fastapi_views.pagination import NumberedPage
-    from fastapi_views.views.generics import BaseGenericListAPIView
-
     class MySchema(BaseModel):
         name: str
 
@@ -170,10 +185,6 @@ def test_generic_list_view_response_schema_pagination_filter():
 
 
 def test_generic_list_view_response_schema_token_filter():
-    from fastapi_views.filters.models import TokenPaginationFilter
-    from fastapi_views.pagination import TokenPage
-    from fastapi_views.views.generics import BaseGenericListAPIView
-
     class MySchema(BaseModel):
         name: str
 
@@ -191,9 +202,6 @@ def test_generic_list_view_response_schema_token_filter():
 
 
 def test_generic_list_view_response_schema_non_list_action():
-    from fastapi_views.filters.models import PaginationFilter
-    from fastapi_views.views.generics import BaseGenericListAPIView
-
     class MySchema(BaseModel):
         name: str
 
@@ -208,13 +216,7 @@ def test_generic_list_view_response_schema_non_list_action():
     assert PaginatedView.get_response_schema() is MySchema
 
 
-# ---- _apply_fields_filter ----
-
-
 def test_apply_fields_filter_sets_serializer_options():
-    from fastapi_views.filters.models import FieldsFilter
-    from fastapi_views.views.generics import AsyncGenericListAPIView
-
     class FieldsFilterView(AsyncGenericListAPIView):
         response_schema = dict
         filter = None
@@ -229,9 +231,6 @@ def test_apply_fields_filter_sets_serializer_options():
 
 
 def test_apply_fields_filter_no_fields():
-    from fastapi_views.filters.models import FieldsFilter
-    from fastapi_views.views.generics import AsyncGenericListAPIView
-
     class FieldsFilterView(AsyncGenericListAPIView):
         response_schema = dict
         filter = None
@@ -245,19 +244,8 @@ def test_apply_fields_filter_no_fields():
     assert "include" not in view.serializer_options
 
 
-# ---- async/sync list with BasePaginationFilter ----
-
-
 @pytest.mark.anyio
 async def test_async_generic_list_with_pagination_filter():
-    from asgi_lifespan import LifespanManager
-    from fastapi import FastAPI
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.filters.models import PaginationFilter
-    from fastapi_views.router import ViewRouter
-    from fastapi_views.views.generics import AsyncGenericListAPIView
-
     class MockRepo:
         async def get_filtered_page(self, _filter):
             return []
@@ -284,11 +272,6 @@ async def test_async_generic_list_with_pagination_filter():
 
 
 def test_sync_generic_list_with_pagination_filter():
-    from unittest.mock import MagicMock
-
-    from fastapi_views.filters.models import PaginationFilter
-    from fastapi_views.views.generics import GenericListAPIView
-
     class MockRepo:
         def get_filtered_page(self, _filter):
             return []
@@ -302,19 +285,8 @@ def test_sync_generic_list_with_pagination_filter():
     assert result == []
 
 
-# ---- async/sync create raises Conflict ----
-
-
 @pytest.mark.anyio
 async def test_async_generic_create_raises_conflict():
-    from asgi_lifespan import LifespanManager
-    from fastapi import FastAPI
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.handlers import add_error_handlers
-    from fastapi_views.router import ViewRouter
-    from fastapi_views.views.generics import AsyncGenericCreateAPIView
-
     class ItemCreate(BaseModel):
         name: str
 
@@ -343,14 +315,6 @@ async def test_async_generic_create_raises_conflict():
 
 @pytest.mark.anyio
 async def test_sync_generic_create_raises_conflict():
-    from asgi_lifespan import LifespanManager
-    from fastapi import FastAPI
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.handlers import add_error_handlers
-    from fastapi_views.router import ViewRouter
-    from fastapi_views.views.generics import GenericCreateAPIView
-
     class ItemCreate(BaseModel):
         name: str
 
@@ -377,19 +341,8 @@ async def test_sync_generic_create_raises_conflict():
         assert response.status_code == HTTP_409_CONFLICT
 
 
-# ---- async update/partial_update raises NotFound ----
-
-
 @pytest.mark.anyio
 async def test_async_generic_update_raises_not_found():
-    from asgi_lifespan import LifespanManager
-    from fastapi import FastAPI
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.handlers import add_error_handlers
-    from fastapi_views.router import ViewRouter
-    from fastapi_views.views.generics import AsyncGenericUpdateAPIView
-
     class ItemUpdate(BaseModel):
         name: str
 
@@ -422,14 +375,6 @@ async def test_async_generic_update_raises_not_found():
 
 @pytest.mark.anyio
 async def test_async_generic_partial_update_raises_not_found():
-    from asgi_lifespan import LifespanManager
-    from fastapi import FastAPI
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.handlers import add_error_handlers
-    from fastapi_views.router import ViewRouter
-    from fastapi_views.views.generics import AsyncGenericPartialUpdateAPIView
-
     class ItemPartialUpdate(BaseModel):
         name: str | None = None
 

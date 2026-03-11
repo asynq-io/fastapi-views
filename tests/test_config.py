@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from fastapi_views import configure_app
+from fastapi_views.config import custom_openapi, simplify_operation_ids
 
 
 def test_configure_app(app):
@@ -11,8 +12,6 @@ def test_configure_app(app):
 
 
 def test_simplify_operation_ids():
-    from fastapi_views.config import simplify_operation_ids
-
     app = FastAPI()
 
     @app.get("/hello")
@@ -26,8 +25,6 @@ def test_simplify_operation_ids():
 
 
 def test_custom_openapi_removes_422():
-    from fastapi_views.config import custom_openapi
-
     app = FastAPI()
 
     @app.post("/items")
@@ -42,8 +39,6 @@ def test_custom_openapi_removes_422():
 
 
 def test_custom_openapi_caches():
-    from fastapi_views.config import custom_openapi
-
     app = FastAPI()
 
     @app.get("/test")

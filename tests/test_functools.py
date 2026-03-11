@@ -17,12 +17,16 @@ from fastapi_views import ViewRouter
 from fastapi_views.exceptions import BadRequest, NotFound
 from fastapi_views.handlers import add_error_handlers
 from fastapi_views.models import BaseSchema, ServerSentEvent
-from fastapi_views.views.api import APIView
+from fastapi_views.views.api import APIView, ListAPIView, View
 from fastapi_views.views.functools import (
     catch,
     catch_defined,
+    delete,
     errors,
     get,
+    patch,
+    post,
+    put,
     serialize_sse,
     sse_route,
     throws,
@@ -55,9 +59,6 @@ async def error_client(error_app) -> AsyncGenerator[AsyncClient, None]:
         yield client
 
 
-# ---- serialize_sse ----
-
-
 def test_serialize_sse_basic():
     result = serialize_sse("id1", "my_event", '{"x": "hello"}')
     assert "id: id1" in result
@@ -73,9 +74,6 @@ def test_serialize_sse_with_retry():
 def test_serialize_sse_no_retry():
     result = serialize_sse("id1", "event", "data", retry=None)
     assert "retry" not in result
-
-
-# ---- errors() ----
 
 
 def test_errors_single_exception():
@@ -108,15 +106,9 @@ def test_errors_empty():
     assert result == {}
 
 
-# ---- throws() ----
-
-
 def test_throws_creates_route_decorator():
     decorator = throws(NotFound, BadRequest)
     assert callable(decorator)
-
-
-# ---- catch() ----
 
 
 @pytest.mark.anyio
@@ -161,8 +153,6 @@ async def test_catch_async_passes_through_when_no_exception(error_app, error_cli
 
 @pytest.mark.anyio
 async def test_catch_sync_handles_exception(error_app, error_client):
-    from fastapi_views.views.api import ListAPIView
-
     class SyncCatchView(ListAPIView):
         response_schema = DummySchema
 
@@ -181,8 +171,6 @@ async def test_catch_sync_handles_exception(error_app, error_client):
 
 @pytest.mark.anyio
 async def test_catch_sync_passes_through(error_app, error_client):
-    from fastapi_views.views.api import ListAPIView
-
     class SyncOkView(ListAPIView):
         response_schema = DummySchema
 
@@ -196,9 +184,6 @@ async def test_catch_sync_passes_through(error_app, error_client):
 
     response = await error_client.get("/catch-sync-ok")
     assert response.status_code == HTTP_200_OK
-
-
-# ---- catch_defined() ----
 
 
 @pytest.mark.anyio
@@ -225,8 +210,6 @@ async def test_catch_defined_async(error_app, error_client):
 
 @pytest.mark.anyio
 async def test_catch_defined_sync(error_app, error_client):
-    from fastapi_views.views.api import ListAPIView
-
     class SyncCatchDefinedView(ListAPIView):
         response_schema = DummySchema
         raises: ClassVar[dict] = {
@@ -264,9 +247,6 @@ async def test_catch_defined_no_raises_no_exception(error_app, error_client):
 
     response = await error_client.get("/no-raises")
     assert response.status_code == HTTP_200_OK
-
-
-# ---- sse_route() ----
 
 
 @pytest.mark.anyio
@@ -321,17 +301,8 @@ async def test_sse_route_with_retry(error_app, error_client):
     assert "retry: 1000" in response.text
 
 
-# ---- HTTP method decorators: post / put / patch / delete ----
-
-
 @pytest.mark.anyio
 async def test_http_method_decorators():
-    from asgi_lifespan import LifespanManager
-    from httpx import ASGITransport, AsyncClient
-
-    from fastapi_views.views.api import View
-    from fastapi_views.views.functools import delete, patch, post, put
-
     class MultiMethodView(View):
         @get(path="/items")
         async def list_items(self) -> list:

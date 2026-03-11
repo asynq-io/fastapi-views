@@ -141,7 +141,6 @@ ignore = [
     "D",
     "B008",     # do not perform function calls in argument defaults
     "E501",     # line too long
-    "PLC0415",
     "N818",
     "PTH123",
     "PLW2901"
@@ -151,6 +150,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 "examples/*" = ["S101", "ANN001", "ANN201", "INP001", "T201", "EM101", "TRY003"]
+"fastapi_views/*" = ["PLC0415"]
+
 
 [tool.bandit]
 skips = ['B101']
