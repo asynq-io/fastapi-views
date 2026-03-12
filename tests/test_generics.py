@@ -5,9 +5,6 @@ from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from asgi_lifespan import LifespanManager
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
 from starlette.status import (
     HTTP_200_OK,
@@ -23,9 +20,7 @@ from fastapi_views.filters.models import (
     PaginationFilter,
     TokenPaginationFilter,
 )
-from fastapi_views.handlers import add_error_handlers
 from fastapi_views.pagination import NumberedPage, TokenPage
-from fastapi_views.router import ViewRouter
 from fastapi_views.views.generics import (
     AsyncGenericCreateAPIView,
     AsyncGenericListAPIView,
@@ -38,7 +33,7 @@ from fastapi_views.views.generics import (
     Page,
 )
 
-from .utils import view_as_fixture
+from .utils import view_as_fixture, view_client
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -258,15 +253,7 @@ async def test_async_generic_list_with_pagination_filter():
         filter = PaginationFilter
         repository = MockRepo()
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(PaginatedListView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(PaginatedListView) as c:
         response = await c.get("/test")
         assert response.status_code == HTTP_200_OK
 
@@ -299,16 +286,7 @@ async def test_async_generic_create_raises_conflict():
         create_schema = ItemCreate
         repository = MockRepo()
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(ConflictCreateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(ConflictCreateView, error_handlers=True) as c:
         response = await c.post("/test", json={"name": "existing"})
         assert response.status_code == HTTP_409_CONFLICT
 
@@ -327,16 +305,7 @@ async def test_sync_generic_create_raises_conflict():
         create_schema = ItemCreate
         repository = MockRepo()
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(ConflictCreateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(ConflictCreateView, error_handlers=True) as c:
         response = await c.post("/test", json={"name": "existing"})
         assert response.status_code == HTTP_409_CONFLICT
 
@@ -359,16 +328,7 @@ async def test_async_generic_update_raises_not_found():
         primary_key = IntId
         repository = MockRepo()
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(NotFoundUpdateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(NotFoundUpdateView, error_handlers=True) as c:
         response = await c.put("/test/1", json={"name": "new"})
         assert response.status_code == HTTP_404_NOT_FOUND
 
@@ -391,15 +351,6 @@ async def test_async_generic_partial_update_raises_not_found():
         primary_key = IntId
         repository = MockRepo()
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(NotFoundPartialView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(NotFoundPartialView, error_handlers=True) as c:
         response = await c.patch("/test/1", json={})
         assert response.status_code == HTTP_404_NOT_FOUND

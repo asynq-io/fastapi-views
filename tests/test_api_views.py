@@ -1,11 +1,9 @@
 from unittest.mock import MagicMock
 
 import pytest
-from asgi_lifespan import LifespanManager
-from fastapi import FastAPI
 from fastapi import Request as FastAPIRequest
 from fastapi import Response as FastAPIResponse
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import Response
 from pydantic.type_adapter import TypeAdapter
 from starlette.status import (
     HTTP_200_OK,
@@ -14,8 +12,6 @@ from starlette.status import (
     HTTP_404_NOT_FOUND,
 )
 
-from fastapi_views.handlers import add_error_handlers
-from fastapi_views.router import ViewRouter
 from fastapi_views.views.api import (
     AnyTypeAdapter,
     AsyncCreateAPIView,
@@ -24,6 +20,8 @@ from fastapi_views.views.api import (
     AsyncUpdateAPIView,
     View,
 )
+
+from .utils import view_client
 
 
 def validate_response_meta(response: Response, status_code: int = HTTP_200_OK):
@@ -100,15 +98,7 @@ async def test_async_view_returns_string():
         async def retrieve(self):
             return "hello string"
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(StringView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(StringView) as c:
         response = await c.get("/test")
         assert response.status_code == HTTP_200_OK
         assert "hello string" in response.text
@@ -123,15 +113,7 @@ async def test_async_create_with_location():
         async def create(self) -> dict:
             return {"id": 1, "name": "test"}
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(LocationCreateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(LocationCreateView) as c:
         response = await c.post("/test")
         assert response.status_code == HTTP_201_CREATED
         assert response.headers.get("location") == "/items/1"
@@ -145,15 +127,7 @@ async def test_async_create_no_return():
         async def create(self) -> dict:
             return {"id": 1}
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(NoReturnCreateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(NoReturnCreateView) as c:
         response = await c.post("/test")
         assert response.status_code == HTTP_201_CREATED
         assert response.content == b""
@@ -168,15 +142,7 @@ async def test_async_update_no_return():
         async def update(self) -> dict:
             return {"updated": True}
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(NoReturnUpdateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(NoReturnUpdateView) as c:
         response = await c.put("/test")
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
@@ -191,16 +157,7 @@ async def test_async_update_raise_on_none():
         async def update(self) -> None:
             return None
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(RaiseOnNoneUpdateView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(RaiseOnNoneUpdateView, error_handlers=True) as c:
         response = await c.put("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
 
@@ -214,16 +171,7 @@ async def test_async_partial_update_raise_on_none():
         async def partial_update(self) -> None:
             return None
 
-    app = FastAPI()
-    add_error_handlers(app)
-    router = ViewRouter()
-    router.register_view(RaiseOnNonePartialView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(RaiseOnNonePartialView, error_handlers=True) as c:
         response = await c.patch("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
 
@@ -237,15 +185,7 @@ async def test_async_partial_update_no_return():
         async def partial_update(self) -> dict:
             return {"updated": True}
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(NoReturnPartialView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c,
-    ):
+    async with view_client(NoReturnPartialView) as c:
         response = await c.patch("/test")
         assert response.status_code == HTTP_200_OK
         assert response.content == b""

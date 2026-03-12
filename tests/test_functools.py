@@ -32,6 +32,8 @@ from fastapi_views.views.functools import (
     throws,
 )
 
+from .utils import view_client
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -324,15 +326,7 @@ async def test_http_method_decorators():
         async def delete_item(self, item_id: int) -> None:
             return None
 
-    app = FastAPI()
-    router = ViewRouter()
-    router.register_view(MultiMethodView, prefix="/test")
-    app.include_router(router)
-
-    async with (
-        LifespanManager(app, startup_timeout=30),
-        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
-    ):
+    async with view_client(MultiMethodView) as client:
         assert (await client.get("/test/items")).status_code == HTTP_200_OK
         assert (await client.post("/test/items")).status_code == HTTP_201_CREATED
         assert (await client.put("/test/items/1")).status_code == HTTP_200_OK
