@@ -225,6 +225,20 @@ def test_apply_fields_filter_sets_serializer_options():
     assert "include" in view.serializer_options
 
 
+def test_apply_fields_filter_sets_serializer_options_with_page_schema():
+    class FieldsFilterView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = PaginationFilter
+
+        async def list(self, _filter):
+            return []
+
+    view = FieldsFilterView.__new__(FieldsFilterView)
+    view.serializer_options = {}
+    view._apply_fields_filter(FieldsFilter(fields={"name", "age"}))
+    assert view.serializer_options.get("include") == {"items": {"name", "age"}}
+
+
 def test_apply_fields_filter_no_fields():
     class FieldsFilterView(AsyncGenericListAPIView):
         response_schema = dict
@@ -243,7 +257,7 @@ def test_apply_fields_filter_no_fields():
 async def test_async_generic_list_with_pagination_filter():
     class MockRepo:
         async def get_filtered_page(self, _filter):
-            return []
+            return NumberedPage(items=[], current_page=1, page_size=10)
 
         async def list(self, **_kwargs):
             return []

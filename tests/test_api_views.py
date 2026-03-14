@@ -15,6 +15,7 @@ from starlette.status import (
 from fastapi_views.views.api import (
     AnyTypeAdapter,
     AsyncCreateAPIView,
+    AsyncListAPIView,
     AsyncPartialUpdateAPIView,
     AsyncRetrieveAPIView,
     AsyncUpdateAPIView,
@@ -189,3 +190,14 @@ async def test_async_partial_update_no_return():
         response = await c.patch("/test")
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
+
+
+def test_base_list_api_view_get_response_schema_non_list_action():
+    class MyListView(AsyncListAPIView):
+        response_schema = dict
+
+        async def list(self) -> list[dict]:
+            return []
+
+    assert MyListView.get_response_schema(action=None) is dict
+    assert MyListView.get_response_schema(action="retrieve") is dict

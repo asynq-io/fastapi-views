@@ -169,8 +169,8 @@ class BaseGenericListAPIView(GenericView):
 
 
 class AsyncGenericListAPIView(
-    AsyncListAPIView,
     BaseGenericListAPIView,
+    AsyncListAPIView,
     WithAsyncRepositoryMixin,
 ):
     """AsyncGenericListAPIView"""
@@ -184,7 +184,7 @@ class AsyncGenericListAPIView(
         )
 
 
-class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
+class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:

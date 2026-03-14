@@ -78,6 +78,9 @@ lint = [
     "ruff",
     "bandit",
     "types-pyyaml>=6.0.12.20250915",
+    "opentelemetry-api>=1.28.0,<2.0.0",
+    "opentelemetry-sdk>=1.28.0,<2.0.0",
+    "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
 ]
 
 docs = [

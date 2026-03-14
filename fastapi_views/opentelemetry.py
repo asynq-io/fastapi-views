@@ -27,9 +27,7 @@ def maybe_instrument_app(app: FastAPI, **options: Any) -> None:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
         from opentelemetry.trace import Span, format_trace_id
 
-        def server_request_hook(
-            span: Span, _scope: dict[str, Any]
-        ) -> None:  # pragma: no cover
+        def server_request_hook(span: Span, _scope: dict[str, Any]) -> None:
             if span and span.is_recording():
                 span_context = span.get_span_context()
                 trace_id = format_trace_id(span_context.trace_id)
