@@ -14,7 +14,7 @@ from fastapi_views.filters.models import (
     PaginationFilter,
     TokenPaginationFilter,
 )
-from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.pagination import BasePage, NumberedPage, TokenPage
 from fastapi_views.views.api import APIView
 
 from .api import (
@@ -163,14 +163,14 @@ class BaseGenericListAPIView(GenericView):
                 return
             response_schema = self.get_response_schema("list")
             key = "__all__"
-            if issubclass(response_schema, (PaginationFilter, TokenPaginationFilter)):
+            if issubclass(response_schema, BasePage):
                 key = "items"
             self.serializer_options["include"] = {key: fields}
 
 
 class AsyncGenericListAPIView(
-    AsyncListAPIView,
     BaseGenericListAPIView,
+    AsyncListAPIView,
     WithAsyncRepositoryMixin,
 ):
     """AsyncGenericListAPIView"""
@@ -184,7 +184,7 @@ class AsyncGenericListAPIView(
         )
 
 
-class GenericListAPIView(ListAPIView, BaseGenericListAPIView, WithRepositoryMixin):
+class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:

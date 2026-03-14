@@ -31,7 +31,6 @@ class SerializerOptions(TypedDict, total=False):
     exclude_defaults: bool
     exclude_none: bool
     round_trip: bool
-    warnings: bool
 
 
 class BaseRouteOptions(TypedDict, total=False):

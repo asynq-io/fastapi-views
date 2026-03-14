@@ -12,7 +12,7 @@ from starlette.concurrency import iterate_in_threadpool
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import NotRequired, ParamSpec, TypedDict, Unpack
 
-from fastapi_views.models import AnyServerSideEvent, ServerSideEvent
+from fastapi_views.models import AnyServerSideEvent, ServerSentEvent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Iterator
@@ -113,8 +113,8 @@ def sse_route(
     kwargs.setdefault("status_code", HTTP_200_OK)
     kwargs.setdefault("methods", ["GET"])
     response_model = kwargs.pop("response_model", Any)
-    schema = ServerSideEvent[response_model].get_openapi_schema(  # type: ignore[valid-type]
-        title=f"{response_model.__name__.title()}ServerSideEvent",
+    schema = ServerSentEvent[response_model].get_openapi_schema(  # type: ignore[valid-type]
+        title=f"{response_model.__name__.title()}ServerSentEvent",
     )
     data_serializer = TypeAdapter(response_model)
     kwargs.update(
