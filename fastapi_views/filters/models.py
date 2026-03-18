@@ -31,6 +31,9 @@ class BaseFilter(BaseModel):
     def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         return []
 
+    def as_kwargs(self) -> dict[str, Any]:
+        return self.model_dump(exclude=self.special_fields, exclude_none=True)
+
 
 class ModelFilter(BaseFilter):
     def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
@@ -188,6 +191,3 @@ class Filter(
     """Main filter class that implements all the functionalities:
     pagination, ordering, search, fields and custom attributes filter
     """
-
-
-AnyFilter = BaseFilter | SearchFilter | OrderingFilter | PaginationFilter | FieldsFilter

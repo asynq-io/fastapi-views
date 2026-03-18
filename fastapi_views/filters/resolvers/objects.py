@@ -3,7 +3,13 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from fastapi_views.filters.models import OrderingFilter, PaginationFilter
+from fastapi_views.filters.models import (
+    BaseFilter,
+    BasePaginationFilter,
+    FieldsFilter,
+    OrderingFilter,
+    PaginationFilter,
+)
 from fastapi_views.filters.operations import (
     LogicalOperation,
     SortOperation,
@@ -14,13 +20,15 @@ from .abc import FilterResolver
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from fastapi_views.filters.models import AnyFilter
     from fastapi_views.filters.operations import (
         Operation,
     )
 
 
-class ObjectFilterResolver(FilterResolver[list[Any]]):
+Objects = list[Any]
+
+
+class ObjectFilterResolver(FilterResolver[Objects]):
     operators: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
         "is_null": lambda a, b: (
             operator.is_(a, None) if b else operator.is_not(a, None)
@@ -61,20 +69,33 @@ class ObjectFilterResolver(FilterResolver[list[Any]]):
 
         return resolved
 
-    def apply_filter(
-        self,
-        filter: AnyFilter,
-        queryset: list[Any],
-        **context: Any,
-    ) -> list[Any]:
-        f = self._apply(*[self.resolve(op, **context) for op in filter.filters], op=all)
-
-        queryset = [obj for obj in queryset if f(obj)]
-        if isinstance(filter, OrderingFilter):
-            for order_by in filter.order_by:
-                resolved = self.resolve(order_by, **context)
-                queryset.sort(**resolved)
-        if isinstance(filter, PaginationFilter):
-            queryset = queryset[filter.offset : filter.offset + filter.limit]
-
+    def apply_fields_filter(
+        self, queryset: Objects, filter: FieldsFilter, **_: Any
+    ) -> Objects:
+        fields = filter.get_fields()
+        if fields:
+            for obj in queryset:
+                for field in fields:
+                    obj.__dict__.pop(field, None)
         return queryset
+
+    def apply_base_filter(
+        self, queryset: Objects, filter: BaseFilter, **context: Any
+    ) -> Objects:
+        f = self._apply(*[self.resolve(op, **context) for op in filter.filters], op=all)
+        return [obj for obj in queryset if f(obj)]
+
+    def apply_ordering_filter(
+        self, queryset: Objects, filter: OrderingFilter, **context: Any
+    ) -> Objects:
+        for order_by in filter.order_by:
+            resolved = self.resolve(order_by, **context)
+            queryset = sorted(queryset, **resolved)
+        return queryset
+
+    def apply_pagination_filter(
+        self, queryset: Objects, filter: BasePaginationFilter, **_: Any
+    ) -> Objects:
+        if isinstance(filter, PaginationFilter):
+            return queryset[filter.offset : filter.offset + filter.limit]
+        raise NotImplementedError

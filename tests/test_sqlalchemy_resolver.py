@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, cast
+from unittest.mock import patch
 
 import pytest
 
 from fastapi_views.filters.models import (
+    FieldsFilter,
     ModelFilter,
     OrderingFilter,
     PaginationFilter,
@@ -156,10 +158,17 @@ class MockQueryset:
         self._limit_val = val
         return self
 
+    def options(self, *args: object) -> MockQueryset:
+        return self
+
 
 class ItemFilter(ModelFilter):
     name: str | None = None
     age: str | None = None
+
+
+class ItemFieldsFilter(FieldsFilter):
+    pass
 
 
 class SearchableFilter(SearchFilter, OrderingFilter):
@@ -286,7 +295,7 @@ def test_resolve_logical_and(resolver: SQLAlchemyFilterResolver) -> None:
 
 def test_resolve_model_field_simple(resolver: SQLAlchemyFilterResolver) -> None:
     op = FilterOperation(field="name", operator="eq", values="test")
-    result = resolver.resolve_model_field(op)
+    result = resolver.resolve_model_field(op.field)
     assert result is MockFilterModel.name
 
 
@@ -294,7 +303,7 @@ def test_resolve_model_field_from_table_context(
     resolver: SQLAlchemyFilterResolver,
 ) -> None:
     op = FilterOperation(field="name", operator="eq", values="test")
-    result = resolver.resolve_model_field(op, table=AnotherModel)
+    result = resolver.resolve_model_field(op.field, table=AnotherModel)
     assert result is AnotherModel.name
 
 
@@ -302,7 +311,7 @@ def test_resolve_model_field_nested_from_context(
     resolver: SQLAlchemyFilterResolver,
 ) -> None:
     op = FilterOperation(field="related__username", operator="eq", values="alice")
-    result = resolver.resolve_model_field(op, related={"table": OtherModel})
+    result = resolver.resolve_model_field(op.field, related={"table": OtherModel})
     assert result is OtherModel.username
 
 
@@ -311,7 +320,7 @@ def test_resolve_model_field_nested_from_registry(
 ) -> None:
     SQLAlchemyFilterResolver._cache.clear()
     op = FilterOperation(field="items__name", operator="eq", values="test")
-    result = resolver.resolve_model_field(op)
+    result = resolver.resolve_model_field(op.field)
     assert result is MockModel.name
 
 
@@ -391,7 +400,7 @@ def test_apply_filter_no_conditions(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
     f = ItemFilter()
-    result = resolver.apply_filter(f, qs)
+    result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert result is qs
     assert result._filters == []
 
@@ -400,7 +409,7 @@ def test_apply_filter_with_field(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
     f = ItemFilter(name="Alice")
-    result = resolver.apply_filter(f, qs)
+    result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert len(result._filters) == 1
     assert "name = Alice" in str(result._filters[0])
 
@@ -411,7 +420,7 @@ def test_apply_filter_pagination(
     page_size = 10
     expected_offset = 20
     f = PaginationFilter(page=3, page_size=page_size)
-    result = resolver.apply_filter(f, qs)
+    result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert result._offset_val == expected_offset
     assert result._limit_val == page_size
 
@@ -421,7 +430,7 @@ def test_apply_filter_ordering(
 ) -> None:
     expected_order_by_count = 2
     f = SearchableFilter(sort=["name", "-age"], query=None)
-    result = resolver.apply_filter(f, qs)
+    result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert len(result._order_by) == expected_order_by_count
 
 
@@ -429,7 +438,7 @@ def test_apply_filter_exclude_filter(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
     f = ItemFilter(name="Alice")
-    result = resolver.apply_filter(f, qs, exclude={"filter"})
+    result = cast("MockQueryset", resolver.apply_filter(f, qs, exclude={"filter"}))
     assert result._filters == []
 
 
@@ -437,7 +446,7 @@ def test_apply_filter_exclude_sort(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
     f = SearchableFilter(sort=["name"], query=None)
-    result = resolver.apply_filter(f, qs, exclude={"sort"})
+    result = cast("MockQueryset", resolver.apply_filter(f, qs, exclude={"sort"}))
     assert result._order_by == []
 
 
@@ -445,7 +454,7 @@ def test_apply_filter_exclude_paginate(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
     f = PaginationFilter(page=2, page_size=10)
-    result = resolver.apply_filter(f, qs, exclude={"paginate"})
+    result = cast("MockQueryset", resolver.apply_filter(f, qs, exclude={"paginate"}))
     assert result._offset_val is None
     assert result._limit_val is None
 
@@ -473,3 +482,14 @@ def test_apply_token_pagination_no_token_raises(
 ) -> None:
     with pytest.raises(NotImplementedError):
         resolver.apply_token_pagination(qs, None, 10)
+
+
+def test_apply_fields_filter(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    f = ItemFieldsFilter(fields={"name"})
+    with patch(
+        "fastapi_views.filters.resolvers.sqlalchemy.load_only", return_value=None
+    ):
+        result = cast("MockQueryset", resolver.apply_filter(f, qs))
+    assert result is qs

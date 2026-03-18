@@ -51,6 +51,7 @@ def resolver():
 def get_user_filter(**kwargs):
     kwargs.setdefault("query", None)
     kwargs.setdefault("sort", None)
+    kwargs.setdefault("fields", None)
     kwargs.setdefault("page", 1)
     kwargs.setdefault("page_size", 10)
     return UserFilter(**kwargs)
@@ -171,3 +172,19 @@ def test_nested_filter_without_prefix():
     wrapper_cls = NestedFilter(SimpleFilter).dependency
     instance = wrapper_cls(name="Bob")
     assert instance.name == "Bob"
+
+
+def test_base_filter_as_kwargs():
+    class MyFilter(BaseFilter):
+        name: str | None = None
+        age: int | None = None
+
+    f = MyFilter(name="Alice", age=None)
+    assert f.as_kwargs() == {"name": "Alice"}
+
+
+def test_apply_fields_filter_removes_fields(users, resolver):
+    filter_ = get_user_filter(fields={"age"})
+    result = resolver.apply_filter(filter_, users)
+    for obj in result:
+        assert "age" not in obj.__dict__

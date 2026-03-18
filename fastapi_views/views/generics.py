@@ -15,9 +15,9 @@ from fastapi_views.filters.models import (
     TokenPaginationFilter,
 )
 from fastapi_views.pagination import BasePage, NumberedPage, TokenPage
-from fastapi_views.views.api import APIView
 
 from .api import (
+    APIView,
     AsyncCreateAPIView,
     AsyncDestroyAPIView,
     AsyncListAPIView,
@@ -180,7 +180,7 @@ class AsyncGenericListAPIView(
         if isinstance(filter, BasePaginationFilter):
             return await self.repository.get_filtered_page(filter)
         return await self.repository.list(
-            **filter.model_dump(exclude=filter.special_fields),
+            **filter.as_kwargs(),
         )
 
 
@@ -191,7 +191,7 @@ class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixi
         self._apply_fields_filter(filter)
         if isinstance(filter, BasePaginationFilter):
             return self.repository.get_filtered_page(filter)
-        return self.repository.list(**filter.model_dump(exclude=filter.special_fields))
+        return self.repository.list(**filter.as_kwargs())
 
 
 class BaseGenericCreateAPIView(GenericView):
