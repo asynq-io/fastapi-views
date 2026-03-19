@@ -419,7 +419,7 @@ class AsyncGenericPartialUpdateAPIView(
     async def before_partial_update(self, data: dict[str, Any]) -> None:
         pass
 
-    async def after_partial_update(self, new_obj: M) -> None:
+    async def after_partial_update(self, obj: M) -> None:
         pass
 
 
@@ -443,7 +443,7 @@ class GenericPartialUpdateAPIView(
     def before_partial_update(self, data: dict[str, Any]) -> None:
         pass
 
-    def after_partial_update(self, new_obj: M) -> None:
+    def after_partial_update(self, obj: M) -> None:
         pass
 
 
