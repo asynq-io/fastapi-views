@@ -2,7 +2,7 @@ from collections.abc import MutableSequence
 from typing import Any, ClassVar, Literal
 
 from fastapi import Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, PrivateAttr, field_validator
 
 from fastapi_views.pagination import PageNumber, PageSize, PageToken
 
@@ -12,6 +12,7 @@ from .types import AnyFields, SearchQuery, Sort
 
 class BaseFilter(BaseModel):
     special_fields: ClassVar[set[str]] = set()
+    _kwargs: dict[str, Any] = PrivateAttr({})
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -32,36 +33,46 @@ class BaseFilter(BaseModel):
         return []
 
     def as_kwargs(self) -> dict[str, Any]:
-        return self.model_dump(exclude=self.special_fields, exclude_none=True)
+        return (
+            self.model_dump(exclude=self.special_fields, exclude_none=True)
+            | self._kwargs
+        )
+
+    def with_kwargs(self, **kwargs: Any) -> None:
+        self._kwargs.update(kwargs)
 
 
 class ModelFilter(BaseFilter):
+    def _get_operations(
+        self, field_name: str, value: Any
+    ) -> MutableSequence[FilterOperation | LogicalOperation]:
+        if value is None:
+            return []
+
+        if isinstance(value, BaseFilter):
+            model_filters = value.get_filters()
+            for operation in model_filters:
+                operation.set_prefix(field_name)
+            return model_filters
+        if "__" in field_name:
+            field_name, _, op = field_name.partition("__")
+        else:
+            op = "eq"
+        return [FilterOperation(field=field_name, operator=op, values=value)]
+
+    @property
+    def field_names(self) -> set[str]:
+        return set(type(self).model_fields) - self.special_fields
+
     def get_filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
         filters = super().get_filters()
 
-        for field_name in type(self).model_fields:
-            if field_name in self.special_fields:
-                continue
-
+        for field_name in self.field_names:
             value = getattr(self, field_name)
-            if value is None:
-                continue
+            filters.extend(self._get_operations(field_name, value))
 
-            if isinstance(value, BaseFilter):
-                model_filters = value.get_filters()
-                for operation in model_filters:
-                    operation.set_prefix(field_name)
-
-                filters.extend(model_filters)
-
-            else:
-                if "__" in field_name:
-                    field_name, _, op = field_name.partition("__")
-                else:
-                    op = "eq"
-                operation = FilterOperation(field=field_name, operator=op, values=value)
-                filters.append(operation)
-
+        for field_name, value in self._kwargs.items():
+            filters.extend(self._get_operations(field_name, value))
         return filters
 
 

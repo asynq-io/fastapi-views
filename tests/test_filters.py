@@ -124,6 +124,18 @@ def test_model_filter_double_underscore_field():
     assert result[0].values == age_value
 
 
+def test_model_filter_get_filters_includes_kwargs():
+    class NameFilter(ModelFilter):
+        pass
+
+    f = NameFilter()
+    f.with_kwargs(name="alice")
+    result = f.get_filters()
+    assert len(result) == 1
+    assert result[0].field == "name"
+    assert result[0].values == "alice"
+
+
 def test_ordering_filter_invalid_sort():
     class MyFilter(OrderingFilter):
         ordering_fields: ClassVar[set[str]] = {"name", "age"}

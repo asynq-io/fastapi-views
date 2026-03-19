@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Generic, NoReturn, Protocol, TypeVar
 
 from fastapi import Depends
 from pydantic import BaseModel
@@ -57,7 +57,9 @@ class Repository(Protocol[M_co]):
 
     def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    def get_filtered_page(self, filter: BasePaginationFilter) -> Page[M_co]: ...
+    def get_filtered_page(
+        self, filter: BasePaginationFilter, **kwargs: Any
+    ) -> Page[M_co]: ...
 
     def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -76,7 +78,9 @@ class AsyncRepository(Protocol[M_co]):
 
     async def get(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
-    async def get_filtered_page(self, filter: BasePaginationFilter) -> Page[M_co]: ...
+    async def get_filtered_page(
+        self, filter: BasePaginationFilter, **kwargs: Any
+    ) -> Page[M_co]: ...
 
     async def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
@@ -106,6 +110,9 @@ class GenericView(APIView):
         schema = getattr(cls, param)
         func.__annotations__[param] = schema
 
+    def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
+        return {}
+
 
 class DetailGenericView(GenericView, Generic[PK]):
     primary_key: type[PK]
@@ -114,15 +121,16 @@ class DetailGenericView(GenericView, Generic[PK]):
     def _patch_pk_param(cls, func: Callable) -> None:
         func.__annotations__["pk"] = Annotated[BaseModel, Depends(cls.primary_key)]
 
-    def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
-        return {}
-
     def get_primary_key(
         self,
         primary_key: PK,
         action: Action | None = None,
     ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         return (), primary_key.model_dump() | self.get_kwargs(action)
+
+
+class _NoFilter(BaseFilter):
+    pass
 
 
 class BaseGenericListAPIView(GenericView):
@@ -149,7 +157,7 @@ class BaseGenericListAPIView(GenericView):
 
         if not hasattr(cls, "filter"):
             return
-        filter_ = cls.filter or BaseFilter
+        filter_ = cls.filter or _NoFilter
 
         cls.list.__annotations__["filter"] = Annotated[
             BaseFilter,
@@ -158,14 +166,22 @@ class BaseGenericListAPIView(GenericView):
 
     def _apply_fields_filter(self, filter: BaseFilter) -> None:
         if isinstance(filter, FieldsFilter):
-            fields = filter.get_fields()
-            if not fields:
+            if not (fields := filter.get_fields()):
                 return
-            response_schema = self.get_response_schema("list")
-            key = "__all__"
-            if issubclass(response_schema, BasePage):
-                key = "items"
+            key = self.get_fields_key()
             self.serializer_options["include"] = {key: fields}
+
+    def get_fields_key(self) -> str:
+        response_schema = self.get_response_schema("list")
+        return "items" if issubclass(response_schema, BasePage) else "__all__"
+
+    def get_pagination_kwargs(self) -> dict[str, Any]:
+        return {}
+
+    def resolve_filter(
+        self, filter: BaseFilter
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        return (), filter.as_kwargs()
 
 
 class AsyncGenericListAPIView(
@@ -176,22 +192,32 @@ class AsyncGenericListAPIView(
     """AsyncGenericListAPIView"""
 
     async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        if type(filter) is _NoFilter:
+            return await self.repository.list(**self.get_kwargs())
         self._apply_fields_filter(filter)
+        filter.with_kwargs(**self.get_kwargs())
         if isinstance(filter, BasePaginationFilter):
-            return await self.repository.get_filtered_page(filter)
-        return await self.repository.list(
-            **filter.as_kwargs(),
-        )
+            return await self.repository.get_filtered_page(
+                filter, **self.get_pagination_kwargs()
+            )
+        args, kwargs = self.resolve_filter(filter)
+        return await self.repository.list(*args, **kwargs)
 
 
 class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
+        if type(filter) is _NoFilter:
+            return self.repository.list(**self.get_kwargs())
         self._apply_fields_filter(filter)
+        filter.with_kwargs(**self.get_kwargs())
         if isinstance(filter, BasePaginationFilter):
-            return self.repository.get_filtered_page(filter)
-        return self.repository.list(**filter.as_kwargs())
+            return self.repository.get_filtered_page(
+                filter, **self.get_pagination_kwargs()
+            )
+        args, kwargs = self.resolve_filter(filter)
+        return self.repository.list(*args, **kwargs)
 
 
 class BaseGenericCreateAPIView(GenericView):
@@ -208,6 +234,10 @@ class BaseGenericCreateAPIView(GenericView):
 
         cls._patch_schema(cls.create)
 
+    def raise_conflict(self) -> NoReturn:
+        msg = f"{self.get_name()} already exists"
+        raise Conflict(msg)
+
 
 class AsyncGenericCreateAPIView(
     BaseGenericCreateAPIView,
@@ -221,8 +251,7 @@ class AsyncGenericCreateAPIView(
         await self.before_create(data)
         obj = await self.repository.create(**data)
         if obj is None:
-            msg = f"{self.get_name()} already exists"
-            raise Conflict(msg)
+            self.raise_conflict()
         await self.after_create(obj)
         return obj
 
@@ -245,8 +274,7 @@ class GenericCreateAPIView(
         self.before_create(data)
         obj = self.repository.create(**data)
         if obj is None:
-            msg = f"{self.get_name()} already exists"
-            raise Conflict(msg)
+            self.raise_conflict()
         self.after_create(obj)
         return obj
 

@@ -45,7 +45,9 @@ class SyncItemRepository:
     def get(self, **kwargs: Any) -> dict[str, Any] | None:
         return self._data.get(kwargs["id"])
 
-    def get_filtered_page(self, filter: BasePaginationFilter) -> Page[dict[str, Any]]:
+    def get_filtered_page(
+        self, filter: BasePaginationFilter, **_: Any
+    ) -> Page[dict[str, Any]]:
         raise NotImplementedError
 
     def list(self) -> Sequence[dict[str, Any]]:

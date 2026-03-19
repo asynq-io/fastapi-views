@@ -16,6 +16,7 @@ from starlette.status import (
 
 from fastapi_views.exceptions import NotFound
 from fastapi_views.filters.models import (
+    BaseFilter,
     FieldsFilter,
     PaginationFilter,
     TokenPaginationFilter,
@@ -69,8 +70,7 @@ class ItemRepository:
         return self._data.get(kwargs["id"])
 
     async def get_filtered_page(
-        self,
-        filter: BasePaginationFilter,
+        self, filter: BasePaginationFilter, **_
     ) -> Page[dict[str, Any]]:
         raise NotImplementedError
 
@@ -368,3 +368,42 @@ async def test_async_generic_partial_update_raises_not_found():
     async with view_client(NotFoundPartialView, error_handlers=True) as c:
         response = await c.patch("/test/1", json={})
         assert response.status_code == HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_async_generic_list_with_plain_filter():
+    class NameFilter(BaseFilter):
+        name: str | None = None
+
+    class MockRepo:
+        async def list(self, **kwargs) -> list:
+            return []
+
+    class FilteredListView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = NameFilter
+        repository = MockRepo()
+
+    async with view_client(FilteredListView) as c:
+        response = await c.get("/test")
+        assert response.status_code == HTTP_200_OK
+
+
+def test_sync_generic_list_with_plain_filter():
+    class NameFilter(BaseFilter):
+        name: str | None = None
+
+    class MockRepo:
+        def list(self, **kwargs) -> list:
+            return []
+
+    view = MagicMock()
+    view.repository = MockRepo()
+    view._apply_fields_filter = MagicMock()
+    view.get_kwargs = MagicMock(return_value={})
+    view.get_pagination_kwargs = MagicMock(return_value={})
+    view.resolve_filter = MagicMock(return_value=((), {}))
+
+    f = NameFilter(name="alice")
+    result = GenericListAPIView.list(view, f)
+    assert result == []

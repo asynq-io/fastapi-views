@@ -38,3 +38,4 @@ openapi.json
 openapi.yaml
 .ropeproject/
 .claude
+ui/
