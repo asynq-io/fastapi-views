@@ -1,6 +1,5 @@
 from .dependencies import FilterDepends, NestedFilter
 from .models import (
-    AnyFilter,
     BaseFilter,
     FieldsFilter,
     Filter,
@@ -10,7 +9,6 @@ from .models import (
 )
 
 __all__ = [
-    "AnyFilter",
     "BaseFilter",
     "FieldsFilter",
     "Filter",

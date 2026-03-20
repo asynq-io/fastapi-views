@@ -19,7 +19,7 @@ from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
 from starlette.responses import StreamingResponse
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from typing_extensions import ParamSpec
+from typing_extensions import ParamSpec, deprecated
 
 from fastapi_views.exceptions import (
     APIError,
@@ -27,7 +27,7 @@ from fastapi_views.exceptions import (
     Conflict,
     NotFound,
 )
-from fastapi_views.models import ServerSideEvent
+from fastapi_views.models import ServerSentEvent
 
 from .functools import VIEWSET_ROUTE_FLAG, errors, serialize_sse
 from .mixins import DetailViewMixin, ErrorHandlerMixin
@@ -248,7 +248,8 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
                 from_attributes=self.from_attributes,
                 context=self.validation_context,
             )
-        return serializer.dump_json(content, **self.serializer_options)
+            return serializer.dump_json(content, **self.serializer_options)
+        return serializer.dump_json(content, warnings=False, **self.serializer_options)
 
 
 class BaseListAPIView(APIView):
@@ -688,12 +689,12 @@ class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
         raise NotImplementedError
 
 
-class ServerSideEventsAPIView(APIView, Generic[P]):
+class ServerSentEventsAPIView(APIView, Generic[P]):
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("events", HTTP_200_OK)
         response_schema_data = cls.get_response_schema() or Any
-        sse_schema = ServerSideEvent[response_schema_data].get_openapi_schema()  # type: ignore[valid-type]
+        sse_schema = ServerSentEvent[response_schema_data].get_openapi_schema()  # type: ignore[valid-type]
         yield cls.get_api_action(
             prefix=prefix,
             endpoint=cls.get_events_endpoint(status_code),
@@ -719,7 +720,7 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
     @classmethod
     def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
         async def endpoint(
-            self: ServerSideEventsAPIView,
+            self: ServerSentEventsAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> StreamingResponse:
@@ -751,3 +752,8 @@ class ServerSideEventsAPIView(APIView, Generic[P]):
     @abstractmethod
     def events(self, *args: P.args, **kwargs: P.kwargs) -> AsyncIterator[Any]:
         raise NotImplementedError
+
+
+@deprecated("This class is deprecated use ServerSentEventsAPIView")
+class ServerSideEventsAPIView(ServerSentEventsAPIView):
+    pass

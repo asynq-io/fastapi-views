@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "1.5.1"
+version = "1.6.0"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -69,6 +69,8 @@ test = [
     "pytest-cov",
     "pytest-sugar",
     "pytest-repeat",
+    "pytest-timeout",
+    "sqlalchemy>=2.0.48",
 ]
 
 lint = [
@@ -76,6 +78,9 @@ lint = [
     "ruff",
     "bandit",
     "types-pyyaml>=6.0.12.20250915",
+    "opentelemetry-api>=1.28.0,<2.0.0",
+    "opentelemetry-sdk>=1.28.0,<2.0.0",
+    "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
 ]
 
 docs = [
@@ -95,15 +100,16 @@ build-backend = "uv_build"
 
 
 [tool.pytest.ini_options]
+timeout = 3
 addopts = "--cov=./fastapi_views"
 testpaths = ["./tests"]
-filterwarnings = "ignore::DeprecationWarning"
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
+    "except ImportError:"
 ]
 
 [tool.pyright]
@@ -135,10 +141,10 @@ select = ["ALL"]
 ignore = [
     "A002",
     "ANN401",
+    "COM812",
     "D",
     "B008",     # do not perform function calls in argument defaults
     "E501",     # line too long
-    "PLC0415",
     "N818",
     "PTH123",
     "PLW2901"
@@ -146,8 +152,10 @@ ignore = [
 
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202"]
+"tests/*" = ["S101", "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "SLF001", "PLR2004", "ARG002"]
 "examples/*" = ["S101", "ANN001", "ANN201", "INP001", "T201", "EM101", "TRY003"]
+"fastapi_views/*" = ["PLC0415"]
+
 
 [tool.bandit]
 skips = ['B101']

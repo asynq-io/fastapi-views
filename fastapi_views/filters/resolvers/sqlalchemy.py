@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+
+from typing_extensions import Self
 
 from fastapi_views.filters.models import (
+    BaseFilter,
+    BasePaginationFilter,
+    FieldsFilter,
     OrderingFilter,
     PaginationFilter,
     TokenPaginationFilter,
 )
 from fastapi_views.filters.operations import (
-    FilterOperation,
     LogicalOperation,
     Operation,
     SortOperation,
@@ -20,7 +24,27 @@ from .abc import FilterResolver
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from fastapi_views.filters.models import AnyFilter
+
+try:
+    from sqlalchemy.orm import load_only
+except ImportError:
+
+    def load_only(*_: Any, raiseload: bool = False) -> Any:
+        raise NotImplementedError
+
+
+class _Queryset(Protocol):
+    """Sqlalchemy Queryset protocol"""
+
+    def filter(self, *args: Any) -> Self: ...
+
+    def options(self, *args: Any) -> Self: ...
+
+    def order_by(self, *args: Any) -> Self: ...
+
+    def offset(self, offset: int) -> Self: ...
+
+    def limit(self, limit: int) -> Self: ...
 
 
 class Column(Protocol):
@@ -33,10 +57,10 @@ class Column(Protocol):
         return self.not_in_(values)
 
     def is_(self, value: Any) -> Any:
-        return self.is_(value)
+        return self.is_(value)  # pragma: no cover
 
     def is_not(self, value: Any) -> Any:
-        return self.is_not(value)
+        return self.is_not(value)  # pragma: no cover
 
     def like(self, value: str) -> Any:
         return self.like(f"%{value}%")
@@ -48,7 +72,7 @@ class Column(Protocol):
         return self.is_(None) if value else self.is_not(None)
 
 
-class SQLAlchemyFilterResolver(FilterResolver):
+class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
     _cache: ClassVar[dict[str, Any]] = {}
     filter_model: Any
     operators: ClassVar[dict[str, Callable[[Any, Any], Any]]] = {
@@ -79,10 +103,10 @@ class SQLAlchemyFilterResolver(FilterResolver):
 
     def resolve_model_field(
         self,
-        operation: SortOperation | FilterOperation,
+        field: str,
         **context: Any,
     ) -> Any:
-        name = operation.field
+        name = field
         if "__" in name:
             prefix, _, name = name.partition("__")
             model_class = context.get(prefix, {}).get("table")
@@ -98,7 +122,7 @@ class SQLAlchemyFilterResolver(FilterResolver):
             fn = self.operators[operation.operator]
             return fn(*(self.resolve(f, **context) for f in operation.values))
 
-        column = self.resolve_model_field(operation, **context)
+        column = self.resolve_model_field(operation.field, **context)
 
         if isinstance(operation, SortOperation):
             return column.desc() if operation.desc else column
@@ -106,37 +130,39 @@ class SQLAlchemyFilterResolver(FilterResolver):
         fn = self.operators[operation.operator]
         return fn(column, operation.values)
 
-    def apply_filter(
-        self,
-        filter: AnyFilter,
-        queryset: Any,
-        exclude: set[Literal["filter", "sort", "paginate"]] | None = None,
-        **context: Any,
-    ) -> Any:
-        excluded = exclude or set()
+    def apply_base_filter(
+        self, queryset: _Queryset, filter: BaseFilter, **context: Any
+    ) -> _Queryset:
+        filters = self.get_filters(filter, **context)
+        return queryset.filter(*filters)
 
-        if "filter" not in excluded:
-            filters = self.get_filters(filter, **context)
-            queryset = queryset.filter(*filters)
-
-        if isinstance(filter, OrderingFilter) and "sort" not in excluded:
-            order_by = self.get_order_by(filter, **context)
-
-            queryset = queryset.order_by(*order_by)
-
-        if "paginate" not in excluded:
-            if isinstance(filter, PaginationFilter):
-                queryset = queryset.offset(filter.offset).limit(filter.limit)
-            elif isinstance(filter, TokenPaginationFilter):
-                queryset = self.apply_token_pagination(
-                    queryset,
-                    filter.page_token,
-                    filter.page_size,
-                )
-
+    def apply_fields_filter(
+        self, queryset: _Queryset, filter: FieldsFilter, **context: Any
+    ) -> _Queryset:
+        fields = filter.get_fields()
+        if fields:
+            columns = [self.resolve_model_field(f, **context) for f in fields]
+            queryset = queryset.options(load_only(*columns))
         return queryset
 
-    def get_filters(self, filter: AnyFilter, **context: Any) -> list[Any]:
+    def apply_ordering_filter(
+        self, queryset: _Queryset, filter: OrderingFilter, **context: Any
+    ) -> _Queryset:
+        order_by = self.get_order_by(filter, **context)
+        return queryset.order_by(*order_by)
+
+    def apply_pagination_filter(
+        self, queryset: _Queryset, filter: BasePaginationFilter, **context: Any
+    ) -> _Queryset:
+        if isinstance(filter, PaginationFilter):
+            return queryset.offset(filter.offset).limit(filter.limit)
+        if isinstance(filter, TokenPaginationFilter):
+            return self.apply_token_pagination(
+                queryset, filter.page_token, filter.page_size, **context
+            )
+        raise NotImplementedError
+
+    def get_filters(self, filter: BaseFilter, **context: Any) -> list[Any]:
         return [self.resolve(f, **context) for f in filter.filters]
 
     def get_order_by(
@@ -152,7 +178,7 @@ class SQLAlchemyFilterResolver(FilterResolver):
 
     def apply_token_pagination(
         self,
-        queryset: Any,
+        queryset: _Queryset,
         page: str | None,
         page_size: int,
     ) -> Any:

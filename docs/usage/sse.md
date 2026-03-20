@@ -1,6 +1,6 @@
 # Server-Sent Events
 
-FastAPI Views makes streaming Server-Sent Events (SSE) straightforward. It provides a dedicated `ServerSideEventsAPIView` base class and an `@sse_route` decorator that handle SSE framing, content-type headers, and Pydantic serialization automatically.
+FastAPI Views makes streaming Server-Sent Events (SSE) straightforward. It provides a dedicated `ServerSentEventsAPIView` base class and an `@sse_route` decorator that handle SSE framing, content-type headers, and Pydantic serialization automatically.
 
 ---
 
@@ -21,9 +21,9 @@ FastAPI Views generates this format automatically from your yielded data.
 
 ---
 
-## `ServerSideEventsAPIView`
+## `ServerSentEventsAPIView`
 
-Subclass `ServerSideEventsAPIView` and implement the `events` async generator method. Yield dictionaries matching the `ServerSideEvent` schema (keys: `event`, `data`, and optionally `id` and `retry`).
+Subclass `ServerSentEventsAPIView` and implement the `events` async generator method. Yield dictionaries matching the `ServerSentEvent` schema (keys: `event`, `data`, and optionally `id` and `retry`).
 
 ```python
 import asyncio
@@ -34,7 +34,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
-from fastapi_views.views import ServerSideEventsAPIView
+from fastapi_views.views import ServerSentEventsAPIView
 
 
 class StockPrice(BaseModel):
@@ -42,7 +42,7 @@ class StockPrice(BaseModel):
     price: float
 
 
-class StockPriceSSEView(ServerSideEventsAPIView):
+class StockPriceSSEView(ServerSentEventsAPIView):
     response_schema = StockPrice
 
     async def events(self) -> AsyncIterator[Any]:
@@ -68,7 +68,7 @@ The `response_schema` is used to validate and serialize the `data` field of each
 Override the `event_id` property and `retry` property to customize the SSE metadata sent with each event:
 
 ```python
-class MySSEView(ServerSideEventsAPIView):
+class MySSEView(ServerSentEventsAPIView):
     response_schema = MySchema
 
     @property
@@ -98,7 +98,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic import BaseModel
-from fastapi_views.views import ServerSideEventsAPIView, sse_route
+from fastapi_views.views import ServerSentEventsAPIView, sse_route
 
 
 class APIModel(BaseModel):
@@ -106,7 +106,7 @@ class APIModel(BaseModel):
     name: str
 
 
-class EventView(ServerSideEventsAPIView):
+class EventView(ServerSentEventsAPIView):
     response_schema = APIModel
 
     async def events(self) -> AsyncIterator[Any]:
@@ -130,7 +130,7 @@ class EventView(ServerSideEventsAPIView):
 SSE views support FastAPI's standard parameter injection. Add parameters to the `events` method signature:
 
 ```python
-class FilteredSSEView(ServerSideEventsAPIView):
+class FilteredSSEView(ServerSentEventsAPIView):
     response_schema = StockPrice
 
     async def events(self, symbol: str) -> AsyncIterator[Any]:
@@ -160,7 +160,7 @@ source.onerror = () => {
 
 ## OpenAPI documentation
 
-FastAPI Views registers SSE endpoints with the correct `text/event-stream` response schema in the OpenAPI spec, derived from the `ServerSideEvent[response_schema]` model. The stream's data shape is visible in the Swagger UI and to API client generators.
+FastAPI Views registers SSE endpoints with the correct `text/event-stream` response schema in the OpenAPI spec, derived from the `ServerSentEvent[response_schema]` model. The stream's data shape is visible in the Swagger UI and to API client generators.
 
 ---
 

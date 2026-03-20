@@ -12,7 +12,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 from pydantic_core import Url
-from typing_extensions import Self
+from typing_extensions import Self, deprecated
 
 from .opentelemetry import get_correlation_id, has_opentelemetry
 
@@ -58,7 +58,7 @@ def _str_uuid() -> str:
     return str(uuid4())
 
 
-class ServerSideEvent(BaseSchema, Generic[D]):
+class ServerSentEvent(BaseSchema, Generic[D]):
     id: str = Field(default_factory=_str_uuid)
     event: str
     data: D
@@ -76,7 +76,12 @@ class ServerSideEvent(BaseSchema, Generic[D]):
         return schema_dump
 
 
-class AnyServerSideEvent(ServerSideEvent[Any]):
+@deprecated("This class is deprecatet, please use ServerSentEvent")
+class ServerSideEvent(ServerSentEvent[D]):
+    pass
+
+
+class AnyServerSideEvent(ServerSentEvent[Any]):
     pass
 
 

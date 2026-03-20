@@ -4,10 +4,12 @@ theme:
   name: "material"
   palette:
     - scheme: default
+      primary: teal
       toggle:
         icon: material/toggle-switch
         name: Switch to dark mode
     - scheme: slate
+      primary: teal
       toggle:
         icon: material/toggle-switch-off-outline
         name: Switch to light mode

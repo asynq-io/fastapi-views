@@ -166,7 +166,7 @@ class UserListView(AsyncListAPIView):
     response_schema = UserSchema
 
     async def list(self, filter: UserFilter = FilterDepends(UserFilter)):
-        return await db.list_users(**filter.model_dump(exclude=filter.special_fields))
+        return await db.list_users(filter)
 ```
 
 In Generic views, set the `filter` class attribute and `FilterDepends` is applied automatically.

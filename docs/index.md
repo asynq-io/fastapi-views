@@ -13,25 +13,23 @@
 
 **Class-based views, CRUD utilities, and production-ready patterns for FastAPI.**
 
-FastAPI Views brings the ergonomics of class-based views (CBVs) to FastAPI, following conventions familiar from Django REST Framework while staying true to FastAPI's type-safe, dependency-injection model. It ships a full suite of building blocks — from low-level `View` classes to fully-wired `GenericViewSet` with pagination, filtering, and sorting — so you can focus on business logic rather than HTTP plumbing.
+FastAPI Views brings Django REST Framework-style class-based views to FastAPI — without giving up type safety or dependency injection. Define a full CRUD resource by inheriting one class; routes, status codes, and OpenAPI docs are wired up automatically.
 
----
+## Features
 
-## Why FastAPI Views?
-
-FastAPI's function-based approach is powerful but can become repetitive as an API grows. FastAPI Views solves several common pain points:
-
-**Reduce boilerplate.** A complete CRUD resource — list, create, retrieve, update, partial update, delete — is defined by inheriting a single class and implementing a handful of methods. All routes, HTTP methods, status codes, and OpenAPI operation IDs are wired up automatically.
-
-**Enforce consistency.** Shared logic (authentication, logging, error handling) lives in the class and is applied uniformly across every action. Response serialization, status codes, and error shapes are standardized across the whole API.
-
-**Correct HTTP semantics out of the box.** `POST` returns `201 Created`, `DELETE` returns `204 No Content`, `PUT`/`PATCH` detail routes accept a primary key, and `Location` headers are set on creation — all without any extra code.
-
-**RFC 9457 Problem Details.** Every error response follows the [Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) standard with machine-readable `type`, `title`, `status`, and `detail` fields. Custom error classes are trivial to create and are automatically reflected in the OpenAPI spec.
-
-**ORM-agnostic.** Generic views use a simple repository protocol. Plug in SQLAlchemy, Motor, plain dicts, or any data source — the view layer does not care.
-
-**Batteries included.** Advanced DRF-style filters, cursor and page-number pagination, field projection, Server-Sent Events, Prometheus metrics, and OpenTelemetry tracing are all available as opt-in add-ons.
+- **Class-based views** — `View`, `APIView`, `ViewSet`, and `GenericViewSet` at three levels of abstraction; mix-in only the actions you need
+- **Full CRUD in one class** — `list`, `create`, `retrieve`, `update`, `partial_update`, `destroy` with correct HTTP semantics out of the box (`201 Created`, `204 No Content`, `Location` header, etc.)
+- **Generic views with the repository pattern** — plug in any data source (SQLAlchemy, Motor, plain dicts) via a simple protocol; no ORM dependency
+- **DRF-style filters** — `ModelFilter`, `OrderingFilter`, `SearchFilter`, `PaginationFilter`, `TokenPaginationFilter`, `FieldsFilter`, and a combined `Filter` class; built-in SQLAlchemy and Python object resolvers
+- **RFC 9457 Problem Details** — every error response is machine-readable; built-in classes for the most common cases; custom errors auto-register in the OpenAPI spec
+- **Fast Pydantic v2 serialization** — `TypeAdapter` cached per schema type avoids the double validation/model instantiation that FastAPI does by default, reducing per-request overhead
+- **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
+- **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
+- **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, and OpenTelemetry instrumentation
+- **Prometheus metrics** — `/metrics` endpoint with request count, latency histogram, and in-flight requests (optional extra)
+- **OpenTelemetry tracing** — `correlation_id` injected into every error response for easy trace correlation (optional extra)
+- **Readable OpenAPI operation IDs** — `list_item`, `create_item`, `retrieve_item` instead of FastAPI's long path-derived defaults
+- **CLI** — export a static `openapi.json` / `openapi.yaml` without starting a server
 
 ---
 
@@ -146,7 +144,7 @@ The `Filter` system mirrors Django REST Framework's `FilterSet` API:
 
 - **`ModelFilter`** — filter by model field values (e.g. `?name=Alice`)
 - **`OrderingFilter`** — sort by whitelisted fields using `?sort=name` or `?sort=-created_at`
-- **`SearchFilter`** — full-text search across multiple fields with `?query=…`
+- **`SearchFilter`** — full-text search across multiple fields with `?q=…`
 - **`PaginationFilter`** — page-number pagination returning a `NumberedPage`
 - **`TokenPaginationFilter`** — cursor-based pagination returning a `TokenPage`
 - **`FieldsFilter`** — sparse fieldsets; return only requested fields with `?fields=id,name`
@@ -190,7 +188,7 @@ Serialization uses Pydantic v2's `TypeAdapter`, which is cached per schema type.
 
 ### Server-Sent Events (SSE)
 
-`ServerSideEventsAPIView` and the `@sse_route` decorator make streaming real-time events straightforward. The view handles content-type negotiation, connection headers, and SSE framing automatically. Data is serialized and validated using the same Pydantic pipeline as regular views.
+`ServerSentEventsAPIView` and the `@sse_route` decorator make streaming real-time events straightforward. The view handles content-type negotiation, connection headers, and SSE framing automatically. Data is serialized and validated using the same Pydantic pipeline as regular views.
 
 See [Server-Sent Events](usage/sse.md).
 
