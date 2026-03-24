@@ -24,6 +24,7 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **RFC 9457 Problem Details** — every error response is machine-readable; built-in classes for the most common cases; custom errors auto-register in the OpenAPI spec
 - **Fast Pydantic v2 serialization** — `TypeAdapter` cached per schema type avoids the double validation/model instantiation that FastAPI does by default, reducing per-request overhead
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
+- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
 - **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, and OpenTelemetry instrumentation
 - **Prometheus metrics** — `/metrics` endpoint with request count, latency histogram, and in-flight requests (optional extra)

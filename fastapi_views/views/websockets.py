@@ -2,7 +2,7 @@ import functools
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable, Awaitable, Callable
 from logging import Logger, getLogger
-from typing import Any, ClassVar, Generic, TypeVar
+from typing import Any, ClassVar, Generic, Literal
 
 from anyio import (
     CancelScope,
@@ -13,7 +13,7 @@ from anyio import (
 )
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
-from typing_extensions import ParamSpec
+from typing_extensions import TypeVar, overload
 
 from fastapi_views.types import (
     AnyTypeAdapter,
@@ -24,18 +24,23 @@ from fastapi_views.types import (
 
 from .mixins import DependencyMixin
 
-P = ParamSpec("P")
-S = TypeVar("S")
-R = TypeVar("R")
+RecvT = TypeVar("RecvT")
+SendT = TypeVar("SendT", default=RecvT)
 
 
-class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
+class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
+    """
+    Base class for implementing WebSocket views
+    """
+
     logger: Logger
     name: str
-    message_schema: Any | None = None
+    message_schema: type[RecvT] | None = None
     default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
+    validate_on_send: bool = True
+
     disconnect_timeout: int = 30
     _serializers: ClassVar[TypeAdapterMap] = {}
     _connections: ClassVar[list[WebSocket]]
@@ -58,8 +63,18 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
     def get_message_schema(cls, action: WebSocketAction) -> Any:  # noqa: ARG003
         return cls.message_schema
 
+    @overload
     @classmethod
-    def get_serializer(cls, action: WebSocketAction) -> TypeAdapter[Any]:
+    def get_serializer(cls, action: Literal["send"]) -> TypeAdapter[SendT]: ...
+
+    @overload
+    @classmethod
+    def get_serializer(cls, action: Literal["receive"]) -> TypeAdapter[RecvT]: ...
+
+    @classmethod
+    def get_serializer(
+        cls, action: WebSocketAction
+    ) -> TypeAdapter[RecvT] | TypeAdapter[SendT]:
         schema = cls.get_message_schema(action)
         if schema is None:
             return AnyTypeAdapter
@@ -97,9 +112,7 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
     @classmethod
     def get_websocket_endpoint(cls) -> Callable:
 
-        async def endpoint(
-            self: WebSocketAPIView, *args: P.args, **kwargs: P.kwargs
-        ) -> None:
+        async def endpoint(self: WebSocketAPIView, *args: Any, **kwargs: Any) -> None:
             try:
                 await self.on_connect()
                 fn = functools.partial(self.handler, *args, **kwargs)
@@ -124,6 +137,13 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
             "name": cls.get_name(),
         }
 
+    def _serialize_message(self, obj: Any) -> bytes:
+        serializer = self.get_serializer("send")
+        if self.validate_on_send:
+            obj = serializer.validate_python(obj)
+            return serializer.dump_json(obj, **self.serializer_options)
+        return serializer.dump_json(obj, warnings=False, **self.serializer_options)
+
     async def _safe_send(self, data: bytes, websocket: WebSocket | None = None) -> None:
         websocket = websocket or self.websocket
         try:
@@ -131,20 +151,18 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
         except (WebSocketDisconnect, ClosedResourceError) as e:
             self.logger.warning("Error sending bytes to websocket", exc_info=e)
 
-    async def send(self, message: S) -> None:
-        serializer = self.get_serializer("send")
-        data = serializer.dump_json(message, **self.serializer_options)
+    async def send(self, message: SendT) -> None:
+        data = self._serialize_message(message)
         await self._safe_send(data)
 
-    async def broadcast(self, message: S) -> None:
-        serializer = self.get_serializer("send")
-        data = serializer.dump_json(message, **self.serializer_options)
+    async def broadcast(self, message: SendT) -> None:
+        data = self._serialize_message(message)
         async with create_task_group() as tg:
             for connection in self._connections:
                 tg.start_soon(self._safe_send, data, connection)
 
     @property
-    def messages(self) -> AsyncIterable[R]:
+    def messages(self) -> AsyncIterable[RecvT]:
         return self._rcv
 
     async def on_connect(self) -> None:
@@ -154,5 +172,5 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[P, S, R]):
         pass
 
     @abstractmethod
-    async def handler(self, *args: P.args, **kwargs: P.kwargs) -> None:
+    async def handler(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError
