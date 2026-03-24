@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from fastapi import Depends, FastAPI
+from anyio import ClosedResourceError
+from fastapi import Depends, FastAPI, WebSocketDisconnect
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
@@ -212,6 +216,58 @@ def test_register_websocket_view_with_dependencies():
     )
     app.include_router(router)
     assert any(r.path == "/dep" for r in app.routes)
+
+
+def test_serialize_message_skips_validation_when_disabled():
+    class NoValidateView(WebSocketAPIView):
+        message_schema = str
+        validate_on_send = False
+
+        async def handler(self) -> None:
+            pass
+
+    mock_ws = MagicMock()
+    view = NoValidateView.__new__(NoValidateView)
+    view.websocket = mock_ws
+    view.serializer_options = NoValidateView.default_serializer_options.copy()
+    result = view._serialize_message("hello")
+    assert result == b'"hello"'
+
+
+def test_safe_send_swallows_websocket_disconnect():
+    class SimpleView(WebSocketAPIView):
+        async def handler(self) -> None:
+            pass
+
+    mock_ws = MagicMock()
+    mock_ws.send_bytes = AsyncMock(side_effect=WebSocketDisconnect())
+    view = SimpleView.__new__(SimpleView)
+    view.websocket = mock_ws
+    view.logger = MagicMock()
+
+    async def run():
+        await view._safe_send(b"data")
+
+    asyncio.run(run())
+    view.logger.warning.assert_called_once()
+
+
+def test_safe_send_swallows_closed_resource_error():
+    class SimpleView(WebSocketAPIView):
+        async def handler(self) -> None:
+            pass
+
+    mock_ws = MagicMock()
+    mock_ws.send_bytes = AsyncMock(side_effect=ClosedResourceError())
+    view = SimpleView.__new__(SimpleView)
+    view.websocket = mock_ws
+    view.logger = MagicMock()
+
+    async def run():
+        await view._safe_send(b"data")
+
+    asyncio.run(run())
+    view.logger.warning.assert_called_once()
 
 
 def test_register_websocket_view_without_dependencies():

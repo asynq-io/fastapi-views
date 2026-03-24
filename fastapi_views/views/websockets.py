@@ -9,7 +9,7 @@ from anyio import (
     ClosedResourceError,
     create_memory_object_stream,
     create_task_group,
-    move_on_after,
+    fail_after,
 )
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
@@ -83,8 +83,6 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
         return cls._serializers[schema]
 
     async def _receiver(self, cancel_scope: CancelScope) -> None:
-        await self.websocket.accept()
-        self._connections.append(self.websocket)
         serializer = self.get_serializer("receive")
         try:
             async with self._snd:
@@ -114,13 +112,15 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
 
         async def endpoint(self: WebSocketAPIView, *args: Any, **kwargs: Any) -> None:
             try:
+                await self.websocket.accept()
+                self._connections.append(self.websocket)
                 await self.on_connect()
                 fn = functools.partial(self.handler, *args, **kwargs)
                 async with create_task_group() as tg:
                     tg.start_soon(self._receiver, tg.cancel_scope)
                     tg.start_soon(self._handler, fn, tg.cancel_scope)
             finally:
-                with move_on_after(self.disconnect_timeout, shield=True):
+                with fail_after(self.disconnect_timeout, shield=True):
                     self._connections.remove(self.websocket)
                     await self.websocket.close()
                     await self.on_disconnect()
