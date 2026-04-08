@@ -47,9 +47,9 @@ class FilterResolver(ABC, Generic[Queryset]):
     ) -> Queryset:
         excluded = exclude or set()
         if "filter" not in excluded:
-            queryset = self.apply_base_filter(queryset, filter)
+            queryset = self.apply_base_filter(queryset, filter, **context)
         if "fields" not in excluded and isinstance(filter, FieldsFilter):
-            queryset = self.apply_fields_filter(queryset, filter)
+            queryset = self.apply_fields_filter(queryset, filter, **context)
         if "sort" not in excluded and isinstance(filter, OrderingFilter):
             queryset = self.apply_ordering_filter(queryset, filter, **context)
         if "paginate" not in excluded and isinstance(filter, BasePaginationFilter):
