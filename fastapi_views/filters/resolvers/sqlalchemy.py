@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import operator
+from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 from typing_extensions import Self
@@ -120,7 +121,8 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
     def resolve(self, operation: Operation, **context: Any) -> Any:
         if isinstance(operation, LogicalOperation):
             fn = self.operators[operation.operator]
-            return fn(*(self.resolve(f, **context) for f in operation.values))
+            resolved = [self.resolve(f, **context) for f in operation.values]
+            return reduce(fn, resolved)
 
         column = self.resolve_model_field(operation.field, **context)
 
