@@ -168,7 +168,10 @@ class SearchFilter(BaseFilter):
 
                 search_fields.append(operation)
 
-            filters.append(LogicalOperation(operator="or", values=search_fields))
+            if len(search_fields) == 1:
+                filters.append(search_fields[0])
+            else:
+                filters.append(LogicalOperation(operator="or", values=search_fields))
         return filters
 
 
