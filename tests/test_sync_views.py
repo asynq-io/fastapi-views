@@ -46,6 +46,7 @@ async def test_sync_list_view(client):
     assert response.status_code == HTTP_200_OK
     data = response.json()
     assert data == [{"x": "sync_item"}]
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_retrieve_view")
@@ -63,6 +64,7 @@ async def test_sync_retrieve_view(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
     assert response.json()["x"] == "sync_retrieved"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_retrieve_not_found_view")
@@ -97,6 +99,7 @@ class TestSyncRetrieveNoneOkView(RetrieveAPIView):
 async def test_sync_retrieve_none_ok(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
+    assert "Content-Type" not in response.headers
 
 
 @view_as_fixture("sync_create_view")
@@ -114,6 +117,7 @@ async def test_sync_custom_get_view(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
     assert response.json()["x"] == "created"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_create_201_view")
@@ -130,6 +134,7 @@ async def test_sync_create_201(client):
     response = await client.post("/test")
     assert response.status_code == HTTP_201_CREATED
     assert response.json()["x"] == "new_item"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_create_no_return_view")
@@ -147,6 +152,7 @@ async def test_sync_create_no_return(client):
     response = await client.post("/test")
     assert response.status_code == HTTP_201_CREATED
     assert response.content == b""
+    assert "Content-Type" not in response.headers
 
 
 @view_as_fixture("sync_create_with_location_view")
@@ -166,6 +172,7 @@ async def test_sync_create_with_location(client):
     response = await client.post("/test")
     assert response.status_code == HTTP_201_CREATED
     assert response.headers.get("location") == "/test/1"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_update_view")
@@ -183,6 +190,7 @@ async def test_sync_update_view(client):
     response = await client.put("/test")
     assert response.status_code == HTTP_200_OK
     assert response.json()["x"] == "updated"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_update_no_return_view")
@@ -201,6 +209,7 @@ async def test_sync_update_no_return(client):
     response = await client.put("/test")
     assert response.status_code == HTTP_200_OK
     assert response.content == b""
+    assert "Content-Type" not in response.headers
 
 
 @view_as_fixture("sync_update_not_found_view")
@@ -235,6 +244,7 @@ async def test_sync_partial_update_view(client):
     response = await client.patch("/test")
     assert response.status_code == HTTP_200_OK
     assert response.json()["x"] == "patched"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_patch_no_return_view")
@@ -253,6 +263,7 @@ async def test_sync_partial_update_no_return(client):
     response = await client.patch("/test")
     assert response.status_code == HTTP_200_OK
     assert response.content == b""
+    assert "Content-Type" not in response.headers
 
 
 @view_as_fixture("sync_patch_not_found_view")
@@ -285,6 +296,7 @@ class TestSyncDestroyView(DestroyAPIView):
 async def test_sync_destroy_view(client):
     response = await client.delete("/test")
     assert response.status_code == HTTP_204_NO_CONTENT
+    assert "Content-Type" not in response.headers
 
 
 @view_as_fixture("sse_events_view")

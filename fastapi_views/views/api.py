@@ -55,6 +55,10 @@ class View(ABC):
         self.request = request
         self.response = response
 
+    def _set_default_media_type(self, media_type: str) -> None:
+        if self.response.media_type is None:
+            self.response.media_type = media_type
+
     @classmethod
     def get_name(cls) -> str:
         return getattr(cls, "api_component_name", cls.__name__)
@@ -69,24 +73,25 @@ class View(ABC):
         *,
         status_code: int = HTTP_200_OK,
         schema: Any = None,
+        headers: dict[str, str] | None = None,
     ) -> Response:
         if isinstance(content, Response):
             return content
 
         self.response.status_code = status_code
 
-        if content is None:
-            return self.response
-
-        if not isinstance(content, (str, bytes)):
+        if content is not None and not isinstance(content, (str, bytes)):
             serializer = self.get_serializer(schema)
             content = self.get_json_content(content=content, serializer=serializer)
+            self._set_default_media_type("application/json")
 
         if isinstance(content, str):
             content = content.encode(self.response.charset)
+            self._set_default_media_type("text/plain")
         if isinstance(content, bytes):
             self.response.body = content
-            self.response.headers["Content-Length"] = str(len(content))
+
+        self.response.init_headers(headers)
         return self.response
 
     def get_serializer(self, schema: Any | None) -> TypeAdapter[Any]:
@@ -201,7 +206,6 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     `serializer` and error handling
     """
 
-    content_type: str = "application/json"
     response_schema: T | None = None
     default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
@@ -211,7 +215,6 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     def __init__(self, request: Request, response: Response) -> None:
         self.validation_context = None
         self.serializer_options = self.default_serializer_options.copy()
-        response.headers["Content-Type"] = self.content_type
         super().__init__(request, response)
 
     @classmethod
@@ -430,11 +433,14 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
         ) -> Response:
             obj = self.create(*args, **kwargs)
             location = self.get_location(obj)
-            if location:
-                self.response.headers["location"] = location
-            if self.return_on_create:
-                return self.get_response(obj, status_code=status_code, schema=schema)
-            return Response(status_code=status_code)
+            if not self.return_on_create:
+                obj = None
+            return self.get_response(
+                obj,
+                status_code=status_code,
+                schema=schema,
+                headers={"location": location} if location else None,
+            )
 
         cls._patch_endpoint_signature(endpoint, cls.create)
         return endpoint
@@ -458,11 +464,14 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
         ) -> Response:
             obj = await self.create(*args, **kwargs)
             location = self.get_location(obj)
-            if location:
-                self.response.headers["location"] = location
-            if self.return_on_create:
-                return self.get_response(obj, status_code=status_code, schema=schema)
-            return Response(status_code=status_code)
+            if not self.return_on_create:
+                obj = None
+            return self.get_response(
+                obj,
+                status_code=status_code,
+                schema=schema,
+                headers={"location": location} if location else None,
+            )
 
         cls._patch_endpoint_signature(endpoint, cls.create)
         return endpoint
@@ -509,8 +518,8 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
         ) -> Response:
             obj = self.update(*args, **kwargs)
             if not self.return_on_update:
-                return Response(status_code=status_code)
-            if obj is None and self.raise_on_none:
+                obj = None
+            elif obj is None and self.raise_on_none:
                 self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
@@ -536,8 +545,8 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
         ) -> Response:
             obj = await self.update(*args, **kwargs)
             if not self.return_on_update:
-                return Response(status_code=status_code)
-            if obj is None and self.raise_on_none:
+                obj = None
+            elif obj is None and self.raise_on_none:
                 self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
@@ -584,11 +593,11 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = self.partial_update(*args, **kwargs)
-            if obj is None and self.raise_on_none:
+            if not self.return_on_update:
+                obj = None
+            elif obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            if self.return_on_update:
-                return self.get_response(obj, schema=schema)
-            return Response(status_code=HTTP_200_OK)
+            return self.get_response(obj, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)
         return endpoint
@@ -611,11 +620,11 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = await self.partial_update(*args, **kwargs)
-            if obj is None and self.raise_on_none:
+            if not self.return_on_update:
+                obj = None
+            elif obj is None and self.raise_on_none:
                 self.raise_not_found_error()
-            if self.return_on_update:
-                return self.get_response(obj, schema=schema)
-            return Response(status_code=HTTP_200_OK)
+            return self.get_response(obj, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)
         return endpoint

@@ -131,6 +131,7 @@ async def test_catch_async_handles_exception(error_app, error_client):
     response = await error_client.get("/catch-async")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     assert "caught error" in data["detail"]
 
 
@@ -207,6 +208,7 @@ async def test_catch_defined_async(error_app, error_client):
     response = await error_client.get("/catch-defined")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     assert data["detail"] == "defined error message"
 
 
@@ -230,6 +232,7 @@ async def test_catch_defined_sync(error_app, error_client):
     response = await error_client.get("/catch-def-sync")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     assert data["detail"] == "sync defined error"
 
 
