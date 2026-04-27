@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "1.6.2"
+version = "1.6.3"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
