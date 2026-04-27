@@ -87,6 +87,7 @@ async def test_sync_list_generic(client):
     response = await client.get("/sync-items")
     assert response.status_code == HTTP_200_OK
     assert isinstance(response.json(), list)
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.usefixtures("sync_items_generic")
@@ -95,6 +96,7 @@ async def test_sync_create_generic(client):
     response = await client.post("/sync-items", json={"name": "test"})
     assert response.status_code == HTTP_201_CREATED
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     assert data["name"] == "test"
     assert "id" in data
 
@@ -111,10 +113,12 @@ async def test_sync_retrieve_not_found(client):
 async def test_sync_retrieve_found(client):
     create_response = await client.post("/sync-items", json={"name": "find_me"})
     assert create_response.status_code == HTTP_201_CREATED
+    assert create_response.headers["Content-Type"] == "application/json"
     item_id = create_response.json()["id"]
 
     response = await client.get(f"/sync-items/{item_id}")
     assert response.status_code == HTTP_200_OK
+    assert response.headers["Content-Type"] == "application/json"
     assert response.json()["name"] == "find_me"
 
 
@@ -123,12 +127,15 @@ async def test_sync_retrieve_found(client):
 async def test_sync_update_generic(client):
     create_response = await client.post("/sync-items", json={"name": "original"})
     assert create_response.status_code == HTTP_201_CREATED
+    assert create_response.headers["Content-Type"] == "application/json"
+
     item_id = create_response.json()["id"]
 
     update_response = await client.put(
         f"/sync-items/{item_id}", json={"name": "updated"}
     )
     assert update_response.status_code == HTTP_200_OK
+    assert update_response.headers["Content-Type"] == "application/json"
     assert update_response.json()["name"] == "updated"
 
 
@@ -144,12 +151,14 @@ async def test_sync_update_not_found(client):
 async def test_sync_partial_update_generic(client):
     create_response = await client.post("/sync-items", json={"name": "original"})
     assert create_response.status_code == HTTP_201_CREATED
+    assert create_response.headers["Content-Type"] == "application/json"
     item_id = create_response.json()["id"]
 
     patch_response = await client.patch(
         f"/sync-items/{item_id}", json={"name": "patched"}
     )
     assert patch_response.status_code == HTTP_200_OK
+    assert patch_response.headers["Content-Type"] == "application/json"
     assert patch_response.json()["name"] == "patched"
 
 
@@ -165,6 +174,7 @@ async def test_sync_partial_update_not_found(client):
 async def test_sync_destroy_generic(client):
     response = await client.delete(f"/sync-items/{uuid4()}")
     assert response.status_code == HTTP_204_NO_CONTENT
+    assert "Content-Type" not in response.headers
 
 
 @pytest.mark.usefixtures("sync_items_generic")
@@ -173,4 +183,5 @@ async def test_sync_create_conflict_returns_conflict_error(client):
     # Test create with repository returning None (conflict)
     # We can verify this by checking the existing behavior
     response = await client.post("/sync-items", json={"name": "conflict_test"})
+    assert response.headers["Content-Type"] == "application/json"
     assert response.status_code == HTTP_201_CREATED

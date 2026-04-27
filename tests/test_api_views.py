@@ -60,6 +60,7 @@ async def test_create_api_view(client, dummy_data):
 async def test_destroy_api_view(client):
     response = await client.delete("/test")
     assert response.status_code == HTTP_204_NO_CONTENT
+    assert "Content-Type" not in response.headers
 
 
 @pytest.mark.usefixtures("custom_retrieve_view")
@@ -103,6 +104,7 @@ async def test_async_view_returns_string():
         response = await c.get("/test")
         assert response.status_code == HTTP_200_OK
         assert "hello string" in response.text
+        assert response.headers["Content-Type"] == "text/plain; charset=utf-8"
 
 
 @pytest.mark.anyio
@@ -118,6 +120,7 @@ async def test_async_create_with_location():
         response = await c.post("/test")
         assert response.status_code == HTTP_201_CREATED
         assert response.headers.get("location") == "/items/1"
+        assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.anyio
@@ -132,6 +135,7 @@ async def test_async_create_no_return():
         response = await c.post("/test")
         assert response.status_code == HTTP_201_CREATED
         assert response.content == b""
+        assert "Content-Type" not in response.headers
 
 
 @pytest.mark.anyio
@@ -147,6 +151,7 @@ async def test_async_update_no_return():
         response = await c.put("/test")
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
+        assert "Content-Type" not in response.headers
 
 
 @pytest.mark.anyio
@@ -161,6 +166,7 @@ async def test_async_update_raise_on_none():
     async with view_client(RaiseOnNoneUpdateView, error_handlers=True) as c:
         response = await c.put("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
+        assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.anyio
@@ -175,6 +181,7 @@ async def test_async_partial_update_raise_on_none():
     async with view_client(RaiseOnNonePartialView, error_handlers=True) as c:
         response = await c.patch("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
+        assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.anyio
@@ -190,6 +197,7 @@ async def test_async_partial_update_no_return():
         response = await c.patch("/test")
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
+        assert "Content-Type" not in response.headers
 
 
 def test_base_list_api_view_get_response_schema_non_list_action():

@@ -111,6 +111,7 @@ class ItemGenericViewSet(AsyncGenericViewSet):
 async def test_list_generic(client):
     response = await client.get("/items")
     assert response.status_code == HTTP_200_OK
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.usefixtures("items_generic")
@@ -118,6 +119,7 @@ async def test_list_generic(client):
 async def test_create_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == HTTP_201_CREATED
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @pytest.mark.usefixtures("items_generic")
@@ -132,6 +134,7 @@ async def test_retrieve_not_found_generic(client):
 async def test_destroy_generic(client):
     response = await client.delete(f"/items/{uuid4()}")
     assert response.status_code == HTTP_204_NO_CONTENT
+    assert "Content-Type" not in response.headers
 
 
 @pytest.mark.usefixtures("items_generic")
@@ -140,10 +143,12 @@ async def test_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == HTTP_201_CREATED
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     item_id = data["id"]
     response2 = await client.put(f"/items/{item_id}", json={"name": "test2"})
     assert response2.status_code == HTTP_200_OK
     data2 = response2.json()
+    assert response2.headers["Content-Type"] == "application/json"
     assert data2["id"] == item_id
     assert data2["name"] == "test2"
 
@@ -154,10 +159,12 @@ async def test_partial_update_generic(client):
     response = await client.post("/items", json={"name": "test"})
     assert response.status_code == HTTP_201_CREATED
     data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
     item_id = data["id"]
     response2 = await client.patch(f"/items/{item_id}", json={"name": "test2"})
     assert response2.status_code == HTTP_200_OK
     data2 = response2.json()
+    assert response2.headers["Content-Type"] == "application/json"
     assert data2["id"] == item_id
     assert data2["name"] == "test2"
 
