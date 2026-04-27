@@ -28,6 +28,7 @@ nav:
       - "Filters": usage/filters.md
       - "Opentelemetry": usage/opentelemetry.md
       - "Server Side Events": usage/sse.md
+      - "WebSockets": usage/websockets.md
   - "Reference":
       - "API Views": reference/views.md
       - "ViewSets": reference/viewsets.md
@@ -37,6 +38,7 @@ nav:
       - "Filters": reference/filters.md
       - "Pagination": reference/pagination.md
       - "Decorators": reference/decorators.md
+      - "WebSockets": reference/websockets.md
 
 markdown_extensions:
   - pymdownx.highlight:

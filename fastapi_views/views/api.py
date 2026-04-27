@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Callable, Generator
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -14,7 +13,7 @@ from typing import (
 )
 from uuid import uuid4
 
-from fastapi import Depends, Request, Response
+from fastapi import Request, Response
 from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
 from starlette.responses import StreamingResponse
@@ -28,21 +27,25 @@ from fastapi_views.exceptions import (
     NotFound,
 )
 from fastapi_views.models import ServerSentEvent
+from fastapi_views.types import (
+    Action,
+    AnyTypeAdapter,
+    Endpoint,
+    SerializerOptions,
+    TypeAdapterMap,
+)
 
 from .functools import VIEWSET_ROUTE_FLAG, errors, serialize_sse
-from .mixins import DetailViewMixin, ErrorHandlerMixin
+from .mixins import DependencyMixin, DetailViewMixin, ErrorHandlerMixin
 
 if TYPE_CHECKING:
-    from fastapi_views.types import Action, SerializerOptions
+    from collections.abc import AsyncIterator, Callable, Generator
 
-Endpoint = Callable[..., Response | Awaitable[Response]]
 P = ParamSpec("P")
 T = TypeVar("T")
-TypeAdapterMap = dict[T, TypeAdapter[T]]
-AnyTypeAdapter: TypeAdapter[Any] = TypeAdapter(Any)
 
 
-class View(ABC):
+class View(DependencyMixin, ABC):
     """Base View Class"""
 
     api_component_name: str
@@ -181,24 +184,6 @@ class View(ABC):
         if status_code and not is_body_allowed_for_status_code(status_code):
             kwargs["response_model"] = None
         return kwargs
-
-    @classmethod
-    def _patch_endpoint_signature(cls, endpoint: Any, method: Callable) -> None:
-        old_signature = inspect.signature(method)
-        old_parameters: list[inspect.Parameter] = list(
-            old_signature.parameters.values(),
-        )
-        old_first_parameter = old_parameters[0]
-        new_first_parameter = old_first_parameter.replace(default=Depends(cls))
-        new_parameters = [new_first_parameter] + [
-            parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
-            for parameter in old_parameters[1:]
-        ]
-        new_signature = old_signature.replace(parameters=new_parameters)
-        endpoint.__signature__ = new_signature
-        endpoint.__doc__ = method.__doc__
-        endpoint.__name__ = method.__name__
-        endpoint.kwargs = getattr(method, "kwargs", {})
 
 
 class APIView(View, ErrorHandlerMixin, Generic[T]):

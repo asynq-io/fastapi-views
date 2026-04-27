@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
 
+from fastapi import Response
+from pydantic import TypeAdapter
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
     from enum import Enum
 
-    from fastapi import Response, params
+    from fastapi import params
     from fastapi.routing import APIRoute
     from pydantic.main import IncEx
     from starlette.routing import BaseRoute
 
-Entity = TypeVar("Entity", bound=Any)
+Endpoint = Callable[..., Response | Awaitable[Response]]
+T = TypeVar("T")
+TypeAdapterMap = dict[T, TypeAdapter[T]]
+AnyTypeAdapter: TypeAdapter[Any] = TypeAdapter(Any)
+
 Action = Literal[
     "create",
     "list",
@@ -21,6 +29,7 @@ Action = Literal[
     "partial_update",
     "events",
 ]
+WebSocketAction = Literal["receive", "send"]
 
 
 class SerializerOptions(TypedDict, total=False):
