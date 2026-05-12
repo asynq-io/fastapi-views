@@ -22,7 +22,7 @@ from fastapi_views.views.api import (
     ServerSentEventsAPIView,
     UpdateAPIView,
 )
-from fastapi_views.views.functools import get
+from fastapi_views.views.functools import get, override
 
 from .utils import view_as_fixture
 
@@ -49,6 +49,24 @@ async def test_sync_list_view(client):
     assert response.headers["Content-Type"] == "application/json"
 
 
+@view_as_fixture("sync_list_custom_status_view")
+class TestSyncListCustomStatusView(ListAPIView):
+    response_schema = DummySchema
+
+    @override(status_code=206)
+    def list(self) -> Any:
+        return [{"x": "sync_item"}]
+
+
+@pytest.mark.usefixtures("sync_list_custom_status_view")
+@pytest.mark.anyio
+async def test_sync_list_custom_status_code(client):
+    response = await client.get("/test")
+    assert response.status_code == 206
+    assert response.json() == [{"x": "sync_item"}]
+    assert response.headers["Content-Type"] == "application/json"
+
+
 @view_as_fixture("sync_retrieve_view")
 class TestSyncRetrieveView(RetrieveAPIView):
     detail_route = ""
@@ -63,6 +81,25 @@ class TestSyncRetrieveView(RetrieveAPIView):
 async def test_sync_retrieve_view(client):
     response = await client.get("/test")
     assert response.status_code == HTTP_200_OK
+    assert response.json()["x"] == "sync_retrieved"
+    assert response.headers["Content-Type"] == "application/json"
+
+
+@view_as_fixture("sync_retrieve_custom_status_view")
+class TestSyncRetrieveCustomStatusView(RetrieveAPIView):
+    detail_route = ""
+    response_schema = DummySchema
+
+    @override(status_code=203)
+    def retrieve(self) -> Any:
+        return {"x": "sync_retrieved"}
+
+
+@pytest.mark.usefixtures("sync_retrieve_custom_status_view")
+@pytest.mark.anyio
+async def test_sync_retrieve_custom_status_code(client):
+    response = await client.get("/test")
+    assert response.status_code == 203
     assert response.json()["x"] == "sync_retrieved"
     assert response.headers["Content-Type"] == "application/json"
 
@@ -281,6 +318,25 @@ class TestSyncPatchNotFoundView(PartialUpdateAPIView):
 async def test_sync_partial_update_raises_not_found(client):
     with pytest.raises(NotFound):
         await client.patch("/test")
+
+
+@view_as_fixture("sync_patch_custom_status_view")
+class TestSyncPatchCustomStatusView(PartialUpdateAPIView):
+    detail_route = ""
+    response_schema = DummySchema
+
+    @override(status_code=202)
+    def partial_update(self) -> Any:
+        return {"x": "patched"}
+
+
+@pytest.mark.usefixtures("sync_patch_custom_status_view")
+@pytest.mark.anyio
+async def test_sync_partial_update_custom_status_code(client):
+    response = await client.patch("/test")
+    assert response.status_code == 202
+    assert response.json()["x"] == "patched"
+    assert response.headers["Content-Type"] == "application/json"
 
 
 @view_as_fixture("sync_destroy_view")
