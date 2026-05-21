@@ -107,6 +107,7 @@ async def _wrapped_events(
 def sse_route(
     path: str = "",
     serializer_options: SerializerOptions | None = None,
+    headers: dict[str, str] | None = None,
     **kwargs: Unpack[RouteOptions],
 ) -> Any:
     status_code = kwargs.get("status_code", HTTP_200_OK)
@@ -122,10 +123,22 @@ def sse_route(
             "response_model": None,
             "response_class": StreamingResponse,
             "responses": {
-                status_code: {"content": {"text/event-stream": {"schema": schema}}},
+                status_code: {
+                    "content": {
+                        "text/event-stream": {
+                            "schema": schema,
+                        }
+                    }
+                },
             },
         },
     )
+    if headers is None:
+        headers = {
+            "Cache-Control": "no-store",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
 
     def wrapper(
         func: Callable[
@@ -134,6 +147,7 @@ def sse_route(
         ]
         | Callable[Concatenate[V, _P], Iterator[Any]],
     ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
+
         @functools.wraps(func)
         async def wrapped(
             self: V,
@@ -148,10 +162,7 @@ def sse_route(
             return StreamingResponse(
                 async_iterator,
                 media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-store",
-                    "Connection": "keep-alive",
-                },
+                headers=headers,
             )
 
         return route(path, **kwargs)(wrapped)

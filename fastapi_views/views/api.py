@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -12,14 +12,12 @@ from typing import (
     TypeVar,
     get_type_hints,
 )
-from uuid import uuid4
 
 from fastapi import Depends, Request, Response
 from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
-from starlette.responses import StreamingResponse
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from typing_extensions import ParamSpec, deprecated
+from typing_extensions import ParamSpec
 
 from fastapi_views.exceptions import (
     APIError,
@@ -27,9 +25,8 @@ from fastapi_views.exceptions import (
     Conflict,
     NotFound,
 )
-from fastapi_views.models import ServerSentEvent
 
-from .functools import VIEWSET_ROUTE_FLAG, errors, serialize_sse
+from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DetailViewMixin, ErrorHandlerMixin
 
 if TYPE_CHECKING:
@@ -696,73 +693,3 @@ class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
     @abstractmethod
     async def destroy(self, *args: P.args, **kwargs: P.kwargs) -> None:
         raise NotImplementedError
-
-
-class ServerSentEventsAPIView(APIView, Generic[P]):
-    @classmethod
-    def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
-        status_code = cls.get_status_code("events", HTTP_200_OK)
-        response_schema_data = cls.get_response_schema() or Any
-        sse_schema = ServerSentEvent[response_schema_data].get_openapi_schema()  # type: ignore[valid-type]
-        yield cls.get_api_action(
-            prefix=prefix,
-            endpoint=cls.get_events_endpoint(status_code),
-            methods=["GET"],
-            action="events",
-            status_code=status_code,
-            response_class=StreamingResponse,
-            responses={
-                status_code: {"content": {"text/event-stream": {"schema": sse_schema}}},
-            }
-            | errors(*cls.default_errors),
-        )
-        yield from super().get_api_actions(prefix)
-
-    @property
-    def event_id(self) -> str:
-        return str(uuid4())
-
-    @property
-    def retry(self) -> int | None:
-        return None
-
-    @classmethod
-    def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
-        async def endpoint(
-            self: ServerSentEventsAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
-        ) -> StreamingResponse:
-            return StreamingResponse(
-                self._serialized_events(*args, **kwargs),
-                status_code=status_code,
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-store",
-                    "Connection": "keep-alive",
-                },
-            )
-
-        cls._patch_endpoint_signature(endpoint, cls.events)
-        return endpoint
-
-    async def _serialized_events(
-        self,
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ) -> AsyncIterator[str]:
-        schema = self.get_response_schema("events")
-        serializer = self.get_serializer(schema)
-
-        async for event, data in self.events(*args, **kwargs):
-            data = self.get_json_content(data, serializer).decode("utf-8")
-            yield serialize_sse(self.event_id, event, data, self.retry)
-
-    @abstractmethod
-    def events(self, *args: P.args, **kwargs: P.kwargs) -> AsyncIterator[Any]:
-        raise NotImplementedError
-
-
-@deprecated("This class is deprecated use ServerSentEventsAPIView")
-class ServerSideEventsAPIView(ServerSentEventsAPIView):
-    pass

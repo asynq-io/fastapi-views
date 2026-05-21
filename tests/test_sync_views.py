@@ -19,10 +19,10 @@ from fastapi_views.views.api import (
     ListAPIView,
     PartialUpdateAPIView,
     RetrieveAPIView,
-    ServerSentEventsAPIView,
     UpdateAPIView,
 )
 from fastapi_views.views.functools import get
+from fastapi_views.views.sse import ServerSentEventsAPIView
 
 from .utils import view_as_fixture
 
