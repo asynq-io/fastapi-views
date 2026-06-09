@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import http
 import re
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -17,6 +17,9 @@ from starlette.status import (
 )
 
 from .models import ErrorDetails, const_type, create_error_model
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _camel_to_title(name: str) -> str:
@@ -52,7 +55,7 @@ class APIError(Exception):
         self,
         detail: str | None = None,
         *,
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
         **kwargs: Any,
     ) -> None:
         self.headers = headers
@@ -98,6 +101,10 @@ class APIError(Exception):
 
     def as_model(self) -> ErrorDetails:
         return self._model_instance
+
+    def set_default_instance(self, value: str) -> None:
+        if self._model_instance.instance is None:
+            self._model_instance.instance = value
 
     @classmethod
     def _has_attr(cls, attribute: str) -> bool:

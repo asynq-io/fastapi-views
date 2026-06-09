@@ -1,59 +1,67 @@
-from logging import getLogger
-
 from fastapi import Request
 from fastapi.applications import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import Response
 from starlette.exceptions import HTTPException
-from typing_extensions import Never
 
 from .exceptions import APIError, BadRequest, InternalServerError
+from .i18n import gettext_lazy as _
+from .logging._compat import get_logger
 
-logger = getLogger("exceptions.handler")
+logger = get_logger("exceptions.handler")
+
+
+def _api_error_to_response(error: APIError) -> Response:
+    model = error.as_model()
+    return Response(
+        content=model.model_dump_json(),
+        status_code=error.status_code,
+        media_type="application/json",
+        headers=error.headers,
+    )
 
 
 def http_exception_handler(request: Request, exc: HTTPException) -> Response:
     error = APIError(
-        exc.detail,
+        _(exc.detail),
         status=exc.status_code,
         instance=request.url.path,
-    )
-    return Response(
-        content=error.as_model().model_dump_json(),
-        status_code=exc.status_code,
         headers=exc.headers,
-        media_type="application/json",
     )
+    return _api_error_to_response(error)
 
 
 def api_error_handler(request: Request, exc: APIError) -> Response:
-    model = exc.as_model()
-    if model.instance is None:
-        model.instance = request.url.path
-    return Response(
-        content=model.model_dump_json(),
-        status_code=model.status,
-        headers=exc.headers,
-        media_type="application/json",
+    exc.set_default_instance(request.url.path)
+    return _api_error_to_response(exc)
+
+
+def request_validation_handler(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    return _api_error_to_response(
+        BadRequest(
+            _("Request validation error"),
+            instance=request.url.path,
+            errors=jsonable_encoder(exc.errors()),
+        )
     )
 
 
-def request_validation_handler(request: Request, exc: RequestValidationError) -> Never:
-    msg = "Request validation error"
-    raise BadRequest(
-        msg,
-        instance=request.url.path,
-        errors=jsonable_encoder(exc.errors()),
+def exception_handler(request: Request, exc: Exception) -> Response:
+    logger.exception(
+        "unhandled_exception",
+        exc_info=exc,
+        url=request.url,
+        headers=dict(request.headers),
+        query_params=dict(request.query_params),
     )
-
-
-def exception_handler(request: Request, exc: Exception) -> Never:
-    msg = "Unhandled server error"
-    logger.exception(msg, exc_info=exc)
-    raise InternalServerError(
-        msg,
-        instance=request.url.path,
+    return _api_error_to_response(
+        InternalServerError(
+            _("Unhandled server error"),
+            instance=request.url.path,
+        )
     )
 
 

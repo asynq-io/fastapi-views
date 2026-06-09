@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any
+import logging
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
+from typing_extensions import NotRequired
 
 from .handlers import add_error_handlers
+from .middlewares import RequestLimitMiddleware
 from .opentelemetry import maybe_instrument_app
 from .prometheus import add_prometheus_middleware
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+    from .i18n.translations import TranslationManager
 
 
 def simplify_operation_ids(app: FastAPI) -> None:
@@ -49,13 +54,21 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
     return self.openapi_schema
 
 
-def configure_app(
+class LogConfig(TypedDict):
+    log_format: Literal["console", "json"]
+    log_level: NotRequired[int]
+
+
+def configure_app(  # noqa: PLR0913
     app: FastAPI,
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
+    translation_manager: TranslationManager | None = None,
+    limits: int | None = 1000,
+    log_config: LogConfig | None = None,
     **tracing_options: Any,
 ) -> None:
     maybe_instrument_app(app, **tracing_options)
@@ -68,3 +81,20 @@ def configure_app(
         simplify_operation_ids(app)
     if gzip_middleware_min_size:
         app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
+    if translation_manager:
+        from .i18n import LocaleMiddleware, configure_translations
+
+        app.add_middleware(
+            LocaleMiddleware,
+            translation_manager.default,
+            translation_manager.supported_locales,
+        )
+        configure_translations(translation_manager)
+    if limits:
+        app.add_middleware(RequestLimitMiddleware, limits)
+    if log_config:
+        from .logging import RequestLoggingMiddleware, configure_logging
+
+        log_config.setdefault("log_level", logging.INFO)
+        configure_logging(**log_config)
+        app.add_middleware(RequestLoggingMiddleware)

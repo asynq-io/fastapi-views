@@ -52,7 +52,9 @@ prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
-all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
+logging = ["orjson", "structlog"]
+all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer", "orjson", "structlog"]
+
 
 [dependency-groups]
 dev = [
@@ -60,6 +62,7 @@ dev = [
     {include-group = "test"},
     {include-group = "docs"},
     "ipython",
+    "opentelemetry-instrumentation-logging>=0.60b1",
 ]
 
 test = [

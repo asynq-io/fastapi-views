@@ -1,15 +1,11 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+from uuid import UUID
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
 from fastapi_views.views.viewsets import AsyncAPIViewSet
-
-if TYPE_CHECKING:
-    from uuid import UUID
 
 
 class UpdateItemSchema(BaseModel):
@@ -52,4 +48,4 @@ router.register_view(MyViewSet)
 app = FastAPI(title="My API")
 app.include_router(router)
 
-configure_app(app)
+configure_app(app, log_config={"log_format": "console"})
