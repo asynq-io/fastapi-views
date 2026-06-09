@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn
 
+from fastapi import Depends
 from starlette.status import HTTP_400_BAD_REQUEST
 
 from fastapi_views.exceptions import APIError, NotFound
@@ -11,6 +13,26 @@ if TYPE_CHECKING:
     from fastapi import Request
 
     from fastapi_views.types import Action
+
+
+class DependencyMixin:
+    @classmethod
+    def _patch_endpoint_signature(cls, endpoint: Any, method: Callable) -> None:
+        old_signature = inspect.signature(method)
+        old_parameters: list[inspect.Parameter] = list(
+            old_signature.parameters.values(),
+        )
+        old_first_parameter = old_parameters[0]
+        new_first_parameter = old_first_parameter.replace(default=Depends(cls))
+        new_parameters = [new_first_parameter] + [
+            parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
+            for parameter in old_parameters[1:]
+        ]
+        new_signature = old_signature.replace(parameters=new_parameters)
+        endpoint.__signature__ = new_signature
+        endpoint.__doc__ = method.__doc__
+        endpoint.__name__ = method.__name__
+        endpoint.kwargs = getattr(method, "kwargs", {})
 
 
 class DetailViewMixin:

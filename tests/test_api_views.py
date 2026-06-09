@@ -21,6 +21,7 @@ from fastapi_views.views.api import (
     AsyncUpdateAPIView,
     View,
 )
+from fastapi_views.views.functools import override
 
 from .utils import view_client
 
@@ -39,12 +40,43 @@ async def test_list_api_view(client, dummy_data):
     validate_response_meta(response)
 
 
+@pytest.mark.anyio
+async def test_async_list_custom_status_code():
+    class CustomStatusListView(AsyncListAPIView):
+        response_schema = dict
+
+        @override(status_code=206)
+        async def list(self) -> list[dict]:
+            return [{"x": "item"}]
+
+    async with view_client(CustomStatusListView) as c:
+        response = await c.get("/test")
+        assert response.status_code == 206
+        assert response.json() == [{"x": "item"}]
+
+
 @pytest.mark.usefixtures("retrieve_view")
 @pytest.mark.anyio
 async def test_retrieve_api_view(client, dummy_data):
     response = await client.get("/test")
     assert response.json() == dummy_data
     validate_response_meta(response)
+
+
+@pytest.mark.anyio
+async def test_async_retrieve_custom_status_code():
+    class CustomStatusRetrieveView(AsyncRetrieveAPIView):
+        detail_route = ""
+        response_schema = dict
+
+        @override(status_code=203)
+        async def retrieve(self) -> dict:
+            return {"x": "item"}
+
+    async with view_client(CustomStatusRetrieveView) as c:
+        response = await c.get("/test")
+        assert response.status_code == 203
+        assert response.json() == {"x": "item"}
 
 
 @pytest.mark.usefixtures("create_view")
@@ -198,6 +230,22 @@ async def test_async_partial_update_no_return():
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
         assert "Content-Type" not in response.headers
+
+
+@pytest.mark.anyio
+async def test_async_partial_update_custom_status_code():
+    class CustomStatusPartialView(AsyncPartialUpdateAPIView):
+        detail_route = ""
+        response_schema = dict
+
+        @override(status_code=202)
+        async def partial_update(self) -> dict:
+            return {"updated": True}
+
+    async with view_client(CustomStatusPartialView) as c:
+        response = await c.patch("/test")
+        assert response.status_code == 202
+        assert response.json() == {"updated": True}
 
 
 def test_base_list_api_view_get_response_schema_non_list_action():
