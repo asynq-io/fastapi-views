@@ -6,8 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
-from fastapi_views.models import ServerSideEvent
-from fastapi_views.views import ServerSideEventsAPIView, sse_route
+from fastapi_views.views import ServerSentEventsAPIView, sse_route
 
 
 class APIModel(BaseModel):
@@ -15,11 +14,7 @@ class APIModel(BaseModel):
     name: str
 
 
-class APIModelSSE(ServerSideEvent[APIModel]):
-    pass
-
-
-class SSEView(ServerSideEventsAPIView):
+class SSEView(ServerSentEventsAPIView):
     """Automatic server side event view based on `events` method"""
 
     response_schema = APIModel

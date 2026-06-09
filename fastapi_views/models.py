@@ -11,7 +11,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 from pydantic_core import Url
-from typing_extensions import Self, deprecated
+from typing_extensions import Self
 
 from .opentelemetry import OPENTELEMETRY_INSTALLED, get_correlation_id
 from .utils import str_uuid
@@ -64,11 +64,6 @@ class ServerSentEvent(BaseSchema, Generic[D]):
         if title:
             schema_dump["title"] = title
         return schema_dump
-
-
-@deprecated("This class is deprecatet, please use ServerSentEvent")
-class ServerSideEvent(ServerSentEvent[D]):
-    pass
 
 
 class AnyServerSideEvent(ServerSentEvent[Any]):

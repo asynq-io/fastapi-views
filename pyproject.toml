@@ -53,7 +53,23 @@ uvicorn = ["uvicorn"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
 logging = ["orjson", "structlog"]
-all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer", "orjson", "structlog"]
+websockets = ["websockets"]
+jose = ["joserfc"]
+auth0 = ["auth0-api-python"]
+standard = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
+
+all = [
+    "uvloop",
+    "starlette-exporter",
+    "uvicorn",
+    "opentelemetry-instrumentation-fastapi",
+    "typer",
+    "websockets",
+    "joserfc",
+    "auth0-api-python",
+    "orjson",
+    "structlog",
+]
 
 
 [dependency-groups]
@@ -145,12 +161,14 @@ ignore = [
     "A002",
     "ANN401",
     "COM812",
+    "EM101",
     "D",
     "B008",     # do not perform function calls in argument defaults
     "E501",     # line too long
     "N818",
     "PTH123",
-    "PLW2901"
+    "PLW2901",
+    "TRY003",
 ]
 
 

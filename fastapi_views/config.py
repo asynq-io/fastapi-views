@@ -32,7 +32,7 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
         self.openapi_schema = get_openapi(
             title=self.title,
             version=self.version,
-            openapi_version=self.openapi_version,
+            openapi_version="3.2.0",
             description=self.description,
             terms_of_service=self.terms_of_service,
             contact=self.contact,
