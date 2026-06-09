@@ -53,6 +53,7 @@ uvicorn = ["uvicorn"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
 all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
+websockets = ["websockets"]
 
 [dependency-groups]
 dev = [
