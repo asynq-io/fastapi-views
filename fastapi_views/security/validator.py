@@ -33,4 +33,4 @@ class JoserfcTokenValidator(TokenValidator[JsonWebTokenT]):
                 "Invalid token", errors=jsonable_encoder(e.errors())
             ) from None
         except JoseError as e:
-            raise Unauthorized(e.description, title=e.error) from None
+            raise Unauthorized(e.description or e.error) from None

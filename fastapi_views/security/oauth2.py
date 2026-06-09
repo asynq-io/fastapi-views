@@ -71,7 +71,6 @@ class OAuth2JWTAuth(JWTAuth[ScopesJsonWebToken]):
             for scope in security_scopes.scopes:
                 if not self.has_scope(scope, token.scopes):
                     raise Forbidden(
-                        title="insufficient_scopes",
                         detail=f"Token is missing required scope: {scope}",
                     )
             return token
