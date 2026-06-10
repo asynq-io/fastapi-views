@@ -32,7 +32,7 @@ def with_locale(func: Callable[..., R], **defaults: Any) -> Callable[..., R]: ..
 
 @overload
 def with_locale(
-    func: None = ..., **defaults: Any
+    func: None = None, **defaults: Any
 ) -> Callable[[Callable[..., R]], Callable[..., R]]: ...
 
 
