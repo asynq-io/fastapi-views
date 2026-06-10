@@ -52,26 +52,25 @@ fastapi-views = "fastapi_views.cli:cli"
 
 [project.optional-dependencies]
 uvloop = ["uvloop"]
-prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
-opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
+prometheus = ["starlette-exporter"]
+opentelemetry = ["opentelemetry-instrumentation-fastapi"]
+
+standard = ["uvloop", "uvicorn", "starlette-exporter", "opentelemetry-instrumentation-fastapi", "typer"]
+
 logging = ["structlog"]
 websockets = ["websockets"]
 jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
-standard = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
-i18n = [
-    "babel",
-    "jinja2",
-]
+i18n = ["babel", "jinja2"]
 
 all = [
     "uvloop",
-    "starlette-exporter",
     "uvicorn",
-    "opentelemetry-instrumentation-fastapi",
     "typer",
+    "starlette-exporter",
+    "opentelemetry-instrumentation-fastapi",
     "websockets",
     "joserfc",
     "auth0-api-python",
