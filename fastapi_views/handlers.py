@@ -14,6 +14,7 @@ logger = get_logger("exceptions.handler")
 
 def _api_error_to_response(error: APIError) -> Response:
     model = error.as_model()
+    model.detail = _(model.detail)
     return Response(
         content=model.model_dump_json(),
         status_code=error.status_code,
@@ -24,7 +25,7 @@ def _api_error_to_response(error: APIError) -> Response:
 
 def http_exception_handler(request: Request, exc: HTTPException) -> Response:
     error = APIError(
-        _(exc.detail),
+        exc.detail,
         status=exc.status_code,
         instance=request.url.path,
         headers=exc.headers,
@@ -42,7 +43,7 @@ def request_validation_handler(
 ) -> Response:
     return _api_error_to_response(
         BadRequest(
-            _("Request validation error"),
+            "Request validation error",
             instance=request.url.path,
             errors=jsonable_encoder(exc.errors()),
         )
@@ -59,7 +60,7 @@ def exception_handler(request: Request, exc: Exception) -> Response:
     )
     return _api_error_to_response(
         InternalServerError(
-            _("Unhandled server error"),
+            "Unhandled server error",
             instance=request.url.path,
         )
     )

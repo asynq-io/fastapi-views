@@ -9,12 +9,14 @@ from .translations import (
     override_locale,
     translate,
 )
+from .types import Translatable
 
 __all__ = [
     "InMemoryTranslations",
     "JsonFilesTranslations",
     "LocaleMiddleware",
     "NoTranslations",
+    "Translatable",
     "TranslationManager",
     "configure_translations",
     "get_locale",
