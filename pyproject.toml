@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "1.6.4"
+version = "1.7.0"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -52,8 +52,22 @@ prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
-all = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
 websockets = ["websockets"]
+jose = ["joserfc"]
+auth0 = ["auth0-api-python"]
+standard = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
+
+all = [
+    "uvloop",
+    "starlette-exporter",
+    "uvicorn",
+    "opentelemetry-instrumentation-fastapi",
+    "typer",
+    "websockets",
+    "joserfc",
+    "auth0-api-python"
+]
+
 
 [dependency-groups]
 dev = [
@@ -143,12 +157,14 @@ ignore = [
     "A002",
     "ANN401",
     "COM812",
+    "EM101",
     "D",
     "B008",     # do not perform function calls in argument defaults
     "E501",     # line too long
     "N818",
     "PTH123",
-    "PLW2901"
+    "PLW2901",
+    "TRY003",
 ]
 
 

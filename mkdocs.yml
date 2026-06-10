@@ -28,6 +28,7 @@ nav:
       - "Filters": usage/filters.md
       - "Opentelemetry": usage/opentelemetry.md
       - "Server Side Events": usage/sse.md
+      - "Authentication": usage/auth.md
       - "WebSockets": usage/websockets.md
   - "Reference":
       - "API Views": reference/views.md
