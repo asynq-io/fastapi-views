@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "1.6.4"
+version = "1.7.0"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -36,7 +36,11 @@ classifiers = [
 "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 "Topic :: Internet :: WWW/HTTP",
 ]
-dependencies = ["orjson", "fastapi", "pydantic>2.0,<3"]
+dependencies = [
+    "fastapi",
+    "orjson",
+    "pydantic>2.0,<3",
+]
 
 [project.urls]
 Documentation = "https://github.com/asynq-io/fastapi-views#readme"
@@ -75,7 +79,6 @@ all = [
     "babel",
     "jinja2",
 ]
-
 
 
 [dependency-groups]
