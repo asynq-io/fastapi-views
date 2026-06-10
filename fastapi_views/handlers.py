@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from starlette.exceptions import HTTPException
 
 from .exceptions import APIError, BadRequest, InternalServerError
-from .i18n import gettext_lazy as _
+from .i18n import translate as _
 from .logging._compat import get_logger
 
 logger = get_logger("exceptions.handler")

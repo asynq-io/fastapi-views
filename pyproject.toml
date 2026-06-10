@@ -36,7 +36,7 @@ classifiers = [
 "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 "Topic :: Internet :: WWW/HTTP",
 ]
-dependencies = ["fastapi", "pydantic>2.0,<3"]
+dependencies = ["orjson", "fastapi", "pydantic>2.0,<3"]
 
 [project.urls]
 Documentation = "https://github.com/asynq-io/fastapi-views#readme"
@@ -52,11 +52,15 @@ prometheus = ["starlette-exporter"]
 uvicorn = ["uvicorn"]
 opentelemetry = ["opentelemetry-instrumentation-fastapi"]
 cli = ["typer"]
-logging = ["orjson", "structlog"]
+logging = ["structlog"]
 websockets = ["websockets"]
 jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
 standard = ["uvloop", "starlette-exporter", "uvicorn", "opentelemetry-instrumentation-fastapi", "typer"]
+i18n = [
+    "babel",
+    "jinja2",
+]
 
 all = [
     "uvloop",
@@ -67,9 +71,11 @@ all = [
     "websockets",
     "joserfc",
     "auth0-api-python",
-    "orjson",
     "structlog",
+    "babel",
+    "jinja2",
 ]
+
 
 
 [dependency-groups]
@@ -77,6 +83,7 @@ dev = [
     {include-group = "lint"},
     {include-group = "test"},
     {include-group = "docs"},
+    "babel>=2.18.0",
     "ipython",
     "opentelemetry-instrumentation-logging>=0.60b1",
 ]
@@ -137,6 +144,7 @@ venv = ".venv"
 
 [tool.mypy]
 python_version = "3.10"
+exclude = ["^tmp/"]
 # strict = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false

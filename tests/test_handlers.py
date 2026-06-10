@@ -13,9 +13,10 @@ from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_403_FORBIDDEN,
     HTTP_404_NOT_FOUND,
+    HTTP_500_INTERNAL_SERVER_ERROR,
 )
 
-from fastapi_views.exceptions import APIError, BadRequest, InternalServerError
+from fastapi_views.exceptions import APIError, BadRequest
 from fastapi_views.handlers import (
     add_error_handlers,
     api_error_handler,
@@ -128,10 +129,18 @@ async def test_request_validation_handler(handler_client):
 
 
 @pytest.mark.anyio
-async def test_unhandled_exception_handler(handler_client):
-    # exception_handler raises InternalServerError which propagates from the handler
-    with pytest.raises(InternalServerError):
-        await handler_client.get("/unhandled")
+async def test_unhandled_exception_handler(handler_app):
+    # ServerErrorMiddleware turns the unhandled RuntimeError into the 500 response
+    # built by exception_handler (it re-raises the original error too, so use a
+    # non-raising transport to observe the response).
+    transport = ASGITransport(app=handler_app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/unhandled")
+    assert response.status_code == HTTP_500_INTERNAL_SERVER_ERROR
+    data = response.json()
+    assert response.headers["Content-Type"] == "application/json"
+    assert data["status"] == HTTP_500_INTERNAL_SERVER_ERROR
+    assert data["instance"] == "/unhandled"
 
 
 @pytest.mark.anyio

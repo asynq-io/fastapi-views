@@ -677,15 +677,17 @@ version = "1.6.4"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "orjson" },
     { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
 all = [
     { name = "auth0-api-python" },
+    { name = "babel" },
+    { name = "jinja2" },
     { name = "joserfc" },
     { name = "opentelemetry-instrumentation-fastapi" },
-    { name = "orjson" },
     { name = "starlette-exporter" },
     { name = "structlog" },
     { name = "typer" },
@@ -699,11 +701,14 @@ auth0 = [
 cli = [
     { name = "typer" },
 ]
+i18n = [
+    { name = "babel" },
+    { name = "jinja2" },
+]
 jose = [
     { name = "joserfc" },
 ]
 logging = [
-    { name = "orjson" },
     { name = "structlog" },
 ]
 opentelemetry = [
@@ -732,6 +737,7 @@ websockets = [
 [package.dev-dependencies]
 dev = [
     { name = "asgi-lifespan" },
+    { name = "babel" },
     { name = "bandit" },
     { name = "httpx" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -786,14 +792,17 @@ test = [
 requires-dist = [
     { name = "auth0-api-python", marker = "extra == 'all'" },
     { name = "auth0-api-python", marker = "extra == 'auth0'" },
+    { name = "babel", marker = "extra == 'all'" },
+    { name = "babel", marker = "extra == 'i18n'" },
     { name = "fastapi" },
+    { name = "jinja2", marker = "extra == 'all'" },
+    { name = "jinja2", marker = "extra == 'i18n'" },
     { name = "joserfc", marker = "extra == 'all'" },
     { name = "joserfc", marker = "extra == 'jose'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'all'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'opentelemetry'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'standard'" },
-    { name = "orjson", marker = "extra == 'all'" },
-    { name = "orjson", marker = "extra == 'logging'" },
+    { name = "orjson" },
     { name = "pydantic", specifier = ">2.0,<3" },
     { name = "starlette-exporter", marker = "extra == 'all'" },
     { name = "starlette-exporter", marker = "extra == 'prometheus'" },
@@ -812,11 +821,12 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "prometheus", "uvicorn", "opentelemetry", "cli", "logging", "websockets", "jose", "auth0", "standard", "all"]
+provides-extras = ["uvloop", "prometheus", "uvicorn", "opentelemetry", "cli", "logging", "websockets", "jose", "auth0", "standard", "i18n", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "asgi-lifespan" },
+    { name = "babel", specifier = ">=2.18.0" },
     { name = "bandit" },
     { name = "httpx" },
     { name = "ipython" },
