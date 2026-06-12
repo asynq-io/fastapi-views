@@ -91,6 +91,7 @@ class JWTConfig:
 class BearerAccessToken(BaseSchema):
     token_type: Literal["bearer"] = "bearer"  # noqa: S105
     access_token: str
+    expires_in: int | None = None
 
 
 class BaseJsonWebToken(BaseSchema):
@@ -157,7 +158,9 @@ class BaseJsonWebToken(BaseSchema):
         self, *, header: dict[str, Any] | None = None, **options: Any
     ) -> BearerAccessToken:
         token = self.encode(header=header, **options)
-        return BearerAccessToken(access_token=token)
+        return BearerAccessToken(
+            access_token=token, expires_in=self.jwt_config.expiration_seconds
+        )
 
     @model_validator(mode="after")
     def set_defaults(self) -> Self:

@@ -78,6 +78,9 @@ all = [
     "babel",
     "jinja2",
 ]
+cache = [
+    "redis>=8.0.0",
+]
 
 
 [dependency-groups]

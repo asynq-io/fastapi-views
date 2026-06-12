@@ -93,6 +93,11 @@ class View(DependencyMixin, ABC):
             self.response.body = content
 
         self.response.init_headers(headers)
+        # ``init_headers`` swapped in a fresh ``raw_headers`` list. FastAPI cached
+        # a ``MutableHeaders`` over the *previous* list when it built the response
+        # (``del response.headers["content-length"]``), so drop that stale cache
+        # to keep ``response.headers`` in sync with what is actually sent.
+        self.response.__dict__.pop("_headers", None)
         return self.response
 
     def get_serializer(self, schema: Any | None) -> TypeAdapter[Any]:
