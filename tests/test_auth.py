@@ -88,20 +88,20 @@ def test_jwt_config_issuer_url_marks_iss_claim_essential():
 
 def test_jwt_config_jwks_wraps_single_key():
     key = jwk.OctKey.generate_key(256)
-    jwks = JWTConfig(key=key).jwks
+    jwks = JWTAuth(JWTConfig(key=key), None).jwks
     assert "keys" in jwks
     assert len(jwks["keys"]) == 1
 
 
 def test_jwt_config_jwks_serializes_key_set():
     key_set = jwk.KeySet([jwk.OctKey.generate_key(256), jwk.OctKey.generate_key(256)])
-    jwks = JWTConfig(key=key_set).jwks
+    jwks = JWTAuth(JWTConfig(key=key_set), None).jwks
     assert len(jwks["keys"]) == 2
 
 
 def test_jwt_config_jwks_excludes_private_material():
     key = jwk.RSAKey.generate_key(2048, private=True)
-    jwks = JWTConfig(key=key).jwks
+    jwks = JWTAuth(JWTConfig(key=key), None).jwks
     # private exponent must never be exposed in a public JWKS
     assert "d" not in jwks["keys"][0]
 
@@ -113,14 +113,14 @@ def test_jwt_config_import_key_sets_single_key():
 
 
 def test_jwt_config_import_key_imports_key_set():
-    jwks = JWTConfig(key=jwk.KeySet([jwk.OctKey.generate_key(256)])).jwks
+    jwks = JWTAuth(JWTConfig(key=jwk.KeySet([jwk.OctKey.generate_key(256)])), None).jwks
     config = JWTConfig()
     config.import_key(jwks)
     assert isinstance(config.get_key(), jwk.KeySet)
 
 
 # --------------------------------------------------------------------------- #
-# JWTAuth.encode
+# JWTAuth.create_access_token / encode
 # --------------------------------------------------------------------------- #
 
 
@@ -129,7 +129,7 @@ def test_utc_timestamp_returns_int():
 
 
 def test_encode_returns_bearer_access_token(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1"})
     assert isinstance(bearer, BearerAccessToken)
     assert bearer.token_type == "bearer"  # noqa: S105  # nosec B105
     assert bearer.access_token
@@ -137,34 +137,34 @@ def test_encode_returns_bearer_access_token(jwt_auth):
 
 @pytest.mark.anyio
 async def test_encode_verify_round_trip(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1"})
     claims = await jwt_auth.verify(bearer.access_token)
     assert claims["sub"] == "user-1"
 
 
 def test_encode_sets_exp_from_config_expiration(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1"})
     claims = jwt.decode(bearer.access_token, jwt_auth.config.get_key()).claims
     assert claims["exp"] == claims["iat"] + 3600
 
 
 def test_encode_without_expiration_has_no_exp():
     auth = JWTAuth(make_config(), None)
-    bearer = auth.encode({"sub": "user-1"})
+    bearer = auth.create_access_token({"sub": "user-1"})
     claims = jwt.decode(bearer.access_token, auth.config.get_key()).claims
     assert "exp" not in claims
     assert bearer.expires_in is None
 
 
 def test_encode_expires_in_overrides_config(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1"}, expires_in=60)
+    bearer = jwt_auth.create_access_token({"sub": "user-1"}, expires_in=60)
     claims = jwt.decode(bearer.access_token, jwt_auth.config.get_key()).claims
     assert claims["exp"] == claims["iat"] + 60
     assert bearer.expires_in == 60
 
 
 def test_encode_explicit_exp_is_not_overridden(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1", "exp": utc_timestamp() + 5})
+    bearer = jwt_auth.create_access_token({"sub": "user-1", "exp": utc_timestamp() + 5})
     claims = jwt.decode(bearer.access_token, jwt_auth.config.get_key()).claims
     # explicit exp wins over the config-derived value
     assert claims["exp"] != claims["iat"] + 3600
@@ -172,14 +172,14 @@ def test_encode_explicit_exp_is_not_overridden(jwt_auth):
 
 def test_encode_populates_iss_from_issuer_url():
     auth = JWTAuth(make_config(issuer_url="https://issuer.example"), None)
-    bearer = auth.encode({"sub": "user-1"})
+    bearer = auth.create_access_token({"sub": "user-1"})
     claims = jwt.decode(bearer.access_token, auth.config.get_key()).claims
     assert claims["iss"] == "https://issuer.example"
 
 
 def test_encode_explicit_iss_is_not_overridden():
     auth = JWTAuth(make_config(issuer_url="https://issuer.example"), None)
-    bearer = auth.encode({"sub": "user-1", "iss": "https://other"})
+    bearer = auth.create_access_token({"sub": "user-1", "iss": "https://other"})
     claims = jwt.decode(bearer.access_token, auth.config.get_key()).claims
     assert claims["iss"] == "https://other"
 
@@ -191,7 +191,7 @@ def test_encode_explicit_iss_is_not_overridden():
 
 @pytest.mark.anyio
 async def test_verify_accepts_valid_token(jwt_auth):
-    bearer = jwt_auth.encode({"sub": "user-1"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1"})
     claims = await jwt_auth.verify(bearer.access_token)
     assert claims["sub"] == "user-1"
 
@@ -275,7 +275,7 @@ async def test_endpoint_accepts_valid_token(jwt_auth, app, client):
     async def me(token=jwt_auth.authenticated()):
         return {"sub": token["sub"]}
 
-    bearer = jwt_auth.encode({"sub": "user-1"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1"})
     response = await client.get(
         "/me", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
@@ -310,7 +310,7 @@ async def test_endpoint_allows_sufficient_scope(jwt_auth, app, client):
     async def items(token=jwt_auth.requires("user:read")):
         return {"sub": token["sub"]}
 
-    bearer = jwt_auth.encode({"sub": "user-1", "scope": "user:edit"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "user:edit"})
     response = await client.get(
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
@@ -324,7 +324,7 @@ async def test_endpoint_forbids_insufficient_scope(jwt_auth, app, client):
     async def items(token=jwt_auth.requires("user:edit")):
         return {"sub": token["sub"]}
 
-    bearer = jwt_auth.encode({"sub": "user-1", "scope": "user:read"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "user:read"})
     response = await client.get(
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
