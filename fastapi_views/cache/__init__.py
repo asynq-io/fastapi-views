@@ -1,16 +1,15 @@
 from typing import Any, Literal
 
-from .abc import Cache
-from .serializers import DefaultSerializer, Serializer
+from .backends import Cache
 
 
 def get_cache(backend: Literal["memory", "redis"], **options: Any) -> Cache:
     if backend == "memory":
-        from .memory import InMemoryCache
+        from .backends.memory import InMemoryCache
 
         return InMemoryCache(**options)
     if backend == "redis":
-        from .redis import RedisCache
+        from .backends.redis import RedisCache
 
         return RedisCache(**options)
     msg = f"Unknown backend {backend}"
@@ -19,7 +18,5 @@ def get_cache(backend: Literal["memory", "redis"], **options: Any) -> Cache:
 
 __all__ = [
     "Cache",
-    "DefaultSerializer",
-    "Serializer",
     "get_cache",
 ]

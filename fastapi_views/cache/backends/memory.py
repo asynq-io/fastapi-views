@@ -1,20 +1,20 @@
 import time
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
-from .abc import Cache
+from .abc import Cache, EncodableT, KeyT
 
 
 class ExpiringItem(NamedTuple):
-    value: Any
+    value: EncodableT
     expires_at: float | None
 
 
 class InMemoryCache(Cache):
     def __init__(self, default_ttl: int | None = None) -> None:
         self._default_ttl = default_ttl
-        self._data: dict[str, ExpiringItem] = {}
+        self._data: dict[KeyT, ExpiringItem] = {}
 
-    async def get(self, key: str, type_: Any = None) -> Any:  # noqa: ARG002
+    async def get(self, key: KeyT) -> EncodableT | None:
         item = self._data.get(key)
         if item is None:
             return None
@@ -23,15 +23,15 @@ class InMemoryCache(Cache):
             return None
         return item.value
 
-    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+    async def set(self, key: KeyT, value: EncodableT, ttl: int | None = None) -> None:
         ttl = ttl or self._default_ttl
         expires_at = (time.monotonic() + ttl) if ttl else None
         self._data[key] = ExpiringItem(value, expires_at)
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: KeyT) -> None:
         self._data.pop(key, None)
 
-    async def pop(self, key: str, type_: Any = None) -> Any:  # noqa: ARG002
+    async def pop(self, key: KeyT) -> EncodableT | None:
         item = self._data.pop(key, None)
         if item is None:
             return None
