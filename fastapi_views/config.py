@@ -84,11 +84,7 @@ def configure_app(  # noqa: PLR0913
     if translation_manager:
         from .i18n import LocaleMiddleware, configure_translations
 
-        app.add_middleware(
-            LocaleMiddleware,
-            translation_manager.default,
-            translation_manager.supported_locales,
-        )
+        app.add_middleware(LocaleMiddleware, translation_manager)
         configure_translations(translation_manager)
     if limits:
         app.add_middleware(RequestLimitMiddleware, limits)

@@ -8,9 +8,9 @@ from .translations import translate
 
 T = TypeVar("T", bound=str)
 
-Translatable = Annotated[
+Translated = Annotated[
     T,
-    PlainSerializer(translate, return_type=str, when_used="json"),
+    PlainSerializer(translate, return_type=str, when_used="json-unless-none"),
 ]
 
-TranslatableStr = Translatable[str]
+TranslatedStr = Translated[str]
