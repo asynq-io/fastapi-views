@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 __all__ = ["CachedAPIView", "cached"]
 
-JSON_MEDIA_TYPE = "application/json"
-
 
 class CachedAPIView(ConditionalMixin, APIView):
     """``APIView`` whose endpoints can cache their serialised responses.
@@ -124,7 +122,7 @@ def cached(
                 return Response(
                     content=cached_body,
                     status_code=self.get_status_code(func.__name__),
-                    media_type=JSON_MEDIA_TYPE,
+                    media_type="application/json",
                     headers=self.get_cache_headers(
                         hit=True, ttl=ttl, cache_control=cache_control, extra=extra
                     ),
