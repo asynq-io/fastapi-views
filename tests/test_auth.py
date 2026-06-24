@@ -19,6 +19,10 @@ from fastapi_views.auth.jwt import (
     JWTConfig,
     utc_timestamp,
 )
+from fastapi_views.auth.scopes import (
+    HierarchicalScopeValidator,
+    SimpleScopeValidator,
+)
 from fastapi_views.exceptions import APIError, Unauthorized
 from fastapi_views.handlers import add_error_handlers
 
@@ -248,11 +252,54 @@ def test_has_scope(jwt_auth, required, granted, expected):
     assert jwt_auth.has_scope(required, granted) is expected
 
 
-def test_resolve_action_includes_self_and_implied(jwt_auth):
+def test_resolve_action_includes_self_and_implied():
     # explicit hierarchy: edit implies read, all implies read+edit
-    assert jwt_auth._resolve_action("edit") == {"edit", "read"}
-    assert jwt_auth._resolve_action("*") == {"*", "read", "edit"}
-    assert jwt_auth._resolve_action("unknown") == {"unknown"}
+    validator = HierarchicalScopeValidator()
+    assert validator._resolve_action("edit") == {"edit", "read"}
+    assert validator._resolve_action("*") == {"*", "read", "edit"}
+    assert validator._resolve_action("unknown") == {"unknown"}
+
+
+def test_scopes_auth_defaults_to_hierarchical_validator(jwt_auth):
+    assert isinstance(jwt_auth.scope_validator, HierarchicalScopeValidator)
+
+
+@pytest.mark.parametrize(
+    ("required", "granted", "expected"),
+    [
+        ("user:read", ["user:read"], True),  # exact match
+        ("user:read", ["user:read", "post:edit"], True),  # contained verbatim
+        ("user:read", ["user:*"], False),  # no wildcard expansion
+        ("user:read", ["user:edit"], False),  # no hierarchy
+        ("user:read", [], False),
+    ],
+)
+def test_simple_scope_validator(required, granted, expected):
+    assert SimpleScopeValidator().has_scope(required, granted) is expected
+
+
+def test_scopes_auth_uses_injected_validator(config):
+    auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
+    assert isinstance(auth.scope_validator, SimpleScopeValidator)
+    # delegates to the simple strategy: hierarchy no longer applies
+    assert auth.has_scope("user:read", ["user:read"]) is True
+    assert auth.has_scope("user:read", ["user:edit"]) is False
+
+
+@pytest.mark.anyio
+async def test_endpoint_forbids_with_simple_validator(config, app, client):
+    auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
+
+    @app.get("/items")
+    async def items(token=auth.requires("user:read")):
+        return {"sub": token["sub"]}
+
+    # "user:edit" would satisfy the hierarchical validator but not the simple one
+    bearer = auth.create_access_token({"sub": "user-1", "scope": "user:edit"})
+    response = await client.get(
+        "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
+    )
+    assert response.status_code == HTTP_403_FORBIDDEN
 
 
 # --------------------------------------------------------------------------- #

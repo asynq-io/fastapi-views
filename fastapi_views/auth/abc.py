@@ -1,27 +1,31 @@
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Annotated, Any, ClassVar, TypeVar
+from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
-from pydantic import StringConstraints
 from typing_extensions import Never
 
 from fastapi_views.exceptions import Forbidden, Unauthorized
 
-Read = "read"
-Edit = "edit"
-All = "*"
+from .scopes import (
+    All,
+    Edit,
+    HierarchicalScopeValidator,
+    Read,
+    Scope,
+    ScopeValidator,
+)
 
-Scope = Annotated[
-    str,
-    StringConstraints(
-        min_length=1,
-        max_length=255,
-        to_lower=True,
-        strip_whitespace=True,
-        pattern=r"^[a-z]+:(\*|[a-z]+)$",
-    ),
+__all__ = [
+    "All",
+    "AuthBase",
+    "AuthorizationScheme",
+    "Edit",
+    "Read",
+    "Scope",
+    "ScopesAuth",
+    "TokenAuth",
 ]
 
 T = TypeVar("T")
@@ -70,26 +74,16 @@ class TokenAuth(AuthBase):
 
 
 class ScopesAuth(TokenAuth):
-    scope_hierarhy: ClassVar[dict[str, set[str]]] = {
-        Read: set(),
-        Edit: {Read},
-        All: {Read, Edit},
-    }
-
-    def _resolve_action(self, action: str) -> set[str]:
-        return self.scope_hierarhy.get(action, set()) | {action}
+    def __init__(
+        self,
+        scheme: AuthorizationScheme | None = None,
+        scope_validator: ScopeValidator | None = None,
+    ) -> None:
+        self.scope_validator = scope_validator or HierarchicalScopeValidator()
+        super().__init__(scheme)
 
     def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
-        required_resource, _, required_action = scope.partition(":")
-        for s in granted_scopes:
-            granted_resource, _, granted_action = s.partition(":")
-            if granted_resource not in (required_resource, All):
-                continue
-            if granted_action == All or required_action in self._resolve_action(
-                granted_action
-            ):
-                return True
-        return False
+        return self.scope_validator.has_scope(scope, granted_scopes)
 
     def validate_scopes(self, token: dict[str, Any], scopes: SecurityScopes) -> None:
         granted = token.get("scope", "").split(" ")

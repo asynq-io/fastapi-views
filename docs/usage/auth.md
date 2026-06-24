@@ -218,28 +218,63 @@ A missing scope produces:
 
 Scopes follow the `resource:action` pattern (e.g. `items:read`, `orders:*`).
 
-### Scope hierarchy
+### Scope validation
 
-Scopes resolve hierarchically out of the box:
+How a required scope is matched against a token's granted scopes is delegated to a
+`ScopeValidator`. Two strategies ship out of the box:
+
+- `HierarchicalScopeValidator` (the default) parses scopes into `resource:action` segments
+  and resolves them hierarchically
+- `SimpleScopeValidator` grants access only when the required scope is present verbatim
+  among the granted scopes (a plain contains/equality check, with no `resource:action`
+  structure assumed)
+
+Select a strategy with the `scope_validator` argument:
+
+```python
+from fastapi_views.auth.scopes import SimpleScopeValidator
+
+auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
+```
+
+#### Hierarchical scopes
+
+The default `HierarchicalScopeValidator` resolves scopes hierarchically:
 
 - a wildcard action grants every action on a resource — `items:*` satisfies `items:read`
 - a wildcard resource grants the action everywhere — `*:read` satisfies `items:read`
 - the default action hierarchy is `edit` ⊃ `read` and `*` ⊃ `{read, edit}`, so a token
   with `items:edit` satisfies an `items:read` requirement
 
-Customise the hierarchy by subclassing and overriding the `scope_hierarhy` class attribute
+Customise the hierarchy by subclassing and overriding the `scope_hierarchy` class attribute
 (mapping each action to the set of actions it implies):
 
 ```python
-class MyAuth(JWTAuth):
-    scope_hierarhy = {
+from fastapi_views.auth.scopes import HierarchicalScopeValidator
+
+
+class MyScopeValidator(HierarchicalScopeValidator):
+    scope_hierarchy = {
         "read": set(),
         "write": {"read"},
         "admin": {"read", "write"},
     }
 
 
-auth = MyAuth(config, scheme=None)
+auth = JWTAuth(config, scope_validator=MyScopeValidator())
+```
+
+Need entirely custom matching? Subclass `ScopeValidator` and implement `has_scope`:
+
+```python
+from collections.abc import Sequence
+
+from fastapi_views.auth.scopes import Scope, ScopeValidator
+
+
+class PrefixScopeValidator(ScopeValidator):
+    def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
+        return any(scope.startswith(granted) for granted in granted_scopes)
 ```
 
 ---

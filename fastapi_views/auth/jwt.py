@@ -16,6 +16,7 @@ from fastapi_views.exceptions import Unauthorized
 from fastapi_views.models import BaseSchema
 
 from .abc import AuthorizationScheme, ScopesAuth
+from .scopes import ScopeValidator
 
 try:
     from httpx import AsyncClient
@@ -79,9 +80,14 @@ class JWTConfig:
 
 
 class JWTAuth(ScopesAuth):
-    def __init__(self, config: JWTConfig, scheme: AuthorizationScheme | None) -> None:
+    def __init__(
+        self,
+        config: JWTConfig,
+        scheme: AuthorizationScheme | None = None,
+        scope_validator: ScopeValidator | None = None,
+    ) -> None:
         self.config = config
-        super().__init__(scheme)
+        super().__init__(scheme, scope_validator)
 
     @cached_property
     def jwks(self) -> jwk.KeySetSerialization:
