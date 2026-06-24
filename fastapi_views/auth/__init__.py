@@ -1,6 +1,9 @@
-from .abc import Auth, AuthorizationScheme
+from .abc import AuthBase, AuthorizationScheme
+from .api_key import APIKeyAuth, ConstAPIKeyAuth
 
 __all__ = [
-    "Auth",
+    "APIKeyAuth",
+    "AuthBase",
     "AuthorizationScheme",
+    "ConstAPIKeyAuth",
 ]

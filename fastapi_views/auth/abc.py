@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Annotated, Any, ClassVar, Generic, TypeVar
+from typing import Annotated, Any, ClassVar, TypeVar
 
 from fastapi import Depends, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
@@ -40,7 +40,7 @@ def http_bearer() -> AuthorizationScheme:
     return http_bearer
 
 
-class Auth(ABC, Generic[T]):
+class AuthBase:
     def __init__(self, scheme: AuthorizationScheme) -> None:
         self.scheme = scheme
         self.dependency = self.get_dependency()
@@ -62,7 +62,7 @@ class Auth(ABC, Generic[T]):
         return _dependency
 
 
-class TokenAuth(Auth[dict[str, Any]]):
+class TokenAuth(AuthBase):
     def __init__(self, scheme: AuthorizationScheme | None = None) -> None:
         if scheme is None:
             scheme = http_bearer()

@@ -7,10 +7,10 @@ from typing_extensions import Never
 
 from fastapi_views.exceptions import Unauthorized
 
-from .abc import Auth
+from .abc import AuthBase
 
 
-class APIKeyAuth(Auth[str]):
+class APIKeyAuth(AuthBase):
     def __init__(
         self,
         name: str = "X-Api-Key",
