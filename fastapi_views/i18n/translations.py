@@ -211,7 +211,7 @@ class JsonFilesTranslations(_DictTranslationManager):
     ) -> None:
         super().__init__(default, supported_locales, formatter, fallbacks)
         self.dir = Path(dir_name)
-        if not self.dir.exists():
+        if not self.dir.is_dir():
             raise NotADirectoryError(dir_name)
         self._lock = Lock()
         self._cache: dict[str, Any] = {}
