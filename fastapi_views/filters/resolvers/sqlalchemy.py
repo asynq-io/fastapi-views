@@ -26,7 +26,6 @@ from .abc import FilterResolver
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-
 try:
     from sqlalchemy import inspect as sa_inspect
     from sqlalchemy.orm import defaultload, load_only
@@ -40,6 +39,10 @@ except ImportError:
 
     def sa_inspect(subject: Any, *, raiseerr: bool = True) -> Any:  # type: ignore[no-redef]
         raise NotImplementedError
+
+
+def _escape_like_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class _Queryset(Protocol):
@@ -71,14 +74,14 @@ class Column(Protocol):
     def is_not(self, value: Any) -> Any:
         return self.is_not(value)  # pragma: no cover
 
-    def like(self, value: str) -> Any:
-        return self.like(f"%{value}%")
-
-    def ilike(self, value: str) -> Any:
-        return self.ilike(f"%{value}%")
-
     def is_null(self, value: bool) -> Any:  # noqa: FBT001
         return self.is_(None) if value else self.is_not(None)
+
+    def like(self, value: str, escape: str = "\\") -> Any:
+        return self.like(f"%{_escape_like_value(value)}%", escape=escape)
+
+    def ilike(self, value: str, escape: str = "\\") -> Any:
+        return self.ilike(f"%{_escape_like_value(value)}%", escape=escape)
 
 
 class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
