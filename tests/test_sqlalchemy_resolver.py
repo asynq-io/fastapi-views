@@ -88,10 +88,10 @@ class MockColumn:
     def is_not(self, value: object) -> MockExpression:
         return MockExpression(f"{self.name} IS NOT {value}")
 
-    def like(self, value: str) -> MockExpression:
+    def like(self, value: str, escape: str | None = None) -> MockExpression:
         return MockExpression(f"{self.name} LIKE {value}")
 
-    def ilike(self, value: str) -> MockExpression:
+    def ilike(self, value: str, escape: str | None = None) -> MockExpression:
         return MockExpression(f"{self.name} ILIKE {value}")
 
     def desc(self) -> MockExpression:
@@ -263,6 +263,25 @@ def test_resolve_ilike(resolver: SQLAlchemyFilterResolver) -> None:
         FilterOperation(field="name", operator="ilike", values="al")
     )
     assert "ILIKE" in str(result)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_pattern"),
+    [
+        ("50%", "%50\\%%"),
+        ("_foo", "%\\_foo%"),
+        ("a\\b", "%a\\\\b%"),
+        ("normal", "%normal%"),
+    ],
+)
+def test_resolve_like_and_ilike_escapes_special_chars(
+    resolver: SQLAlchemyFilterResolver, query: str, expected_pattern: str
+) -> None:
+    for operator in ("like", "ilike"):
+        result = resolver.resolve(
+            FilterOperation(field="name", operator=operator, values=query)
+        )
+        assert expected_pattern in str(result)
 
 
 def test_resolve_sort_asc(resolver: SQLAlchemyFilterResolver) -> None:
