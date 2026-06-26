@@ -45,10 +45,6 @@ def _escape_like_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _escape_like_value(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
 class _Queryset(Protocol):
     """Sqlalchemy Queryset protocol"""
 
