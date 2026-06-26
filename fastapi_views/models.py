@@ -1,7 +1,7 @@
 import http
 from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -13,7 +13,8 @@ from pydantic.alias_generators import to_camel
 from pydantic_core import Url
 from typing_extensions import Self
 
-from .opentelemetry import get_correlation_id, has_opentelemetry
+from .opentelemetry import OPENTELEMETRY_INSTALLED, get_correlation_id
+from .utils import str_uuid
 
 
 class BaseSchema(BaseModel):
@@ -47,12 +48,8 @@ class IdCreatedUpdatedSchema(IdSchema, CreatedUpdatedSchema):
 D = TypeVar("D", bound=Any)
 
 
-def _str_uuid() -> str:
-    return str(uuid4())
-
-
 class ServerSentEvent(BaseSchema, Generic[D]):
-    id: str = Field(default_factory=_str_uuid)
+    id: str = Field(default_factory=str_uuid)
     event: str
     data: D
     retry: int | None = None
@@ -89,10 +86,10 @@ class ErrorDetails(BaseSchema):
     detail: str = Field(description="Error detail")
     instance: str | None = Field(None, description="Requested instance")
 
-    if has_opentelemetry():
+    if OPENTELEMETRY_INSTALLED:
         correlation_id: str | None = Field(
-            description="Optional correlation id",
             default_factory=get_correlation_id,
+            description="Request correlation identifier",
         )
 
     errors: list[Any] = Field([], description="List of any additional errors")

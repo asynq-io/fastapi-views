@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import ClassVar, cast
 from unittest.mock import patch
 
@@ -512,3 +513,133 @@ def test_apply_fields_filter(
     ):
         result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert result is qs
+
+
+def test_apply_fields_filter_nested_single_level(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class RelatedModel:
+        id = MockColumn("id")
+
+    class ModelWithRel:
+        user = MockColumn("user")
+
+    rel_property = SimpleNamespace(mapper=SimpleNamespace(class_=RelatedModel))
+    inspector = SimpleNamespace(
+        relationships=SimpleNamespace(
+            get=lambda name: rel_property if name == "user" else None
+        )
+    )
+
+    resolver.filter_model = ModelWithRel
+
+    f = ItemFieldsFilter(fields={"user__id"})
+    with (
+        patch("fastapi_views.filters.resolvers.sqlalchemy.load_only") as mock_load_only,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
+        ) as mock_defaultload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            return_value=inspector,
+        ),
+    ):
+        resolver.apply_fields_filter(qs, f)
+
+    mock_defaultload.assert_called_once_with(ModelWithRel.user)
+    mock_defaultload.return_value.load_only.assert_called_once_with(RelatedModel.id)
+    mock_load_only.assert_not_called()
+
+
+def test_apply_fields_filter_nested_multi_level(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class PostModel:
+        id = MockColumn("post_id")
+
+    class UserModel:
+        post = MockColumn("post")
+
+    class ModelWithRel:
+        user = MockColumn("user")
+
+    post_rel = SimpleNamespace(mapper=SimpleNamespace(class_=PostModel))
+    user_rel = SimpleNamespace(mapper=SimpleNamespace(class_=UserModel))
+
+    def mock_inspect(model: type) -> SimpleNamespace | None:
+        if model is ModelWithRel:
+            return SimpleNamespace(
+                relationships=SimpleNamespace(
+                    get=lambda name: user_rel if name == "user" else None
+                )
+            )
+        if model is UserModel:
+            return SimpleNamespace(
+                relationships=SimpleNamespace(
+                    get=lambda name: post_rel if name == "post" else None
+                )
+            )
+        return None
+
+    resolver.filter_model = ModelWithRel
+
+    f = ItemFieldsFilter(fields={"user__post__id"})
+    with (
+        patch("fastapi_views.filters.resolvers.sqlalchemy.load_only") as mock_load_only,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
+        ) as mock_defaultload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            side_effect=mock_inspect,
+        ),
+    ):
+        resolver.apply_fields_filter(qs, f)
+
+    mock_defaultload.assert_called_once_with(ModelWithRel.user)
+    mock_defaultload.return_value.defaultload.assert_called_once_with(UserModel.post)
+    mock_defaultload.return_value.defaultload.return_value.load_only.assert_called_once_with(
+        PostModel.id
+    )
+    mock_load_only.assert_not_called()
+
+
+def test_apply_fields_filter_nested_mixed(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class RelatedModel:
+        id = MockColumn("id")
+
+    rel_property = SimpleNamespace(mapper=SimpleNamespace(class_=RelatedModel))
+    inspector = SimpleNamespace(
+        relationships=SimpleNamespace(
+            get=lambda name: rel_property if name == "user" else None
+        )
+    )
+
+    resolver.filter_model = MockFilterModel
+
+    f = ItemFieldsFilter(fields={"name", "user__id"})
+
+    user_col = MockColumn("user")
+    MockFilterModel.user = user_col  # type: ignore[attr-defined]
+    try:
+        with (
+            patch(
+                "fastapi_views.filters.resolvers.sqlalchemy.load_only"
+            ) as mock_load_only,
+            patch(
+                "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
+            ) as mock_defaultload,
+            patch(
+                "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+                return_value=inspector,
+            ),
+        ):
+            resolver.apply_fields_filter(qs, f)
+    finally:
+        del MockFilterModel.user  # type: ignore[attr-defined]
+
+    mock_load_only.assert_called_once_with(MockFilterModel.name)
+    mock_defaultload.assert_called_once_with(user_col)
+    mock_defaultload.return_value.load_only.assert_called_once_with(RelatedModel.id)

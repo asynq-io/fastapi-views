@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import operator
+from contextlib import suppress
 from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
@@ -26,10 +27,17 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 try:
-    from sqlalchemy.orm import load_only
+    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.orm import defaultload, load_only
 except ImportError:
 
     def load_only(*_: Any, raiseload: bool = False) -> Any:
+        raise NotImplementedError
+
+    def defaultload(*_: Any) -> Any:
+        raise NotImplementedError
+
+    def sa_inspect(subject: Any, *, raiseerr: bool = True) -> Any:  # type: ignore[no-redef]
         raise NotImplementedError
 
 
@@ -141,14 +149,57 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         filters = self.get_filters(filter, **context)
         return queryset.filter(*filters)
 
+    def _get_related_model_cls(self, model: Any, rel_name: str) -> Any:
+        with suppress(Exception):
+            mapper = sa_inspect(model)
+            rel = mapper.relationships.get(rel_name)
+            if rel is not None:
+                return rel.mapper.class_
+        return None
+
     def apply_fields_filter(
         self, queryset: _Queryset, filter: FieldsFilter, **context: Any
     ) -> _Queryset:
         fields = filter.get_fields()
-        if fields:
-            columns = [self.resolve_model_field(f, **context) for f in fields]
-            queryset = queryset.options(load_only(*columns))
-        return queryset
+        if not fields:
+            return queryset
+
+        model = context.get("table", self.filter_model)
+        top_level: list[str] = []
+        nested: dict[tuple[str, ...], list[str]] = {}
+
+        for field in fields:
+            if "__" in field:
+                parts = field.split("__")
+                path = tuple(parts[:-1])
+                nested.setdefault(path, []).append(parts[-1])
+            else:
+                top_level.append(field)
+
+        options_list = []
+
+        if top_level:
+            options_list.append(load_only(*[getattr(model, f) for f in top_level]))
+
+        for path, rel_fields in nested.items():
+            current_model = model
+            loader = None
+            for rel_name in path:
+                rel_attr = getattr(current_model, rel_name)
+                loader = (
+                    defaultload(rel_attr)
+                    if loader is None
+                    else loader.defaultload(rel_attr)
+                )
+                current_model = self._get_related_model_cls(current_model, rel_name)
+                if current_model is None:
+                    loader = None
+                    break
+            if loader is not None:
+                rel_columns = [getattr(current_model, f) for f in rel_fields]
+                options_list.append(loader.load_only(*rel_columns))
+
+        return queryset.options(*options_list)
 
     def apply_ordering_filter(
         self, queryset: _Queryset, filter: OrderingFilter, **context: Any

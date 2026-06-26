@@ -8,10 +8,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 
 from fastapi_views import opentelemetry
-from fastapi_views.opentelemetry import (
-    has_opentelemetry,
-    maybe_instrument_app,
-)
+from fastapi_views.opentelemetry import _CORRELATION_ID, maybe_instrument_app
 
 
 def test_has_opentelemetry_import_error():
@@ -23,7 +20,9 @@ def test_has_opentelemetry_import_error():
 
 def test_has_opentelemetry_returns_false():
     with patch.dict(sys.modules, {"opentelemetry.instrumentation.fastapi": None}):
-        result = has_opentelemetry()
+        importlib.reload(opentelemetry)
+        result = opentelemetry.OPENTELEMETRY_INSTALLED
+    importlib.reload(opentelemetry)
     assert result is False
 
 
@@ -55,8 +54,8 @@ def test_server_request_hook_sets_correlation_id():
     tracer = trace.get_tracer("test")
     with tracer.start_as_current_span("test-span") as span:
         hook(span, {})
-        assert opentelemetry.CORRELATION_ID.get() is not None
-        assert len(opentelemetry.CORRELATION_ID.get()) == 32
+        assert opentelemetry._CORRELATION_ID.get() is not None
+        assert len(opentelemetry._CORRELATION_ID.get()) == 32
 
 
 def test_server_request_hook_skips_non_recording_span():
@@ -73,8 +72,8 @@ def test_server_request_hook_skips_non_recording_span():
         maybe_instrument_app(MagicMock())
 
     hook = captured_hook["hook"]
-    opentelemetry.CORRELATION_ID.set(None)
+    _CORRELATION_ID.set(None)
     non_recording_span = MagicMock()
     non_recording_span.is_recording.return_value = False
     hook(non_recording_span, {})
-    assert opentelemetry.CORRELATION_ID.get() is None
+    assert _CORRELATION_ID.get() is None

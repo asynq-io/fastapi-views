@@ -4,7 +4,7 @@
 ![Build](https://github.com/asynq-io/fastapi-views/workflows/Publish/badge.svg)
 ![License](https://img.shields.io/github/license/asynq-io/fastapi-views)
 ![Mypy](https://img.shields.io/badge/mypy-checked-blue)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v1.json)](https://github.com/charliermarsh/ruff)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)](https://github.com/charliermarsh/ruff)
 [![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://docs.pydantic.dev/latest/contributing/#badges)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 ![Python](https://img.shields.io/pypi/pyversions/fastapi-views)
@@ -25,10 +25,13 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **Fast Pydantic v2 serialization** — `TypeAdapter` cached per schema type avoids the double validation/model instantiation that FastAPI does by default, reducing per-request overhead
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
 - **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
+- **Authentication & authorization** — JWT bearer auth (`JWTAuth`), OAuth2 scope enforcement with hierarchical scopes (`OAuth2JWTAuth`), Auth0 integration, and constant-time API-key auth (`require_api_key`); protected routers and JWKS publishing included (optional extras)
+- **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`) with configurable locale fallbacks, pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translated[str]` model fields; built-in error messages are translatable out of the box (optional extra)
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
-- **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, and OpenTelemetry instrumentation
+- **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, OpenTelemetry instrumentation, locale detection, request logging, and a request-size limit
 - **Prometheus metrics** — `/metrics` endpoint with request count, latency histogram, and in-flight requests (optional extra)
 - **OpenTelemetry tracing** — `correlation_id` injected into every error response for easy trace correlation (optional extra)
+- **Structured request logging** — opt-in `console` or `json` request logging via `configure_app(log_config=...)` (optional extra)
 - **Readable OpenAPI operation IDs** — `list_item`, `create_item`, `retrieve_item` instead of FastAPI's long path-derived defaults
 - **CLI** — export a static `openapi.json` / `openapi.yaml` without starting a server
 
@@ -45,10 +48,16 @@ pip install fastapi-views
 | Extra | What it adds |
 |---|---|
 | `uvloop` | `uvloop` event loop for better async performance |
-| `prometheus` | Prometheus metrics middleware (`/metrics` endpoint) |
 | `uvicorn` | `uvicorn` ASGI server |
+| `prometheus` | Prometheus metrics middleware (`/metrics` endpoint) |
 | `opentelemetry` | OpenTelemetry tracing instrumentation |
 | `cli` | CLI tool for generating static OpenAPI JSON/YAML files |
+| `logging` | Structured (`console`/`json`) request logging via `structlog` |
+| `websockets` | `websockets` library for `WebSocketAPIView` |
+| `jose` | JWT authentication (`joserfc`) — `JWTAuth`, `OAuth2JWTAuth` |
+| `auth0` | Auth0 token validation (`auth0-api-python`) |
+| `i18n` | Internationalization — `babel` and `jinja2` formatters |
+| `standard` | Curated bundle: `uvloop`, `uvicorn`, `prometheus`, `opentelemetry`, `cli` |
 
 Install all extras at once:
 
@@ -193,6 +202,38 @@ Serialization uses Pydantic v2's `TypeAdapter`, which is cached per schema type.
 
 See [Server-Sent Events](usage/sse.md).
 
+### WebSockets
+
+`WebSocketAPIView` manages the full connection lifecycle — accept, per-class connection
+tracking, broadcast helpers, and graceful disconnect handling — and validates incoming
+frames through the same Pydantic pipeline as the rest of the library.
+
+See [WebSockets](usage/websockets.md).
+
+### Authentication & authorization
+
+A lightweight JWT layer built on FastAPI's `Security` system. `JWTAuth` turns a token
+validator into reusable `authenticated()` dependencies; `OAuth2JWTAuth` adds hierarchical
+scope enforcement via `requires(*scopes)`. Token validators ship for standard JWTs
+(`JoserfcTokenValidator`, requires the `jose` extra) and Auth0 (`Auth0TokenValidator`,
+`auth0` extra), or you can write your own. Also included: header-based API-key auth
+(`require_api_key`), JWKS publishing (`JWTAuth.get_jwks`), and `protected_router` to guard
+every route under a prefix.
+
+See [Authentication](usage/auth.md).
+
+### Internationalization (i18n)
+
+`LocaleMiddleware` detects the request locale (query param, cookie, then `Accept-Language`)
+and exposes it through a `ContextVar`, so `translate` (conventionally aliased `_`) works
+anywhere without threading a request around. Translation managers resolve message keys per
+locale — `JsonFilesTranslations`, `InMemoryTranslations`, `NoTranslations`, or a custom
+subclass — and formatters (`StrFormatter`, or Jinja2 via the `i18n` extra) interpolate
+runtime values. Mark response-model fields with `Translated[str]` to translate them on
+serialization. Built-in error messages are already translatable.
+
+See [Internationalization](usage/i18n.md).
+
 ### OpenTelemetry integration
 
 When `opentelemetry-sdk` is installed, `configure_app` automatically injects the active trace's `correlation_id` into every error response. This makes it trivial to correlate an error seen by a user with a span in your tracing backend.
@@ -203,13 +244,23 @@ See [OpenTelemetry](usage/opentelemetry.md).
 
 When the `prometheus` extra is installed, `configure_app` mounts a `/metrics` endpoint that exposes standard HTTP request metrics (request count, latency histogram, in-flight requests) compatible with `prometheus_client`.
 
+### Structured request logging
+
+Pass `log_config={"log_format": "console" | "json"}` to `configure_app` (requires the
+`logging` extra) to install a request-logging middleware backed by `structlog`. Use
+`console` for human-readable local development and `json` for structured production logs.
+
 ### `configure_app` — one-call setup
 
 `configure_app(app)` wires up:
 
 - RFC 9457 error handlers for `APIError`, FastAPI's `RequestValidationError`, and unhandled exceptions
+- a GZip middleware (configurable minimum size) and a request-size limit middleware
 - Prometheus middleware (if `starlette-exporter` is installed)
 - OpenTelemetry instrumentation (if `opentelemetry-sdk` is installed)
+- `LocaleMiddleware` and the global translation source, when a `translation_manager` is passed
+- structured request logging, when a `log_config` is passed
+- simplified OpenAPI operation IDs
 
 This single call replaces dozens of lines of middleware and exception handler boilerplate.
 

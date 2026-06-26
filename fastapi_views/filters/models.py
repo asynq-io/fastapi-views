@@ -187,8 +187,6 @@ class FieldsFilter(BaseFilter):
         super().__init_subclass__(**kwargs)
 
     def get_fields(self) -> set[str] | None:
-        # consider implementing advanced include/exclude (subfields)
-        # using '__ ' syntax later on, for now only top-level fields are supported
         return self.fields
 
 
