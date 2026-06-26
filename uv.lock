@@ -673,7 +673,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-views"
-version = "1.7.0"
+version = "1.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -821,7 +821,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "prometheus", "uvicorn", "opentelemetry", "cli", "logging", "websockets", "jose", "auth0", "standard", "i18n", "all"]
+provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "logging", "websockets", "jose", "auth0", "i18n", "all"]
 
 [package.metadata.requires-dev]
 dev = [
