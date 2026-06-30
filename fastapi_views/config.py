@@ -90,7 +90,8 @@ def configure_app(  # noqa: PLR0913
     if limits:
         app.add_middleware(RequestLimitMiddleware, limits)
     if log_config:
-        from .logging import RequestLoggingMiddleware, configure_logging
+        from .logging.config import configure_logging
+        from .logging.middleware import RequestLoggingMiddleware
 
         log_config.setdefault("log_level", logging.INFO)
         configure_logging(**log_config)
