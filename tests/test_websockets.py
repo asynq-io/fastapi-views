@@ -14,6 +14,22 @@ from fastapi_views.types import AnyTypeAdapter
 from fastapi_views.views.websockets import WebSocketAPIView
 
 
+def collect_paths(app: FastAPI) -> set[str]:
+    """Collect every route path, descending into included routers."""
+    paths: set[str] = set()
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if path is not None:
+            paths.add(path)
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None:
+            for nested in original_router.routes:
+                nested_path = getattr(nested, "path", None)
+                if nested_path is not None:
+                    paths.add(nested_path)
+    return paths
+
+
 class EchoView(WebSocketAPIView):
     name = "echo"
 
@@ -196,7 +212,7 @@ def test_register_websocket_view_registers_route():
     router = ViewRouter()
     router.register_websocket_view(SimpleView, prefix="/simple")
     app.include_router(router)
-    assert any(r.path == "/simple" for r in app.routes)
+    assert "/simple" in collect_paths(app)
 
 
 def test_register_websocket_view_with_dependencies():
@@ -215,7 +231,7 @@ def test_register_websocket_view_with_dependencies():
         DepView, prefix="/dep", dependencies=[Depends(my_dep)]
     )
     app.include_router(router)
-    assert any(r.path == "/dep" for r in app.routes)
+    assert "/dep" in collect_paths(app)
 
 
 def test_serialize_message_skips_validation_when_disabled():
@@ -281,4 +297,4 @@ def test_register_websocket_view_without_dependencies():
     router = ViewRouter()
     router.register_websocket_view(NoDepsView, prefix="/nodeps")
     app.include_router(router)
-    assert any(r.path == "/nodeps" for r in app.routes)
+    assert "/nodeps" in collect_paths(app)
