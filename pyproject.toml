@@ -110,7 +110,6 @@ lint = [
     "opentelemetry-sdk>=1.28.0,<2.0.0",
     "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
     "opentelemetry-instrumentation-logging>=0.60b1",
-    "opentelemetry-instrumentation-logging>=0.60b1",
 ]
 
 docs = [
