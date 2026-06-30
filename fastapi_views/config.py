@@ -32,7 +32,7 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
         self.openapi_schema = get_openapi(
             title=self.title,
             version=self.version,
-            openapi_version=self.openapi_version,
+            openapi_version="3.2.0",
             description=self.description,
             terms_of_service=self.terms_of_service,
             contact=self.contact,
@@ -84,11 +84,11 @@ def configure_app(  # noqa: PLR0913
     if translation_manager:
         from .i18n import LocaleMiddleware, configure_translations
 
-        configure_translations(translation_manager)
         app.add_middleware(LocaleMiddleware, translation_manager)
-
+        configure_translations(translation_manager)
     if limits:
         app.add_middleware(RequestLimitMiddleware, limits)
+
     if log_config:
         from .logging.config import configure_logging
         from .logging.middleware import RequestLoggingMiddleware

@@ -248,6 +248,8 @@ class AsyncGenericCreateAPIView(
 
     async def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
+        kwargs = self.get_kwargs("create")
+        data.update(kwargs)
         await self.before_create(data)
         obj = await self.repository.create(**data)
         if obj is None:
@@ -271,6 +273,8 @@ class GenericCreateAPIView(
 
     def create(self, create_schema: BaseModel) -> M:
         data = create_schema.model_dump()
+        kwargs = self.get_kwargs("create")
+        data.update(kwargs)
         self.before_create(data)
         obj = self.repository.create(**data)
         if obj is None:
