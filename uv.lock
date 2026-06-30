@@ -697,6 +697,7 @@ all = [
     { name = "jinja2" },
     { name = "joserfc" },
     { name = "opentelemetry-instrumentation-fastapi" },
+    { name = "redis" },
     { name = "starlette-exporter" },
     { name = "structlog" },
     { name = "typer" },
@@ -749,7 +750,6 @@ websockets = [
 [package.dev-dependencies]
 dev = [
     { name = "asgi-lifespan" },
-    { name = "babel" },
     { name = "bandit" },
     { name = "httpx" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -785,6 +785,7 @@ lint = [
     { name = "mypy" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-instrumentation-logging" },
     { name = "opentelemetry-sdk" },
     { name = "ruff" },
     { name = "types-pyyaml" },
@@ -816,7 +817,8 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'standard'" },
     { name = "orjson" },
     { name = "pydantic", specifier = ">2.0,<3" },
-    { name = "redis", marker = "extra == 'cache'", specifier = ">=8.0.0" },
+    { name = "redis", marker = "extra == 'all'" },
+    { name = "redis", marker = "extra == 'cache'" },
     { name = "starlette-exporter", marker = "extra == 'all'" },
     { name = "starlette-exporter", marker = "extra == 'prometheus'" },
     { name = "starlette-exporter", marker = "extra == 'standard'" },
@@ -834,12 +836,11 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "logging", "websockets", "jose", "auth0", "i18n", "all", "cache"]
+provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "logging", "websockets", "jose", "auth0", "i18n", "cache", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "asgi-lifespan" },
-    { name = "babel", specifier = ">=2.18.0" },
     { name = "bandit" },
     { name = "httpx" },
     { name = "ipython" },
@@ -874,6 +875,7 @@ lint = [
     { name = "mypy" },
     { name = "opentelemetry-api", specifier = ">=1.28.0,<2.0.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.28.0,<2.0.0" },
+    { name = "opentelemetry-instrumentation-logging", specifier = ">=0.60b1" },
     { name = "opentelemetry-sdk", specifier = ">=1.28.0,<2.0.0" },
     { name = "ruff" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
@@ -2351,14 +2353,14 @@ wheels = [
 
 [[package]]
 name = "redis"
-version = "8.0.0"
+version = "8.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "async-timeout", marker = "python_full_version < '3.11.3'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/53/ae/ed461cca5780b5fc8b9fe8ca0ed98d89508645fb9d880c24cc42c087678f/redis-8.0.0.tar.gz", hash = "sha256:a00c5355432051ac14e593b8b197fc76c887ee12d55a0984f69328a1115fdc49", size = 5101591, upload-time = "2026-05-28T12:45:13.5Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/c3/928b290c2c0ca99ab96eea5b4ff8f30be8112b075301a7d3ba214a3c8c12/redis-8.0.1.tar.gz", hash = "sha256:afc5a7a2f5a084f5b1880dec548dd45be17db7e43c82a30d84f952aefb05cfb0", size = 5114170, upload-time = "2026-06-23T14:52:37.728Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/e3/b519734372d305bd547534a9f32e4ce9f98552af753dce72cf3483a0ff0b/redis-8.0.0-py3-none-any.whl", hash = "sha256:c938c18338585009f0bc310f4c7e4e4b4d37639356c4ac072cedf3af570c8dc7", size = 499870, upload-time = "2026-05-28T12:45:11.697Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/0a/c2345ebf1ebe70840ce3f6c6ee612f8fa749cfbd1b03069c53bf0c62aaad/redis-8.0.1-py3-none-any.whl", hash = "sha256:47daa35a058c23468d6437f17a8c76882cb316b838ef763036af99b96cedd743", size = 502406, upload-time = "2026-06-23T14:52:36.137Z" },
 ]
 
 [[package]]

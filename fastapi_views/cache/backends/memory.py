@@ -1,7 +1,7 @@
 import time
 from typing import NamedTuple
 
-from .abc import Cache, EncodableT, KeyT
+from .abc import CacheBackend, EncodableT, KeyT
 
 
 class ExpiringItem(NamedTuple):
@@ -9,7 +9,7 @@ class ExpiringItem(NamedTuple):
     expires_at: float | None
 
 
-class InMemoryCache(Cache):
+class InMemoryCache(CacheBackend):
     def __init__(self, default_ttl: int | None = None) -> None:
         self._default_ttl = default_ttl
         self._data: dict[KeyT, ExpiringItem] = {}

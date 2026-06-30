@@ -14,8 +14,8 @@ from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from fastapi_views import ViewRouter
 from fastapi_views.cache.backends.memory import InMemoryCache
-from fastapi_views.cache.middleware import CacheMiddleware, _cache_context
-from fastapi_views.cache.view import CachedAPIView, cached
+from fastapi_views.cache.middleware import CacheMiddleware
+from fastapi_views.cache.view import CacheControl, CachedAPIView, use_cache
 from fastapi_views.handlers import add_error_handlers
 from fastapi_views.models import BaseSchema
 from fastapi_views.views.api import AsyncListAPIView, AsyncRetrieveAPIView
@@ -51,7 +51,7 @@ async def cached_view_client(
     error_handlers: bool = False,
 ) -> AsyncGenerator[AsyncClient, None]:
     app = FastAPI()
-    app.add_middleware(CacheMiddleware, cache=mem_cache)
+    app.add_middleware(CacheMiddleware, backend=mem_cache)
     if error_handlers:
         add_error_handlers(app)
     router = ViewRouter()
@@ -139,38 +139,102 @@ def test_build_key_missing_header_excluded() -> None:
 
 
 @pytest.mark.parametrize(
-    ("hit", "ttl", "cache_control", "extra", "expected"),
+    ("hit", "ttl", "cache_control", "expected"),
     [
-        (True, None, None, {}, {"x-cache": "HIT"}),
-        (False, None, None, {}, {"x-cache": "MISS"}),
-        (False, 60, None, {}, {"x-cache": "MISS", "cache-control": "max-age=60"}),
-        (False, 60, "no-store", {}, {"x-cache": "MISS", "cache-control": "no-store"}),
-        (False, None, None, {"x-ver": "2"}, {"x-cache": "MISS", "x-ver": "2"}),
+        (True, None, None, {"X-Cache": "HIT"}),
+        (False, None, None, {"X-Cache": "MISS"}),
+        (False, 60, None, {"X-Cache": "MISS", "cache-control": "max-age=60"}),
+        (False, 60, "no-store", {"X-Cache": "MISS", "cache-control": "no-store"}),
     ],
 )
 def test_get_cache_headers(
     hit: bool,
     ttl: int | None,
     cache_control: str | None,
-    extra: dict,
     expected: dict,
 ) -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
-    headers = view.get_cache_headers(
-        hit=hit, ttl=ttl, cache_control=cache_control, extra=extra
-    )
+    headers = view.get_cache_headers(hit=hit, ttl=ttl, cache_control=cache_control)
     for k, v in expected.items():
         assert headers[k] == v
 
 
 def test_get_cache_headers_no_cache_control_when_no_ttl() -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
-    headers = view.get_cache_headers(hit=False, ttl=None, cache_control=None, extra={})
+    headers = view.get_cache_headers(hit=False, ttl=None, cache_control=None)
     assert "cache-control" not in headers
 
 
 # ---------------------------------------------------------------------------
-# @cached decorator + CacheMiddleware integration
+# CacheControl
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("cache_control", "expected"),
+    [
+        (CacheControl(), ""),
+        (CacheControl(no_store=True), "no-store"),
+        (CacheControl(max_age=0), "max-age=0"),
+        (CacheControl(private=True, max_age=30), "private, max-age=30"),
+        (CacheControl(public=True, s_maxage=60), "public, s-maxage=60"),
+        (
+            CacheControl(stale_while_revalidate=10, stale_if_error=5),
+            "stale-while-revalidate=10, stale-if-error=5",
+        ),
+    ],
+)
+def test_cache_control_render(cache_control: CacheControl, expected: str) -> None:
+    assert cache_control.render() == expected
+
+
+def test_get_cache_headers_cache_control_object_injects_ttl_as_max_age() -> None:
+    view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
+    headers = view.get_cache_headers(
+        hit=False, ttl=300, cache_control=CacheControl(private=True)
+    )
+    assert headers["cache-control"] == "private, max-age=300"
+
+
+def test_get_cache_headers_cache_control_object_keeps_explicit_max_age() -> None:
+    view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
+    headers = view.get_cache_headers(
+        hit=False, ttl=300, cache_control=CacheControl(max_age=30)
+    )
+    assert headers["cache-control"] == "max-age=30"
+
+
+# ---------------------------------------------------------------------------
+# Vary
+# ---------------------------------------------------------------------------
+
+
+def test_get_vary_headers_combines_key_headers_and_vary_and_dedupes() -> None:
+    class VaryView(_BaseKeyView):
+        cache_key_headers = ("X-Tenant-Id",)
+        vary = ("Accept-Encoding", "x-tenant-id")  # last is a case-insensitive dup
+
+    view = VaryView(request=_mock_request(), response=MagicMock(spec=Response))
+    assert view.get_vary_headers() == ["X-Tenant-Id", "Accept-Encoding"]
+
+
+def test_get_cache_headers_emits_vary_from_cache_key_headers() -> None:
+    class VaryView(_BaseKeyView):
+        cache_key_headers = ("X-Tenant-Id",)
+
+    view = VaryView(request=_mock_request(), response=MagicMock(spec=Response))
+    headers = view.get_cache_headers(hit=True, ttl=None, cache_control=None)
+    assert headers["Vary"] == "X-Tenant-Id"
+
+
+def test_get_cache_headers_no_vary_when_unconfigured() -> None:
+    view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
+    headers = view.get_cache_headers(hit=True, ttl=None, cache_control=None)
+    assert "Vary" not in headers
+
+
+# ---------------------------------------------------------------------------
+# @use_cache decorator + CacheMiddleware integration
 # ---------------------------------------------------------------------------
 
 
@@ -182,7 +246,7 @@ async def test_cached_miss_populates_cache_and_returns_miss_header() -> None:
     class MissView(CachedAPIView, AsyncListAPIView):
         response_schema = Item
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def list(self):
             nonlocal call_count
             call_count += 1
@@ -207,7 +271,7 @@ async def test_cached_hit_returns_cached_body_and_skips_endpoint() -> None:
     class HitView(CachedAPIView, AsyncListAPIView):
         response_schema = Item
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def list(self):
             nonlocal call_count
             call_count += 1
@@ -233,7 +297,7 @@ async def test_cached_none_result_is_not_stored() -> None:
         raise_on_none = False
         detail_route = ""
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def retrieve(self):
             return None
 
@@ -251,7 +315,7 @@ async def test_cached_custom_cache_control() -> None:
     class CustomCCView(CachedAPIView, AsyncListAPIView):
         response_schema = Item
 
-        @cached(ttl=60, cache_control="no-store")
+        @use_cache(ttl=60, cache_control="no-store")
         async def list(self):
             return [Item(name="x")]
 
@@ -259,23 +323,6 @@ async def test_cached_custom_cache_control() -> None:
         response = await client.get("/test")
 
     assert response.headers["cache-control"] == "no-store"
-
-
-@pytest.mark.anyio
-async def test_cached_extra_headers_forwarded() -> None:
-    mem_cache = InMemoryCache()
-
-    class TaggedView(CachedAPIView, AsyncListAPIView):
-        response_schema = Item
-
-        @cached(ttl=None, headers={"x-version": "2"})
-        async def list(self):
-            return [Item(name="x")]
-
-    async with cached_view_client(TaggedView, mem_cache) as client:
-        response = await client.get("/test")
-
-    assert response.headers["x-version"] == "2"
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +343,7 @@ async def test_middleware_passthrough_non_http_scope() -> None:
     async def send_noop(_: Any) -> None:
         pass
 
-    middleware = CacheMiddleware(dummy_app, cache=InMemoryCache())
+    middleware = CacheMiddleware(dummy_app, backend=InMemoryCache())
     await middleware({"type": "lifespan"}, receive_noop, send_noop)
     assert received == [{"type": "lifespan"}]
 
@@ -314,7 +361,7 @@ async def test_error_response_not_cached() -> None:
         response_schema = Item
         detail_route = ""
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def retrieve(self):
             return None
 
@@ -328,28 +375,28 @@ async def test_error_response_not_cached() -> None:
 
 
 # ---------------------------------------------------------------------------
-# ContextVar is reset between requests
+# Cache context does not bleed between requests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_cache_context_reset_between_requests() -> None:
-    """Stale _cache_context from a MISS must not bleed into the next request."""
+async def test_cache_context_does_not_bleed_between_requests() -> None:
+    """A MISS's cache context is per-request, so the next request is a clean HIT."""
     mem_cache = InMemoryCache()
 
     class ResetView(CachedAPIView, AsyncListAPIView):
         response_schema = Item
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def list(self):
             return [Item(name="x")]
 
     async with cached_view_client(ResetView, mem_cache) as client:
-        await client.get("/test")  # populates cache
-        response = await client.get("/test")  # must be HIT, not MISS from stale ctx
+        first = await client.get("/test")  # MISS, populates cache
+        second = await client.get("/test")  # HIT, not a stale MISS
 
-    assert _cache_context.get() is None  # reset after second request
-    assert response.headers["x-cache"] == "HIT"
+    assert first.headers["x-cache"] == "MISS"
+    assert second.headers["x-cache"] == "HIT"
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +413,7 @@ async def test_cache_key_headers_isolate_tenants() -> None:
         response_schema = Item
         cache_key_headers = ("X-Tenant-Id",)
 
-        @cached(ttl=60)
+        @use_cache(ttl=60)
         async def list(self):
             tenant = self.request.headers.get("x-tenant-id", "unknown")
             call_log.append(tenant)
@@ -382,3 +429,5 @@ async def test_cache_key_headers_isolate_tenants() -> None:
     assert r3.json() == [{"name": "alpha"}]
     assert r3.headers["x-cache"] == "HIT"
     assert call_log == ["alpha", "beta"]  # alpha served from cache on third request
+    # The key header is advertised to downstream caches so they key on it too.
+    assert r1.headers["vary"] == "X-Tenant-Id"

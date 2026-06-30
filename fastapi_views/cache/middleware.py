@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from starlette.datastructures import MutableHeaders, State
+from starlette.datastructures import MutableHeaders
+
+from .cache import cache
 
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Receive, Scope, Send
 
-    from .backends import Cache
+    from fastapi_views.cache.backends.abc import CacheBackend
 
-__all__ = ["CacheMiddleware"]
 
 _STATUS_CACHEABLE_MAX = 300
 
@@ -20,73 +20,59 @@ _STATUS_CACHEABLE_MAX = 300
 class _CacheContext:
     key: str
     ttl: int | None
-    headers: dict[str, str]
-
-
-_cache_context: ContextVar[_CacheContext | None] = ContextVar(
-    "fastapi_views_cache_context", default=None
-)
+    headers: dict[str, Any]
 
 
 class CacheMiddleware:
     """ASGI middleware that writes cache entries and injects cache headers.
 
-    Sets ``request.state.cache`` so :class:`~fastapi_views.cache.view.CachedAPIView`
-    can access the backend without a class-level attribute. Also reads the
-    :data:`_cache_context` variable set by the
-    :func:`~fastapi_views.cache.view.cached` decorator: injects cache headers
-    into the outgoing response and, after the full body is sent, persists it to
-    the backend::
+    On a cache miss the :func:`~fastapi_views.cache.view.use_cache` decorator
+    stores a :class:`_CacheContext` on the shared ASGI ``scope``. This middleware
+    reads it back to inject the cache headers into the outgoing response and,
+    once the full body has been sent, persist it to the backend::
 
-        app.add_middleware(CacheMiddleware, cache=get_cache("redis", client=redis))
+        app.add_middleware(CacheMiddleware, backend=InMemoryCache())
     """
 
-    def __init__(self, app: ASGIApp, cache: Cache) -> None:
+    def __init__(self, app: ASGIApp, *, backend: CacheBackend | None = None) -> None:
         self.app = app
-        self.cache = cache
+        if backend is not None:
+            cache.init_backend(backend)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        if "state" not in scope:
-            scope["state"] = State()
-        scope["state"].cache = self.cache
-
-        token = _cache_context.set(None)
-        status_code = 0
         body_chunks: list[bytes] = []
+        cacheable = False
 
         async def send_wrapper(message: Any) -> None:
-            nonlocal status_code
+            nonlocal cacheable
 
-            ctx = _cache_context.get()
+            ctx: _CacheContext | None = scope.get("_fastapi_views_cache")
+            if ctx is None:
+                await send(message)
+                return
 
             if message["type"] == "http.response.start":
-                status_code = message["status"]
-                if ctx is not None:
-                    headers = MutableHeaders(scope=message)
-                    for k, v in ctx.headers.items():
-                        headers[k] = v
-
-            elif message["type"] == "http.response.body" and ctx is not None:
-                chunk = message.get("body", b"")
-                if chunk:
-                    body_chunks.append(chunk)
+                cacheable = message["status"] < _STATUS_CACHEABLE_MAX
+                headers = MutableHeaders(scope=message)
+                for name, value in ctx.headers.items():
+                    headers[name] = value
+            elif message["type"] == "http.response.body" and (
+                chunk := message.get("body", b"")
+            ):
+                body_chunks.append(chunk)
 
             await send(message)
 
             if (
                 message["type"] == "http.response.body"
                 and not message.get("more_body", False)
-                and ctx is not None
+                and cacheable
                 and body_chunks
-                and status_code < _STATUS_CACHEABLE_MAX
             ):
-                await self.cache.set(ctx.key, b"".join(body_chunks), ttl=ctx.ttl)
+                await cache.set(ctx.key, b"".join(body_chunks), ttl=ctx.ttl)
 
-        try:
-            await self.app(scope, receive, send_wrapper)
-        finally:
-            _cache_context.reset(token)
+        await self.app(scope, receive, send_wrapper)

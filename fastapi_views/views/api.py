@@ -37,7 +37,9 @@ from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DependencyMixin, DetailViewMixin, ErrorHandlerMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Sequence
+
+    from fastapi_views.models import ResponseHeaders
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -77,7 +79,7 @@ class View(DependencyMixin, ABC):
         headers: dict[str, str] | None = None,
     ) -> Response:
         if isinstance(content, Response):
-            return content
+            return self.finalize_response(content)
 
         self.response.status_code = status_code
 
@@ -92,13 +94,30 @@ class View(DependencyMixin, ABC):
         if isinstance(content, bytes):
             self.response.body = content
 
+        # Headers may already be set on the response (e.g. inside the view).
+        # ``init_headers`` rebuilds ``raw_headers`` from ``headers`` alone, so
+        # preserve the pre-existing ones it does not regenerate.
+        preset = list(self.response.raw_headers)
         self.response.init_headers(headers)
+        generated = {key for key, _ in self.response.raw_headers}
+        self.response.raw_headers[:0] = [
+            item for item in preset if item[0] not in generated
+        ]
         # ``init_headers`` swapped in a fresh ``raw_headers`` list. FastAPI cached
         # a ``MutableHeaders`` over the *previous* list when it built the response
         # (``del response.headers["content-length"]``), so drop that stale cache
         # to keep ``response.headers`` in sync with what is actually sent.
         self.response.__dict__.pop("_headers", None)
-        return self.response
+        return self.finalize_response(self.response)
+
+    def finalize_response(self, response: Response) -> Response:
+        """Hook to post-process the built response before it is returned.
+
+        Returns it unchanged by default; mixins such as
+        :class:`~fastapi_views.views.mixins.ConditionalMixin` override this to
+        attach validators and downgrade to ``304``.
+        """
+        return response
 
     def get_serializer(self, schema: Any | None) -> TypeAdapter[Any]:
         if schema is None:
@@ -206,6 +225,66 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         super().__init__(request, response)
 
     @classmethod
+    def get_response_headers(
+        cls,
+        action: Action | None = None,  # noqa: ARG003
+    ) -> type[ResponseHeaders] | None:
+        """Response headers to document in OpenAPI for the given ``action``.
+
+        Override to declare headers (a :class:`~fastapi_views.models.ResponseHeaders`
+        subclass) attached to the success response. Returns ``None`` by default.
+        """
+        return None
+
+    @classmethod
+    def get_conditional_responses(
+        cls,
+        *,
+        action: Action | None = None,  # noqa: ARG003
+        status_code: int | None = None,  # noqa: ARG003
+        methods: Sequence[str] | None = None,  # noqa: ARG003
+    ) -> dict[int | str, dict[str, Any]]:
+        """Extra status-code responses contributed by mixins (e.g. ``304``).
+
+        Returns an empty mapping by default; mixins such as
+        :class:`~fastapi_views.views.mixins.ConditionalMixin` override this to
+        document validator-driven responses.
+        """
+        return {}
+
+    @classmethod
+    def get_extra_responses(
+        cls,
+        *,
+        action: Action | None = None,
+        status_code: int | None = None,
+        methods: Sequence[str] | None = None,
+    ) -> dict[int | str, dict[str, Any]]:
+        """Build the OpenAPI ``responses`` contributed by the view itself.
+
+        Documents :meth:`get_response_headers` on the success status code and
+        merges in any :meth:`get_conditional_responses`, combining the header
+        maps when both target the same status code.
+        """
+        responses: dict[int | str, dict[str, Any]] = {}
+        response_headers = cls.get_response_headers(action)
+        if response_headers is not None and status_code is not None:
+            responses[status_code] = {
+                "headers": dict(response_headers.get_openapi_schema())
+            }
+        conditional = cls.get_conditional_responses(
+            action=action, status_code=status_code, methods=methods
+        )
+        for status, response in conditional.items():
+            target = responses.setdefault(status, {})
+            for key, value in response.items():
+                if key == "headers" and "headers" in target:
+                    target["headers"] = {**target["headers"], **value}
+                else:
+                    target[key] = value
+        return responses
+
+    @classmethod
     def get_api_action(
         cls,
         endpoint: Callable,
@@ -220,7 +299,17 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             kwargs.setdefault("operation_id", f"{action}_{cls.get_slug_name()}")
 
         kwargs.setdefault("response_model", cls.get_response_schema(action))
-        kwargs.setdefault("responses", errors(*extra_errors, *cls.default_errors))
+
+        extra_responses = cls.get_extra_responses(
+            action=action,
+            status_code=kwargs.get("status_code"),
+            methods=kwargs.get("methods"),
+        )
+        kwargs["responses"] = (
+            kwargs.get("responses", {})
+            | extra_responses
+            | errors(*extra_errors, *cls.default_errors)
+        )
         return super().get_api_action(endpoint, prefix=prefix, path=path, **kwargs)
 
     @classmethod

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .abc import Cache, EncodableT, KeyT
+from .abc import CacheBackend, EncodableT, KeyT
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 
-class RedisCache(Cache):
+class RedisCache(CacheBackend):
     def __init__(self, client: Redis) -> None:
         self.redis = client
 

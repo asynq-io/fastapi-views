@@ -1,22 +1,20 @@
-from typing import Any, Literal
-
-from .backends import Cache
-
-
-def get_cache(backend: Literal["memory", "redis"], **options: Any) -> Cache:
-    if backend == "memory":
-        from .backends.memory import InMemoryCache
-
-        return InMemoryCache(**options)
-    if backend == "redis":
-        from .backends.redis import RedisCache
-
-        return RedisCache(**options)
-    msg = f"Unknown backend {backend}"
-    raise ValueError(msg)
-
+from .cache import Cache, cache
+from .middleware import CacheMiddleware
+from .view import (
+    CacheControl,
+    CachedAPIView,
+    CacheHeaders,
+    ConditionalCachedAPIView,
+    use_cache,
+)
 
 __all__ = [
     "Cache",
-    "get_cache",
+    "CacheControl",
+    "CacheHeaders",
+    "CacheMiddleware",
+    "CachedAPIView",
+    "ConditionalCachedAPIView",
+    "cache",
+    "use_cache",
 ]

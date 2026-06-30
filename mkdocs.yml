@@ -26,6 +26,7 @@ nav:
       - "Viewset": usage/viewset.md
       - "Generics": usage/generics.md
       - "Filters": usage/filters.md
+      - "Caching": usage/cache.md
       - "Opentelemetry": usage/opentelemetry.md
       - "Server Side Events": usage/sse.md
       - "Authentication": usage/auth.md
@@ -39,6 +40,7 @@ nav:
       - "Models": reference/models.md
       - "Filters": reference/filters.md
       - "Pagination": reference/pagination.md
+      - "Caching": reference/cache.md
       - "Decorators": reference/decorators.md
       - "WebSockets": reference/websockets.md
 

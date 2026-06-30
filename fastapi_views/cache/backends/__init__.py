@@ -1,5 +1,3 @@
-from .abc import Cache
-from .memory import InMemoryCache
-from .redis import RedisCache
+from .abc import CacheBackend, EncodableT, KeyT
 
-__all__ = ["Cache", "InMemoryCache", "RedisCache"]
+__all__ = ["CacheBackend", "EncodableT", "KeyT"]
