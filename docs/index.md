@@ -26,7 +26,7 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
 - **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
 - **Authentication & authorization** — JWT bearer auth (`JWTAuth`), OAuth2 scope enforcement with hierarchical scopes (`OAuth2JWTAuth`), Auth0 integration, and constant-time API-key auth (`require_api_key`); protected routers and JWKS publishing included (optional extras)
-- **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`), pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translatable[str]` model fields; built-in error messages are translatable out of the box (optional extra)
+- **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`) with configurable locale fallbacks, pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translated[str]` model fields; built-in error messages are translatable out of the box (optional extra)
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
 - **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, OpenTelemetry instrumentation, locale detection, request logging, and a request-size limit
 - **Prometheus metrics** — `/metrics` endpoint with request count, latency histogram, and in-flight requests (optional extra)
@@ -229,7 +229,7 @@ and exposes it through a `ContextVar`, so `translate` (conventionally aliased `_
 anywhere without threading a request around. Translation managers resolve message keys per
 locale — `JsonFilesTranslations`, `InMemoryTranslations`, `NoTranslations`, or a custom
 subclass — and formatters (`StrFormatter`, or Jinja2 via the `i18n` extra) interpolate
-runtime values. Mark response-model fields with `Translatable[str]` to translate them on
+runtime values. Mark response-model fields with `Translated[str]` to translate them on
 serialization. Built-in error messages are already translatable.
 
 See [Internationalization](usage/i18n.md).

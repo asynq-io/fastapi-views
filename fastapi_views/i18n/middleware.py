@@ -6,24 +6,16 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .translations import set_locale
-
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+    from .translations import TranslationManager
 
 
 class LocaleMiddleware:
-    def __init__(
-        self,
-        app: ASGIApp,
-        default_locale: str = "en",
-        supported_locales: Sequence[str] | None = None,
-    ) -> None:
+    def __init__(self, app: ASGIApp, manager: TranslationManager) -> None:
         self.app = app
-        self.default_locale = default_locale
-        self.supported_locales = supported_locales or (default_locale,)
+        self.manager = manager
 
     def _detect_best_locale(self, request: Request) -> tuple[str, bool]:
         """
@@ -33,22 +25,22 @@ class LocaleMiddleware:
         3. Accept-Language header
         4. Default locale (fallback)
         returns best match and flag for setting cookie
+
+        Each candidate tag is resolved to a supported locale by the translation
+        manager (exact match, configured fallback, then language subtag).
         """
         locale_query = request.query_params.get("lang")
-        if locale_query and locale_query in self.supported_locales:
-            return locale_query, True
-        preffered = request.cookies.get("locale")
-        if preffered and preffered in self.supported_locales:
-            return preffered, False
+        if locale_query and (match := self.manager.match_supported(locale_query)):
+            return match, True
+        preferred = request.cookies.get("locale")
+        if preferred and (match := self.manager.match_supported(preferred)):
+            return match, False
         accept_language = request.headers.get("Accept-Language", "")
         for locale_tag in self._parse_accept_language(accept_language):
-            if locale_tag in self.supported_locales:
-                return locale_tag, False
-            lang = locale_tag.split("-")[0]
-            if lang in self.supported_locales:
-                return lang, False
+            if match := self.manager.match_supported(locale_tag):
+                return match, False
 
-        return self.default_locale, False
+        return self.manager.default, False
 
     @staticmethod
     def _parse_accept_language(header: str) -> list[str]:
@@ -87,7 +79,7 @@ class LocaleMiddleware:
         # Detect the locale from query param, cookie or header.
         request = Request(scope)
         locale, set_cookie = self._detect_best_locale(request)
-        set_locale(locale)
+        self.manager.set_locale(locale)
 
         # Build the Set-Cookie header once, reusing Starlette's serialization.
         # `secure` tracks the request scheme so the cookie hardens over HTTPS

@@ -13,8 +13,8 @@ class RequestLimitMiddleware:
         self._limiter = anyio.CapacityLimiter(limit)
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-        else:
-            async with self._limiter:
-                await self.app(scope, receive, send)
+        if scope["type"] not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+
+        async with self._limiter:
+            return await self.app(scope, receive, send)

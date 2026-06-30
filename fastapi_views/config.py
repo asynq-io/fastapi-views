@@ -84,16 +84,14 @@ def configure_app(  # noqa: PLR0913
     if translation_manager:
         from .i18n import LocaleMiddleware, configure_translations
 
-        app.add_middleware(
-            LocaleMiddleware,
-            translation_manager.default,
-            translation_manager.supported_locales,
-        )
+        app.add_middleware(LocaleMiddleware, translation_manager)
         configure_translations(translation_manager)
     if limits:
         app.add_middleware(RequestLimitMiddleware, limits)
+
     if log_config:
-        from .logging import RequestLoggingMiddleware, configure_logging
+        from .logging.config import configure_logging
+        from .logging.middleware import RequestLoggingMiddleware
 
         log_config.setdefault("log_level", logging.INFO)
         configure_logging(**log_config)
