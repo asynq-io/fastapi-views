@@ -27,6 +27,26 @@ def simplify_operation_ids(app: FastAPI) -> None:
             route.operation_id = route.name.replace(" ", "")
 
 
+def _collect_local_defs(node: Any, schemas: dict[str, Any]) -> None:
+    """Move `$defs` of hand-authored content schemas into components.
+
+    Schemas passed directly as OpenAPI response content (e.g. SSE events)
+    are opaque to FastAPI, so the models they reference are never registered
+    in `components/schemas`. Their definitions travel in `$defs` instead
+    and are relocated here to make the references resolvable.
+    """
+    if isinstance(node, dict):
+        defs = node.pop("$defs", None)
+        if isinstance(defs, dict):
+            for name, definition in defs.items():
+                schemas.setdefault(name, definition)
+        for value in node.values():
+            _collect_local_defs(value, schemas)
+    elif isinstance(node, list):
+        for value in node:
+            _collect_local_defs(value, schemas)
+
+
 def custom_openapi(self: FastAPI) -> dict[str, Any]:
     if not self.openapi_schema:
         self.openapi_schema = get_openapi(
@@ -46,6 +66,10 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
                 responses = param.get("responses")
                 if "422" in responses:
                     del responses["422"]
+        _collect_local_defs(
+            self.openapi_schema.get("paths", {}),
+            self.openapi_schema.setdefault("components", {}).setdefault("schemas", {}),
+        )
         schemas = self.openapi_schema.get("components", {}).get("schemas", {})
         for k in ("ValidationError", "HTTPValidationError"):
             if k in schemas:

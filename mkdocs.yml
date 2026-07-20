@@ -25,6 +25,7 @@ nav:
       - "Basic": usage/basic.md
       - "Viewset": usage/viewset.md
       - "Generics": usage/generics.md
+      - "Bulk actions": usage/bulk.md
       - "Filters": usage/filters.md
       - "Caching": usage/cache.md
       - "Opentelemetry": usage/opentelemetry.md
@@ -36,6 +37,7 @@ nav:
       - "API Views": reference/views.md
       - "ViewSets": reference/viewsets.md
       - "Generic Views": reference/generics.md
+      - "Bulk Views": reference/bulk.md
       - "Exceptions": reference/exceptions.md
       - "Models": reference/models.md
       - "Filters": reference/filters.md

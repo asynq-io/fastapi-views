@@ -1,18 +1,19 @@
 from abc import abstractmethod
 from collections.abc import AsyncIterator, Generator
 from typing import Any, ClassVar, Generic
-from uuid import uuid4
 
 from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_200_OK
 
-from fastapi_views.models import ServerSentEvent
+from fastapi_views.models import AnyServerSideEvent, ServerSentEvent
 
 from .api import APIView, Endpoint, P
-from .functools import errors, serialize_sse
+from .functools import serialize_sse
 
 
 class ServerSentEventsAPIView(APIView, Generic[P]):
+    """API view streaming Server-Sent Events yielded by the `events` action."""
+
     sse_headers: ClassVar[dict[str, str]] = {
         "Cache-Control": "no-store",
         "Connection": "keep-alive",
@@ -22,29 +23,20 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("events", HTTP_200_OK)
-        response_schema_data = cls.get_response_schema() or Any
-        sse_schema = ServerSentEvent[response_schema_data].get_openapi_schema()  # type: ignore[valid-type]
+        event_model = cls.get_response_schema("events") or AnyServerSideEvent
         yield cls.get_api_action(
             prefix=prefix,
             endpoint=cls.get_events_endpoint(status_code),
             methods=["GET"],
             action="events",
             status_code=status_code,
+            response_model=None,
             response_class=StreamingResponse,
             responses={
-                status_code: {"content": {"text/event-stream": {"schema": sse_schema}}},
-            }
-            | errors(*cls.default_errors),
+                status_code: {"content": event_model.get_openapi_content()},
+            },
         )
         yield from super().get_api_actions(prefix)
-
-    @property
-    def event_id(self) -> str:
-        return str(uuid4())
-
-    @property
-    def retry(self) -> int | None:
-        return None
 
     @classmethod
     def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
@@ -56,8 +48,8 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
             return StreamingResponse(
                 self._serialized_events(*args, **kwargs),
                 status_code=status_code,
-                media_type="text/event-stream",
                 headers=self.sse_headers,
+                media_type="text/event-stream",
             )
 
         cls._patch_endpoint_signature(endpoint, cls.events)
@@ -68,13 +60,15 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> AsyncIterator[str]:
-        schema = self.get_response_schema("events")
-        serializer = self.get_serializer(schema)
+        event_schema = self.get_response_schema("events") or AnyServerSideEvent
+        serializer = self.get_serializer(event_schema.model_fields["data"].annotation)
 
-        async for event, data in self.events(*args, **kwargs):
-            data = self.get_json_content(data, serializer).decode("utf-8")
-            yield serialize_sse(self.event_id, event, data, self.retry)
+        async for sse in self.events(*args, **kwargs):
+            data = serializer.dump_json(sse.data).decode("utf-8")
+            yield serialize_sse(sse.id, sse.event, data, sse.retry)
 
     @abstractmethod
-    def events(self, *args: P.args, **kwargs: P.kwargs) -> AsyncIterator[Any]:
+    def events(
+        self, *args: P.args, **kwargs: P.kwargs
+    ) -> AsyncIterator[ServerSentEvent[Any, Any, Any]]:
         raise NotImplementedError

@@ -14,9 +14,32 @@ Use these inside any `View` or `APIView` subclass to register additional endpoin
 | `@patch(path, **kwargs)` | PATCH | 200 |
 | `@delete(path, **kwargs)` | DELETE | 204 |
 | `@route(path, methods, **kwargs)` | Any | — |
+| `@action(path, *, detail=False, response_headers=None, **kwargs)` | Any (default GET) | 200 |
 | `@sse_route(path, **kwargs)` | GET | 200 (SSE) |
 
 `@override` (alias for `@annotate`) sets metadata on an existing CRUD action method — useful for overriding `status_code` or adding `responses` to a standard action.
+
+## `@action`
+
+`@action` is DRF-style sugar over `@route` for adding an extra routable method to a view:
+
+- the path defaults to the hyphenated method name (`mark_read` → `/mark-read`);
+- `detail=True` nests the route under the view's detail route (e.g. `POST /{id}/publish`);
+- `response_headers=` (a `ResponseHeaders` subclass) documents headers on the success response.
+
+The response model comes from an explicit `response_model=` argument, otherwise it falls back to the view's `response_schema`.
+
+```python
+from uuid import UUID
+from fastapi_views.views.functools import action
+
+class ArticleViewSet(AsyncAPIViewSet):
+    @action(methods=["POST"], detail=True, response_headers=LocationHeaders)
+    async def publish(self, id: UUID) -> Article:  # POST /{id}/publish
+        ...
+```
+
+`response_headers` is available on every route decorator (`@get`/`@post`/`@route`/`@action`), and `ViewRouter(response_headers=...)` applies them to every route it registers.
 
 ## Error utilities
 

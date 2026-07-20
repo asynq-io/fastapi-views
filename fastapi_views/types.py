@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from pydantic.main import IncEx
     from starlette.routing import BaseRoute
 
+    from fastapi_views.models import ResponseHeaders
+
 Endpoint = Callable[..., Response | Awaitable[Response]]
 T = TypeVar("T")
 TypeAdapterMap = dict[T, TypeAdapter[T]]
@@ -28,6 +30,9 @@ Action = Literal[
     "destroy",
     "partial_update",
     "events",
+    "bulk_create",
+    "bulk_update",
+    "bulk_delete",
 ]
 WebSocketAction = Literal["receive", "send"]
 
@@ -65,6 +70,9 @@ class BaseRouteOptions(TypedDict, total=False):
     callbacks: list[BaseRoute] | None
     openapi_extra: dict[str, Any] | None
     generate_unique_id_function: Callable[[APIRoute], str]
+    #: Response headers documented on the success response (consumed by the view,
+    #: not passed to FastAPI's ``add_api_route``).
+    response_headers: type[ResponseHeaders]
 
 
 class RouteOptions(BaseRouteOptions, total=False):

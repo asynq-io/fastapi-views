@@ -16,7 +16,7 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
-from .models import ErrorDetails, const_type, create_error_model
+from .models.errors import ErrorDetails, const_type, create_error_model
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

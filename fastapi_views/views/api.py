@@ -167,20 +167,30 @@ class View(DependencyMixin, ABC):
         return endpoint
 
     @classmethod
+    def _is_endpoint(cls, member: Any) -> bool:
+        return callable(member) and hasattr(member, VIEWSET_ROUTE_FLAG)
+
+    @classmethod
     def get_custom_api_actions(
         cls,
         prefix: str = "",
     ) -> Generator[dict[str, Any], None, None]:
-        for _, route_endpoint in inspect.getmembers(
-            cls,
-            lambda member: callable(member) and hasattr(member, VIEWSET_ROUTE_FLAG),
-        ):
+        for _, route_endpoint in inspect.getmembers(cls, cls._is_endpoint):
             endpoint = cls.get_custom_endpoint(route_endpoint)
+            options = getattr(route_endpoint, "kwargs", {})
+            route_prefix = prefix
+            if options.get("detail"):
+                route_prefix += cls.get_action_detail_route()
             yield cls.get_api_action(
                 endpoint,
-                prefix=prefix,
+                prefix=route_prefix,
                 name=f"{endpoint.__name__} {cls.get_name()}",
             )
+
+    @classmethod
+    def get_action_detail_route(cls) -> str:
+        """Detail-route prefix for ``@action(detail=True)`` endpoints."""
+        return getattr(cls, "detail_route", "/{id}")
 
     @classmethod
     def get_api_action(
@@ -205,6 +215,17 @@ class View(DependencyMixin, ABC):
         status_code = kwargs.get("status_code")
         if status_code and not is_body_allowed_for_status_code(status_code):
             kwargs["response_model"] = None
+        # ``detail`` (an ``@action`` marker applied to the path in
+        # ``get_custom_api_actions``) and ``response_headers`` are not FastAPI
+        # route arguments — consume them here so they never reach add_api_route.
+        kwargs.pop("detail", None)
+        response_headers = kwargs.pop("response_headers", None)
+        if response_headers is not None:
+            success = kwargs.get("status_code") or HTTP_200_OK
+            entry = kwargs["responses"].setdefault(success, {})
+            entry.setdefault("headers", {}).update(
+                response_headers.get_openapi_headers()
+            )
         return kwargs
 
 
@@ -269,9 +290,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         responses: dict[int | str, dict[str, Any]] = {}
         response_headers = cls.get_response_headers(action)
         if response_headers is not None and status_code is not None:
-            responses[status_code] = {
-                "headers": dict(response_headers.get_openapi_schema())
-            }
+            responses[status_code] = {"headers": response_headers.get_openapi_headers()}
         conditional = cls.get_conditional_responses(
             action=action, status_code=status_code, methods=methods
         )
@@ -306,9 +325,9 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             methods=kwargs.get("methods"),
         )
         kwargs["responses"] = (
-            kwargs.get("responses", {})
+            errors(*extra_errors, *cls.default_errors)
             | extra_responses
-            | errors(*extra_errors, *cls.default_errors)
+            | kwargs.get("responses", {})
         )
         return super().get_api_action(endpoint, prefix=prefix, path=path, **kwargs)
 

@@ -87,7 +87,7 @@ async def test_api_error_handler_response(handler_client):
     response = await handler_client.get("/api-error")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert data["detail"] == "test error"
     assert data["status"] == HTTP_400_BAD_REQUEST
     assert data["instance"] == "/api-error"
@@ -98,7 +98,7 @@ async def test_api_error_handler_sets_instance(handler_client):
     response = await handler_client.get("/api-error-no-instance")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert data["instance"] == "/api-error-no-instance"
 
 
@@ -107,7 +107,7 @@ async def test_http_exception_handler(handler_client):
     response = await handler_client.get("/http-error")
     assert response.status_code == HTTP_404_NOT_FOUND
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert "not found" in data["detail"]
     assert data["status"] == HTTP_404_NOT_FOUND
 
@@ -123,7 +123,7 @@ async def test_request_validation_handler(handler_client):
     response = await handler_client.post("/validation-error", json={"invalid": "data"})
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert "errors" in data
     assert len(data["errors"]) > 0
 
@@ -138,7 +138,7 @@ async def test_unhandled_exception_handler(handler_app):
         response = await client.get("/unhandled")
     assert response.status_code == HTTP_500_INTERNAL_SERVER_ERROR
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert data["status"] == HTTP_500_INTERNAL_SERVER_ERROR
     assert data["instance"] == "/unhandled"
 

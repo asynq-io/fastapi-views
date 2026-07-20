@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl, urlencode
 from fastapi import Response
 from pydantic import Field
 
-from fastapi_views.models import ResponseHeaders
+from fastapi_views.models.headers import ResponseHeaders
 from fastapi_views.views.api import APIView
 from fastapi_views.views.mixins import ConditionalMixin
 

@@ -185,6 +185,54 @@ class ItemViewSet(AsyncAPIViewSet):
 
 ---
 
+## Custom actions with `@action`
+
+`@action` is a higher-level alternative to the raw HTTP decorators, modelled on Django REST Framework. It adds a few conveniences on top of `@route`:
+
+- **Default path** — the path defaults to the hyphenated method name, so `@action(methods=["GET"])` on `stats` becomes `GET /stats`.
+- **Detail routes** — `detail=True` nests the route under the view's detail route, e.g. `POST /{id}/publish`.
+- **Response headers** — `response_headers=` (a `ResponseHeaders` subclass) documents headers on the success response.
+
+Static routes are always registered before parameterized ones, so a collection action like `/stats` is never shadowed by `retrieve`'s `/{id}`.
+
+```python
+from uuid import UUID
+from fastapi_views.models import ResponseHeaders
+from fastapi_views.views.functools import action
+
+
+class LocationHeaders(ResponseHeaders):
+    location: str
+
+
+class ItemViewSet(AsyncAPIViewSet):
+    api_component_name = "Item"
+    response_schema = ItemSchema
+
+    # ... standard CRUD actions ...
+
+    # GET /items/stats — response_model documents the schema (otherwise it
+    # falls back to the view's response_schema).
+    @action(methods=["GET"], response_model=ItemStats)
+    async def stats(self) -> ItemStats:
+        ...
+
+    # POST /items/{id}/publish — nested under the detail route, with a
+    # documented Location header.
+    @action(methods=["POST"], detail=True, response_headers=LocationHeaders)
+    async def publish(self, id: UUID) -> ItemSchema:
+        self.response.headers["location"] = f"/items/{id}"
+        ...
+```
+
+A full runnable example lives in [`examples/actions.py`](https://github.com/asynq-io/fastapi-views/blob/main/examples/actions.py):
+
+```python
+--8<-- "examples/actions.py"
+```
+
+---
+
 ## Overriding default status codes
 
 Override the default status code for any action using the `@override` decorator:

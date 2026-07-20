@@ -198,7 +198,7 @@ async def test_async_update_raise_on_none():
     async with view_client(RaiseOnNoneUpdateView, error_handlers=True) as c:
         response = await c.put("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
-        assert response.headers["Content-Type"] == "application/json"
+        assert response.headers["Content-Type"] == "application/problem+json"
 
 
 @pytest.mark.anyio
@@ -213,7 +213,7 @@ async def test_async_partial_update_raise_on_none():
     async with view_client(RaiseOnNonePartialView, error_handlers=True) as c:
         response = await c.patch("/test")
         assert response.status_code == HTTP_404_NOT_FOUND
-        assert response.headers["Content-Type"] == "application/json"
+        assert response.headers["Content-Type"] == "application/problem+json"
 
 
 @pytest.mark.anyio

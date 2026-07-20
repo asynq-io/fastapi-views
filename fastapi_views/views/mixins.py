@@ -45,7 +45,6 @@ class DependencyMixin:
 class DetailViewMixin:
     detail_route: str = "/{id}"
     raise_on_none: bool = True
-    request: Request
     get_name: Callable[..., str]
     error_message = "{} does not exist"
 
@@ -63,8 +62,6 @@ class _Sentinel(Exception):
 
 
 class ErrorHandlerMixin:
-    request: Request
-
     raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {}
 
     def get_error_message(self, key: type[Exception]) -> str | dict[str, Any]:
@@ -76,7 +73,6 @@ class ErrorHandlerMixin:
             kwargs["detail"] = kw
         elif isinstance(kw, Mapping):
             kwargs.update(kw)
-        kwargs.setdefault("instance", self.request.url.path)
         kwargs.setdefault("title", type(exc).__name__)
         kwargs.setdefault("detail", str(exc))
         kwargs.setdefault("status", HTTP_400_BAD_REQUEST)

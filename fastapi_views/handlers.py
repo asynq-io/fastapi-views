@@ -18,7 +18,7 @@ def _api_error_to_response(error: APIError) -> Response:
     return Response(
         content=model.model_dump_json(),
         status_code=error.status_code,
-        media_type="application/json",
+        media_type=model.__content_type__,
         headers=error.headers,
     )
 

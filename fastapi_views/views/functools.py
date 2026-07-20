@@ -4,7 +4,7 @@ import functools
 import inspect
 from collections import defaultdict
 from collections.abc import AsyncIterable, Callable, Iterable
-from typing import TYPE_CHECKING, Any, Concatenate, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Concatenate, TypeVar
 
 from fastapi.responses import StreamingResponse
 from pydantic.type_adapter import TypeAdapter
@@ -13,6 +13,7 @@ from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import NotRequired, ParamSpec, TypedDict, Unpack
 
 from fastapi_views.models import AnyServerSideEvent, ServerSentEvent
+from fastapi_views.models.errors import ErrorDetails
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Iterator
@@ -52,17 +53,27 @@ class Responses(TypedDict):
 
 
 def errors(*exceptions: type[APIError]) -> dict[int | str, dict[str, Any]]:
+    """Build OpenAPI responses for the given errors.
+
+    Error models are documented as explicit content under their declared
+    `__content_type__` (`application/problem+json` for `ErrorDetails`).
+    """
     status_to_exc: dict[int, list[type[APIError]]] = defaultdict(list)
     for e in exceptions:
         status = e.get_status()
         status_to_exc[status].append(e)
     responses: dict[int | str, dict[str, Any]] = {}
     for status, excs in status_to_exc.items():
+        response: dict[str, Any] = {}
         if len(excs) == 1:
-            exc = excs[0]
-            responses[status] = {"model": exc.model, "description": exc.__doc__}
-        else:
-            responses[status] = {"model": Union[tuple(e.model for e in excs)]}  # noqa: UP007
+            response["description"] = excs[0].__doc__
+        schemas = [e.model.get_openapi_schema() for e in excs]
+        response["content"] = {
+            ErrorDetails.__content_type__: {
+                "schema": schemas[0] if len(schemas) == 1 else {"anyOf": schemas},
+            },
+        }
+        responses[status] = response
     return responses
 
 
@@ -81,15 +92,53 @@ def route(
     return wrapper
 
 
+def action(
+    path: str = "",
+    *,
+    detail: bool = False,
+    **kwargs: Unpack[RouteOptions],
+) -> Callable[[EndpointFn], EndpointFn]:
+    """Register an extra routable method on a view (à la DRF's ``@action``).
+
+    Sugar over :func:`route` that additionally:
+
+    * defaults the path to the hyphenated method name (``mark_read`` -> ``/mark-read``),
+    * nests the route under the view's detail route when ``detail=True``
+      (e.g. ``POST /{id}/publish``),
+    * documents ``response_headers`` on the success response.
+
+    The OpenAPI response model comes from an explicit ``response_model`` option;
+    otherwise it falls back to the view's ``response_schema``.
+
+    Example::
+
+        class ArticleViewSet(AsyncAPIViewSet):
+            @action(methods=["POST"], detail=True, response_headers=LocationHeaders)
+            async def publish(self, id: UUID) -> Article: ...
+            # -> POST /{id}/publish
+    """
+
+    def wrapper(func: EndpointFn) -> EndpointFn:
+        options: dict[str, Any] = dict(kwargs)
+        options["path"] = path or f"/{func.__name__.replace('_', '-')}"
+        if detail:
+            options["detail"] = True
+        setattr(func, VIEWSET_ROUTE_FLAG, True)
+        func.__setattr__("kwargs", options)
+        return func
+
+    return wrapper
+
+
 def serialize_sse(id: Any, event: Any, data: Any, retry: int | None = None) -> str:
     line = f"id: {id}\nevent: {event}\ndata: {data}\n"
     if retry is not None:
         line += f"retry: {retry}\n"
-    return f"{line}]\n"
+    return f"{line}\n"
 
 
 async def _wrapped_events(
-    iterable: Iterable[Any] | AsyncIterable[Any],
+    iterable: Iterable[ServerSentEvent] | AsyncIterable[ServerSentEvent],
     data_serializer: TypeAdapter[Any],
     **options: Unpack[SerializerOptions],
 ) -> AsyncIterator[str]:
@@ -97,10 +146,8 @@ async def _wrapped_events(
         async_iterable = iterable
     else:
         async_iterable = iterate_in_threadpool(iterable)
-    async for item in async_iterable:
-        sse = AnyServerSideEvent.model_validate(item)
-        validated_data = data_serializer.validate_python(sse.data)
-        data = data_serializer.dump_json(validated_data, **options)
+    async for sse in async_iterable:
+        data = data_serializer.dump_json(sse.data, **options).decode("utf-8")
         yield serialize_sse(sse.id, sse.event, data, sse.retry)
 
 
@@ -113,11 +160,10 @@ def sse_route(
     status_code = kwargs.get("status_code", HTTP_200_OK)
     kwargs.setdefault("status_code", HTTP_200_OK)
     kwargs.setdefault("methods", ["GET"])
-    response_model = kwargs.pop("response_model", Any)
-    schema = ServerSentEvent[response_model].get_openapi_schema(  # type: ignore[valid-type]
-        title=f"{response_model.__name__.title()}ServerSentEvent",
+    response_model = kwargs.pop("response_model", None) or AnyServerSideEvent
+    data_serializer: TypeAdapter[Any] = TypeAdapter(
+        response_model.model_fields["data"].annotation
     )
-    data_serializer = TypeAdapter(response_model)
     kwargs.update(
         {
             "response_model": None,
@@ -126,7 +172,7 @@ def sse_route(
                 status_code: {
                     "content": {
                         "text/event-stream": {
-                            "schema": schema,
+                            "schema": response_model.get_openapi_schema(),
                         }
                     }
                 },
@@ -143,9 +189,9 @@ def sse_route(
     def wrapper(
         func: Callable[
             Concatenate[V, _P],
-            AsyncIterator[Any],
+            AsyncIterator[ServerSentEvent],
         ]
-        | Callable[Concatenate[V, _P], Iterator[Any]],
+        | Callable[Concatenate[V, _P], Iterator[ServerSentEvent]],
     ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
 
         @functools.wraps(func)
