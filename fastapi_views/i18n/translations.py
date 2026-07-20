@@ -8,20 +8,25 @@ from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
-from .formatter import Formatter, StrFormatter
+from fastapi_views.logging._compat import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
 
+    from .formatter import Formatter
+
     Fallbacks = Mapping[str | tuple[str, ...], str | Sequence[str]]
+
+logger = get_logger("translations.manager")
 
 
 class TranslationManager(ABC):
     def __init__(
         self,
+        *,
         default: str = "en",
         supported_locales: Sequence[str] | None = None,
-        formatter: Formatter = StrFormatter(),
+        formatter: Formatter | None = None,
         fallbacks: Fallbacks | None = None,
     ) -> None:
         self.default = default
@@ -97,7 +102,13 @@ class TranslationManager(ABC):
         return None
 
     def format_text(self, text: str, **kwargs: Any) -> str:
-        return self.formatter.format(text, **kwargs)
+        if self.formatter is None:
+            return text
+        try:
+            return self.formatter.format(text, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Unhandled formatting exception", exc_info=e)
+            return text
 
     def format_key(self, key: str, locale: str | None = None, **kwargs: Any) -> str:
         if locale is None:
@@ -188,12 +199,18 @@ class InMemoryTranslations(_DictTranslationManager):
     def __init__(
         self,
         data: dict[str, Any] | None = None,
+        *,
         default: str = "en",
         supported_locales: Sequence[str] | None = None,
-        formatter: Formatter = StrFormatter(),
+        formatter: Formatter | None = None,
         fallbacks: Fallbacks | None = None,
     ) -> None:
-        super().__init__(default, supported_locales, formatter, fallbacks)
+        super().__init__(
+            default=default,
+            supported_locales=supported_locales,
+            formatter=formatter,
+            fallbacks=fallbacks,
+        )
         self._data: dict[str, Any] = data or {}
 
     def get_locale_data(self, locale: str) -> dict[str, Any]:
@@ -204,12 +221,18 @@ class JsonFilesTranslations(_DictTranslationManager):
     def __init__(
         self,
         dir_name: str = "./translations",
+        *,
         default: str = "en",
         supported_locales: Sequence[str] | None = None,
-        formatter: Formatter = StrFormatter(),
+        formatter: Formatter | None = None,
         fallbacks: Fallbacks | None = None,
     ) -> None:
-        super().__init__(default, supported_locales, formatter, fallbacks)
+        super().__init__(
+            default=default,
+            supported_locales=supported_locales,
+            formatter=formatter,
+            fallbacks=fallbacks,
+        )
         self.dir = Path(dir_name)
         if not self.dir.is_dir():
             raise NotADirectoryError(dir_name)
