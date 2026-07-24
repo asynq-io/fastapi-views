@@ -53,7 +53,7 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
         self.websocket = websocket
         self.validation_context = None
         self.serializer_options = self.default_serializer_options.copy()
-        self._snd, self._rcv = create_memory_object_stream()
+        self._snd, self._rcv = create_memory_object_stream[RecvT]()
 
     @classmethod
     def get_name(cls) -> str:
