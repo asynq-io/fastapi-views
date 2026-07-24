@@ -173,6 +173,7 @@ ignore = [
     "A002",
     "ANN401",
     "COM812",
+    "CPY001",
     "EM101",
     "D",
     "B008",     # do not perform function calls in argument defaults

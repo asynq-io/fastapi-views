@@ -30,7 +30,7 @@ __all__ = [
 
 T = TypeVar("T")
 
-AuthorizationScheme = Callable[..., str | None | Awaitable[str | None]]
+AuthorizationScheme = Callable[..., str | Awaitable[str | None] | None]
 
 
 def http_bearer() -> AuthorizationScheme:

@@ -51,7 +51,7 @@ def request_validation_handler(
 
 
 def exception_handler(request: Request, exc: Exception) -> Response:
-    logger.exception(
+    logger.error(
         "unhandled_exception",
         exc_info=exc,
         url=request.url,
