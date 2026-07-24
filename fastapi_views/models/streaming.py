@@ -79,8 +79,8 @@ class ResponseResult(_BaseEvent, Generic[T]):
         index: int | None = None,
         total_results: int | None = None,
     ) -> Self:
-        return cls.model_validate(
-            {"data": {"items": items, "index": index, "total_results": total_results}}
+        return cls(
+            data=ResultData(items=items, index=index, total_results=total_results)
         )
 
 
