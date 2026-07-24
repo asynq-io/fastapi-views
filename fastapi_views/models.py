@@ -48,12 +48,7 @@ class IdCreatedUpdatedSchema(IdSchema, CreatedUpdatedSchema):
 D = TypeVar("D", bound=Any)
 
 
-class ServerSentEvent(BaseSchema, Generic[D]):
-    id: str = Field(default_factory=str_uuid)
-    event: str
-    data: D
-    retry: int | None = None
-
+class _OpenAPIBase(BaseSchema):
     @classmethod
     def get_openapi_schema(cls, title: str | None = None) -> dict[str, Any]:
         schema_dump = cls.model_json_schema(
@@ -64,6 +59,63 @@ class ServerSentEvent(BaseSchema, Generic[D]):
         if title:
             schema_dump["title"] = title
         return schema_dump
+
+
+_IGNORED_HEADER_SCHEMA_KEYS = frozenset({"description", "title", "default"})
+
+
+def _simplify_header_schema(prop: dict[str, Any]) -> dict[str, Any]:
+    """Build a header ``schema`` from a property, collapsing nullable unions.
+
+    A field typed as ``X | None`` yields ``anyOf: [X, null]``; response headers
+    are never null, so the null branch is dropped and the remaining type merged.
+    """
+    schema = {
+        key: value
+        for key, value in prop.items()
+        if key not in _IGNORED_HEADER_SCHEMA_KEYS
+    }
+    any_of = schema.get("anyOf")
+    if any_of is None:
+        return schema
+    non_null = [option for option in any_of if option.get("type") != "null"]
+    if len(non_null) != 1:
+        return schema
+    del schema["anyOf"]
+    return {**schema, **non_null[0]}
+
+
+class ResponseHeaders(_OpenAPIBase):
+    """Class used to specify OpenAPI for response headers.
+
+    Each field is rendered as an OpenAPI `Header Object
+    <https://spec.openapis.org/oas/v3.1.0#header-object>`_: ``description`` is
+    lifted to the top level, the remaining JSON schema is nested under
+    ``schema``, and required fields are flagged with ``required: true``.
+    """
+
+    @classmethod
+    def get_openapi_schema(cls, title: str | None = None) -> dict[str, Any]:
+        base = super().get_openapi_schema(title=title)
+        required = base.get("required", [])
+        headers: dict[str, Any] = {}
+        for name, prop in base["properties"].items():
+            header: dict[str, Any] = {}
+            description = prop.get("description")
+            if description is not None:
+                header["description"] = description
+            if name in required:
+                header["required"] = True
+            header["schema"] = _simplify_header_schema(prop)
+            headers[name] = header
+        return headers
+
+
+class ServerSentEvent(_OpenAPIBase, Generic[D]):
+    id: str = Field(default_factory=str_uuid)
+    event: str
+    data: D
+    retry: int | None = None
 
 
 class AnyServerSideEvent(ServerSentEvent[Any]):
