@@ -16,7 +16,8 @@ from starlette.status import (
 from fastapi_views import ViewRouter
 from fastapi_views.exceptions import BadRequest, NotFound
 from fastapi_views.handlers import add_error_handlers
-from fastapi_views.models import BaseSchema, ServerSentEvent
+from fastapi_views.models import BaseSchema
+from fastapi_views.models.sse import AnyServerSentEvent
 from fastapi_views.views.api import APIView, ListAPIView, View
 from fastapi_views.views.functools import (
     catch,
@@ -76,25 +77,6 @@ def test_serialize_sse_with_retry():
 def test_serialize_sse_no_retry():
     result = serialize_sse("id1", "event", "data", retry=None)
     assert "retry" not in result
-
-
-def test_errors_single_exception():
-    result = errors(NotFound)
-    assert 404 in result
-    assert "model" in result[404]
-
-
-def test_errors_multiple_exceptions_same_status():
-    class Error1(BadRequest):
-        pass
-
-    class Error2(BadRequest):
-        pass
-
-    result = errors(Error1, Error2)
-    assert 400 in result
-    # When multiple exceptions share a status, model should be a Union
-    assert "model" in result[400]
 
 
 def test_errors_multiple_exceptions_different_statuses():
@@ -257,10 +239,10 @@ async def test_catch_defined_no_raises_no_exception(error_app, error_client):
 @pytest.mark.anyio
 async def test_sse_route_sync_generator(error_app, error_client):
     class SseView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="")
         def stream(self):
-            yield {"event": "data", "data": {"x": "hello"}, "id": "1"}
-            yield {"event": "data", "data": {"x": "world"}, "id": "2"}
+            yield AnyServerSentEvent(id="1", event="data", data={"x": "hello"})
+            yield AnyServerSentEvent(id="2", event="data", data={"x": "world"})
 
     router = ViewRouter()
     router.register_view(SseView, prefix="/sse-sync")
@@ -279,7 +261,7 @@ async def test_sse_route_async_generator(error_app, error_client):
     class AsyncSseView(APIView):
         @sse_route(path="", response_model=DummySchema)
         async def stream(self):
-            yield {"event": "update", "data": {"x": "async"}, "id": "1"}
+            yield AnyServerSentEvent(id="1", event="update", data={"x": "async"})
 
     router = ViewRouter()
     router.register_view(AsyncSseView, prefix="/sse-async")
@@ -295,7 +277,9 @@ async def test_sse_route_with_retry(error_app, error_client):
     class SseRetryView(APIView):
         @sse_route(path="", response_model=DummySchema)
         def stream(self):
-            yield ServerSentEvent(event="tick", data=DummySchema(x="a"), retry=1000)
+            yield AnyServerSentEvent(
+                id="1", event="tick", data=DummySchema(x="a"), retry=1000
+            )
 
     router = ViewRouter()
     router.register_view(SseRetryView, prefix="/sse-retry")

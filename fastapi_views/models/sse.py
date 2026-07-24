@@ -1,30 +1,22 @@
-from typing import Any, Generic
+from typing import Any
+from uuid import UUID, uuid4
 
-from typing_extensions import TypeVar
+from pydantic import Field
 
 from .base import OpenAPIBase
 
-ID = TypeVar("ID", default=str)
-Event = TypeVar("Event", bound=str, default=str)
-Data = TypeVar("Data", default=Any)
 
-
-class ServerSentEvent(OpenAPIBase, Generic[ID, Event, Data]):
-    """Generic Server-Sent Event model.
-
-    Fully customizable via the `ID`, `Event` and `Data` type parameters,
-    e.g. `ServerSentEvent[UUID, Literal["my.event"], MyModel]`.
-    If `event` is not provided but `data` carries a `type` attribute (or key),
-    the event name is derived from it; it can always be set explicitly.
-    """
-
+class BaseServerSentEvent(OpenAPIBase):
     __content_type__ = "text/event-stream"
 
-    id: ID
-    event: Event
-    data: Data
     retry: int | None = None
 
 
-class AnyServerSideEvent(ServerSentEvent[str, str, Any]):
-    pass
+class IdBaseServerSentEvent(BaseServerSentEvent):
+    id: UUID = Field(default_factory=uuid4)
+
+
+class AnyServerSentEvent(BaseServerSentEvent):
+    id: str
+    event: str
+    data: Any

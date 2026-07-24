@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, TypeVar
 
 from fastapi import Response
 from pydantic import TypeAdapter
@@ -81,3 +81,23 @@ class RouteOptions(BaseRouteOptions, total=False):
 
 class PathRouteOptions(RouteOptions, total=False):
     path: str
+
+
+class ServerSentEventType(Protocol):
+    """Structural type for Server-Sent Events.
+
+    Members are read-only properties so any object exposing these
+    attributes matches, including models narrowing `event` to a `Literal`.
+    """
+
+    @property
+    def id(self) -> Any: ...
+
+    @property
+    def event(self) -> str: ...
+
+    @property
+    def data(self) -> Any: ...
+
+    @property
+    def retry(self) -> int | None: ...

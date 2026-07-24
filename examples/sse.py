@@ -1,12 +1,15 @@
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
-from fastapi_views.models.sse_response import ResponseEvent
+from fastapi_views.models.streaming import (
+    ResponseEvent,
+    ResponseFinished,
+    ResponseResult,
+)
 from fastapi_views.views import ServerSentEventsAPIView, sse_route
 
 
@@ -15,8 +18,8 @@ class Item(BaseModel):
     name: str
 
 
-class CustomResponseEvent(ResponseEvent[Item]):
-    pass
+CustomResult = ResponseResult[Item]
+CustomResponseEvent = ResponseEvent[Item]
 
 
 class SSEView(ServerSentEventsAPIView):
@@ -24,32 +27,36 @@ class SSEView(ServerSentEventsAPIView):
 
     response_schema = CustomResponseEvent
 
-    async def events(self) -> AsyncIterator[Any]:
-        yield CustomResponseEvent.page(
+    async def events(self) -> AsyncIterator[CustomResponseEvent]:
+        yield CustomResult.new(
             items=[Item(id=1, name="test"), Item(id=2, name="test")],
-            page=1,
-            total_pages=2,
+            index=1,
+            total_results=2,
         )
         await asyncio.sleep(2)
-        yield CustomResponseEvent.page(
+        yield CustomResult.new(
             items=[Item(id=3, name="test"), Item(id=4, name="test")],
-            page=2,
-            total_pages=2,
+            index=2,
+            total_results=2,
         )
+        await asyncio.sleep(1)
+        yield ResponseFinished.new()
 
     @sse_route("/custom-function", response_model=CustomResponseEvent)
     async def function_sse_route(self) -> AsyncIterator[CustomResponseEvent]:
-        yield CustomResponseEvent.page(
+        yield CustomResult.new(
             items=[Item(id=1, name="test"), Item(id=2, name="test")],
-            page=1,
-            total_pages=2,
+            index=1,
+            total_results=2,
         )
         await asyncio.sleep(2)
-        yield CustomResponseEvent.page(
+        yield CustomResult.new(
             items=[Item(id=3, name="test"), Item(id=4, name="test")],
-            page=2,
-            total_pages=2,
+            index=2,
+            total_results=2,
         )
+        await asyncio.sleep(1)
+        yield ResponseFinished.new()
 
 
 router = ViewRouter()

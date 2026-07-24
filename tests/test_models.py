@@ -7,15 +7,14 @@ from pydantic import ValidationError
 from starlette.status import HTTP_400_BAD_REQUEST
 
 from fastapi_views.models import (
-    AnyServerSideEvent,
     BaseSchema,
     CamelCaseSchema,
     ErrorDetails,
     IdSchema,
-    ServerSentEvent,
     const_type,
     create_error_model,
 )
+from fastapi_views.models.sse import AnyServerSentEvent
 
 
 def test_base_schema_from_attributes():
@@ -59,7 +58,7 @@ def test_id_schema_validation():
 
 
 def test_server_sent_event_defaults():
-    event = ServerSentEvent(event="test", data={"key": "value"})
+    event = AnyServerSentEvent(id="1", event="test", data={"key": "value"})
     assert event.event == "test"
     assert event.data == {"key": "value"}
     assert event.retry is None
@@ -67,31 +66,23 @@ def test_server_sent_event_defaults():
 
 
 def test_server_sent_event_with_retry():
-    event = ServerSentEvent(event="test", data="data", retry=5000)
+    event = AnyServerSentEvent(id="1", event="test", data="data", retry=5000)
     assert event.retry == 5000
 
 
 def test_server_sent_event_get_openapi_schema_no_title():
-    schema = ServerSentEvent.get_openapi_schema()
+    schema = AnyServerSentEvent.get_openapi_schema()
     assert "title" in schema
     assert "$defs" not in schema
 
 
 def test_server_sent_event_get_openapi_schema_with_title():
-    schema = ServerSentEvent.get_openapi_schema(title="CustomSSE")
+    schema = AnyServerSentEvent.get_openapi_schema(title="CustomSSE")
     assert schema["title"] == "CustomSSE"
 
 
-def test_server_sent_event_typed_get_openapi_schema():
-    class DummyData(BaseSchema):
-        value: int
-
-    schema = ServerSentEvent[DummyData].get_openapi_schema(title="DummySSE")
-    assert schema["title"] == "DummySSE"
-
-
 def test_any_server_side_event():
-    event = AnyServerSideEvent(event="test", data={"x": 1})
+    event = AnyServerSentEvent(id="1", event="test", data={"x": 1})
     assert event.event == "test"
 
 

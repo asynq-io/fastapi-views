@@ -7,12 +7,14 @@ from collections.abc import AsyncIterable, Callable, Iterable
 from typing import TYPE_CHECKING, Any, Concatenate, TypeVar
 
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from pydantic.type_adapter import TypeAdapter
 from starlette.concurrency import iterate_in_threadpool
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from typing_extensions import NotRequired, ParamSpec, TypedDict, Unpack
 
-from fastapi_views.models import AnyServerSideEvent, ServerSentEvent
+from fastapi_views.models import AnyServerSentEvent
+from fastapi_views.models.base import OpenAPIBase
 from fastapi_views.models.errors import ErrorDetails
 
 if TYPE_CHECKING:
@@ -24,6 +26,7 @@ if TYPE_CHECKING:
         PathRouteOptions,
         RouteOptions,
         SerializerOptions,
+        ServerSentEventType,
     )
     from fastapi_views.views.api import View
     from fastapi_views.views.mixins import ErrorHandlerMixin
@@ -137,8 +140,36 @@ def serialize_sse(id: Any, event: Any, data: Any, retry: int | None = None) -> s
     return f"{line}\n"
 
 
+def sse_data_annotation(response_model: Any) -> Any:
+    """Return the `data` field annotation of an SSE event model.
+
+    Falls back to `Any` for non-model types such as unions or type aliases,
+    letting pydantic infer the serializer from runtime values.
+    """
+    if isinstance(response_model, type) and issubclass(response_model, BaseModel):
+        field = response_model.model_fields.get("data")
+        if field is not None:
+            return field.annotation
+    return Any
+
+
+def sse_openapi_content(response_model: Any) -> dict[str, Any]:
+    """Render OpenAPI `text/event-stream` content for any SSE response model.
+
+    Model classes document themselves via `get_openapi_content`; other types
+    (unions, type aliases) are rendered through a pydantic `TypeAdapter`.
+    """
+    if isinstance(response_model, type) and issubclass(response_model, OpenAPIBase):
+        return response_model.get_openapi_content()
+    schema = TypeAdapter(response_model).json_schema(
+        ref_template="#/components/schemas/{model}",
+        mode="serialization",
+    )
+    return {AnyServerSentEvent.__content_type__: {"schema": schema}}
+
+
 async def _wrapped_events(
-    iterable: Iterable[ServerSentEvent] | AsyncIterable[ServerSentEvent],
+    iterable: Iterable[ServerSentEventType] | AsyncIterable[ServerSentEventType],
     data_serializer: TypeAdapter[Any],
     **options: Unpack[SerializerOptions],
 ) -> AsyncIterator[str]:
@@ -160,22 +191,14 @@ def sse_route(
     status_code = kwargs.get("status_code", HTTP_200_OK)
     kwargs.setdefault("status_code", HTTP_200_OK)
     kwargs.setdefault("methods", ["GET"])
-    response_model = kwargs.pop("response_model", None) or AnyServerSideEvent
-    data_serializer: TypeAdapter[Any] = TypeAdapter(
-        response_model.model_fields["data"].annotation
-    )
+    response_model = kwargs.pop("response_model", None) or AnyServerSentEvent
+    data_serializer: TypeAdapter[Any] = TypeAdapter(sse_data_annotation(response_model))
     kwargs.update(
         {
             "response_model": None,
             "response_class": StreamingResponse,
             "responses": {
-                status_code: {
-                    "content": {
-                        "text/event-stream": {
-                            "schema": response_model.get_openapi_schema(),
-                        }
-                    }
-                },
+                status_code: {"content": sse_openapi_content(response_model)},
             },
         },
     )
@@ -189,9 +212,9 @@ def sse_route(
     def wrapper(
         func: Callable[
             Concatenate[V, _P],
-            AsyncIterator[ServerSentEvent],
+            AsyncIterator[ServerSentEventType],
         ]
-        | Callable[Concatenate[V, _P], Iterator[ServerSentEvent]],
+        | Callable[Concatenate[V, _P], Iterator[ServerSentEventType]],
     ) -> Callable[Concatenate[V, _P], Awaitable[StreamingResponse]]:
 
         @functools.wraps(func)

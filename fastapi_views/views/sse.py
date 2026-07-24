@@ -5,10 +5,11 @@ from typing import Any, ClassVar, Generic
 from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_200_OK
 
-from fastapi_views.models import AnyServerSideEvent, ServerSentEvent
+from fastapi_views.models import AnyServerSentEvent
+from fastapi_views.types import ServerSentEventType
 
 from .api import APIView, Endpoint, P
-from .functools import serialize_sse
+from .functools import serialize_sse, sse_data_annotation, sse_openapi_content
 
 
 class ServerSentEventsAPIView(APIView, Generic[P]):
@@ -23,7 +24,7 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("events", HTTP_200_OK)
-        event_model = cls.get_response_schema("events") or AnyServerSideEvent
+        event_model = cls.get_response_schema("events") or AnyServerSentEvent
         yield cls.get_api_action(
             prefix=prefix,
             endpoint=cls.get_events_endpoint(status_code),
@@ -33,7 +34,7 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
             response_model=None,
             response_class=StreamingResponse,
             responses={
-                status_code: {"content": event_model.get_openapi_content()},
+                status_code: {"content": sse_openapi_content(event_model)},
             },
         )
         yield from super().get_api_actions(prefix)
@@ -60,8 +61,8 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> AsyncIterator[str]:
-        event_schema = self.get_response_schema("events") or AnyServerSideEvent
-        serializer = self.get_serializer(event_schema.model_fields["data"].annotation)
+        event_schema = self.get_response_schema("events") or AnyServerSentEvent
+        serializer = self.get_serializer(sse_data_annotation(event_schema))
 
         async for sse in self.events(*args, **kwargs):
             data = serializer.dump_json(sse.data).decode("utf-8")
@@ -70,5 +71,5 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
     @abstractmethod
     def events(
         self, *args: P.args, **kwargs: P.kwargs
-    ) -> AsyncIterator[ServerSentEvent[Any, Any, Any]]:
+    ) -> AsyncIterator[ServerSentEventType]:
         raise NotImplementedError

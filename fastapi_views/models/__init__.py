@@ -7,18 +7,19 @@ from .common import (
 )
 from .errors import ErrorDetails, const_type, create_error_model
 from .headers import ResponseHeaders
-from .sse import AnyServerSideEvent, ServerSentEvent
+from .sse import AnyServerSentEvent, BaseServerSentEvent, IdBaseServerSentEvent
 
 __all__ = [
-    "AnyServerSideEvent",
+    "AnyServerSentEvent",
     "BaseSchema",
+    "BaseServerSentEvent",
     "CamelCaseSchema",
     "CreatedUpdatedSchema",
     "ErrorDetails",
+    "IdBaseServerSentEvent",
     "IdCreatedUpdatedSchema",
     "IdSchema",
     "ResponseHeaders",
-    "ServerSentEvent",
     "const_type",
     "create_error_model",
 ]
