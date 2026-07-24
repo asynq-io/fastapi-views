@@ -17,18 +17,12 @@ try:
     def _add_trace_info(
         _: Any, __: Any, event_dict: MutableMapping[str, Any]
     ) -> MutableMapping[str, Any]:
-
-        span = get_current_span()
-        if not span.is_recording():
+        ctx = get_current_span().get_span_context()
+        if not ctx.is_valid:
             return event_dict
+        event_dict["trace_id"] = format_trace_id(ctx.trace_id)
+        event_dict["span_id"] = format_span_id(ctx.span_id)
 
-        ctx = span.get_span_context()
-        event_dict.update(
-            {
-                "span_id": format_span_id(ctx.span_id),
-                "trace_id": format_trace_id(ctx.trace_id),
-            }
-        )
         return event_dict
 except ImportError:
     _add_trace_info = None  # type: ignore[assignment]

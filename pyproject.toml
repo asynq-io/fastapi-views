@@ -55,7 +55,7 @@ uvloop = ["uvloop"]
 uvicorn = ["uvicorn"]
 cli = ["typer"]
 prometheus = ["starlette-exporter"]
-opentelemetry = ["opentelemetry-instrumentation-fastapi"]
+opentelemetry = ["opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-prometheus", "prometheus-client"]
 
 standard = ["uvloop", "uvicorn", "starlette-exporter", "opentelemetry-instrumentation-fastapi", "typer"]
 
@@ -71,7 +71,9 @@ all = [
     "uvicorn",
     "typer",
     "starlette-exporter",
+    "prometheus-client",
     "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-exporter-prometheus",
     "websockets",
     "joserfc",
     "auth0-api-python",
@@ -110,7 +112,6 @@ lint = [
     "opentelemetry-api>=1.28.0,<2.0.0",
     "opentelemetry-sdk>=1.28.0,<2.0.0",
     "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
-    "opentelemetry-instrumentation-logging>=0.60b1",
 ]
 
 docs = [
