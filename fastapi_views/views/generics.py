@@ -110,7 +110,7 @@ class GenericView(APIView):
         schema = getattr(cls, param)
         func.__annotations__[param] = schema
 
-    def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
+    def get_kwargs(self, action: Action | None = None) -> dict[str, Any]:  # noqa: ARG002
         return {}
 
 
@@ -231,7 +231,6 @@ class BaseGenericCreateAPIView(GenericView):
 
         if not hasattr(cls, "create_schema"):
             return
-
         cls._patch_schema(cls.create)
 
     def raise_conflict(self) -> NoReturn:
@@ -411,7 +410,7 @@ class AsyncGenericPartialUpdateAPIView(
     """AsyncGenericPartialUpdateAPIView"""
 
     async def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
-        args, kwargs = self.get_primary_key(pk, action="update")
+        args, kwargs = self.get_primary_key(pk, action="partial_update")
         data = partial_update_schema.model_dump(exclude_unset=True)
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
@@ -435,7 +434,7 @@ class GenericPartialUpdateAPIView(
     """GenericPartialUpdateAPIView"""
 
     def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
-        args, kwargs = self.get_primary_key(pk, action="update")
+        args, kwargs = self.get_primary_key(pk, action="partial_update")
         data = partial_update_schema.model_dump(exclude_unset=True)
         self.before_partial_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)

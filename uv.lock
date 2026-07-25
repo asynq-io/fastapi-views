@@ -690,6 +690,7 @@ all = [
     { name = "babel" },
     { name = "jinja2" },
     { name = "joserfc" },
+    { name = "jsonpatch" },
     { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "prometheus-client" },
@@ -716,6 +717,9 @@ i18n = [
 ]
 jose = [
     { name = "joserfc" },
+]
+jsonpatch = [
+    { name = "jsonpatch" },
 ]
 logging = [
     { name = "structlog" },
@@ -752,7 +756,6 @@ dev = [
     { name = "httpx" },
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.15.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "jsonpatch" },
     { name = "mkdocs" },
     { name = "mkdocs-autorefs" },
     { name = "mkdocs-material" },
@@ -809,6 +812,8 @@ requires-dist = [
     { name = "jinja2", marker = "extra == 'i18n'" },
     { name = "joserfc", marker = "extra == 'all'" },
     { name = "joserfc", marker = "extra == 'jose'" },
+    { name = "jsonpatch", marker = "extra == 'all'" },
+    { name = "jsonpatch", marker = "extra == 'jsonpatch'" },
     { name = "opentelemetry-exporter-prometheus", marker = "extra == 'all'" },
     { name = "opentelemetry-exporter-prometheus", marker = "extra == 'opentelemetry'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'all'" },
@@ -837,7 +842,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "logging", "websockets", "jose", "auth0", "i18n", "cache", "all"]
+provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "logging", "websockets", "jose", "auth0", "i18n", "cache", "jsonpatch", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -845,7 +850,6 @@ dev = [
     { name = "bandit" },
     { name = "httpx" },
     { name = "ipython" },
-    { name = "jsonpatch", specifier = ">=1.33" },
     { name = "mkdocs" },
     { name = "mkdocs-autorefs" },
     { name = "mkdocs-material" },

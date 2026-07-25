@@ -65,6 +65,7 @@ jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
 i18n = ["babel", "jinja2"]
 cache = ["redis"]
+jsonpatch = ["jsonpatch"]
 
 all = [
     "uvloop",
@@ -81,6 +82,7 @@ all = [
     "babel",
     "jinja2",
     "redis",
+    "jsonpatch",
 ]
 
 
@@ -90,7 +92,6 @@ dev = [
     {include-group = "test"},
     {include-group = "docs"},
     "ipython",
-    "jsonpatch>=1.33",
 ]
 
 test = [
