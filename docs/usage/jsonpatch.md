@@ -17,12 +17,11 @@ pip install fastapi-views[jsonpatch]
 3. The patched document is validated against `partial_update_schema` again, so a patch can never produce an invalid resource.
 4. Only the **changed** fields are sent to `repository.update_one`. If nothing changed, the repository is not called at all and the fetched object is returned.
 
-Failure modes:
+Failure modes (in an app set up with `configure_app`, which remaps FastAPI's default `422` validation errors to `400`):
 
 | Case | Response |
 |------|----------|
-| Malformed patch document (unknown op, missing members) | `422 Unprocessable Entity` |
-| Inapplicable patch (bad pointer, failed `test`, invalid result, unknown field) | `400 Bad Request` |
+| Invalid patch (malformed document, bad pointer, failed `test`, invalid result, unknown field) | `400 Bad Request` |
 | Object not found | `404 Not Found` |
 
 ---

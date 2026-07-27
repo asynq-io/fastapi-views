@@ -256,12 +256,21 @@ async def test_patch_invalid_operations_return_bad_request(view, operations):
 
 
 @pytest.mark.anyio
-async def test_patch_malformed_document_returns_unprocessable(view):
+async def test_patch_malformed_document_returns_unprocessable_without_handlers(view):
     async with view_client(view) as client:
         response = await client.patch(
             "/test/1", json=[{"op": "unknown", "path": "/name"}]
         )
     assert response.status_code == HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.anyio
+async def test_patch_malformed_document_returns_bad_request_with_handlers(view):
+    async with view_client(view, error_handlers=True) as client:
+        response = await client.patch(
+            "/test/1", json=[{"op": "unknown", "path": "/name"}]
+        )
+    assert response.status_code == HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.anyio
