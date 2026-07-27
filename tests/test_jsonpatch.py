@@ -17,6 +17,7 @@ from fastapi_views.models.jsonpatch import JsonPatchModel, apply
 from fastapi_views.views.jsonpatch import (
     AsyncGenericJsonPatchAPIView,
     GenericJsonPatchAPIView,
+    JsonPatchViewMixin,
 )
 
 from .utils import view_client
@@ -165,6 +166,14 @@ def sync_view(items):
 
 
 @pytest.mark.anyio
+async def test_patch_openapi_advertises_json_patch_media_type(view):
+    async with view_client(view) as client:
+        response = await client.get("/openapi.json")
+    content = response.json()["paths"]["/test/{id}"]["patch"]["requestBody"]["content"]
+    assert "application/json-patch+json" in content
+
+
+@pytest.mark.anyio
 async def test_patch_replaces_field(view):
     async with view_client(view) as client:
         response = await client.patch(
@@ -185,13 +194,13 @@ async def test_patch_updates_only_changed_fields(view, repository):
 
 
 @pytest.mark.anyio
-async def test_patch_noop_sends_no_updates(view, repository):
+async def test_patch_noop_skips_repository_update(view, repository):
     async with view_client(view) as client:
         response = await client.patch(
             "/test/1", json=[{"op": "test", "path": "/name", "value": "first"}]
         )
     assert response.status_code == HTTP_200_OK
-    assert repository.updates == [{}]
+    assert repository.updates == []
 
 
 @pytest.mark.anyio
@@ -237,6 +246,7 @@ async def test_patch_writes_default_back_on_remove(view, repository):
         [{"op": "test", "path": "/name", "value": "other"}],
         [{"op": "remove", "path": "/name"}],
         [{"op": "replace", "path": "/name", "value": {"bad": "type"}}],
+        [{"op": "add", "path": "/unknown", "value": 42}],
     ],
 )
 async def test_patch_invalid_operations_return_bad_request(view, operations):
@@ -264,6 +274,28 @@ async def test_patch_missing_item_returns_not_found(view):
 
 
 @pytest.mark.anyio
+async def test_patch_item_deleted_before_update_returns_not_found(items):
+    class VanishingItemRepository(ItemRepository):
+        async def update_one(
+            self, values: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any] | None:
+            return None
+
+    class VanishingItemView(AsyncGenericJsonPatchAPIView):
+        api_component_name = "VanishingItem"
+        response_schema = Item
+        partial_update_schema = Item
+        primary_key = ItemId
+        repository = VanishingItemRepository(items)
+
+    async with view_client(VanishingItemView, error_handlers=True) as client:
+        response = await client.patch(
+            "/test/1", json=[{"op": "replace", "path": "/name", "value": "x"}]
+        )
+    assert response.status_code == HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
 async def test_sync_patch_replaces_field(sync_view):
     async with view_client(sync_view) as client:
         response = await client.patch(
@@ -282,14 +314,72 @@ async def test_sync_patch_invalid_operations_return_bad_request(sync_view):
     assert response.status_code == HTTP_400_BAD_REQUEST
 
 
-def test_apply_patch_validation_error_on_source_object_is_not_bad_request(view):
-    instance = view.__new__(view)
+@pytest.mark.anyio
+async def test_sync_patch_noop_skips_repository_update(items):
+    repo = SyncItemRepository(items)
+
+    class NoopSyncItemView(GenericJsonPatchAPIView):
+        api_component_name = "NoopSyncItem"
+        response_schema = Item
+        partial_update_schema = Item
+        primary_key = ItemId
+        repository = repo
+
+    async with view_client(NoopSyncItemView) as client:
+        response = await client.patch(
+            "/test/1", json=[{"op": "test", "path": "/name", "value": "first"}]
+        )
+    assert response.status_code == HTTP_200_OK
+    assert repo.updates == []
+
+
+@pytest.mark.anyio
+async def test_sync_patch_missing_item_returns_not_found(sync_view):
+    async with view_client(sync_view, error_handlers=True) as client:
+        response = await client.patch(
+            "/test/42", json=[{"op": "replace", "path": "/name", "value": "x"}]
+        )
+    assert response.status_code == HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_sync_patch_item_deleted_before_update_returns_not_found(items):
+    class VanishingSyncItemRepository(SyncItemRepository):
+        def update_one(
+            self, values: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any] | None:
+            return None
+
+    class VanishingSyncItemView(GenericJsonPatchAPIView):
+        api_component_name = "VanishingSyncItem"
+        response_schema = Item
+        partial_update_schema = Item
+        primary_key = ItemId
+        repository = VanishingSyncItemRepository(items)
+
+    async with view_client(VanishingSyncItemView, error_handlers=True) as client:
+        response = await client.patch(
+            "/test/1", json=[{"op": "replace", "path": "/name", "value": "x"}]
+        )
+    assert response.status_code == HTTP_404_NOT_FOUND
+
+
+class ItemPatcher(JsonPatchViewMixin):
+    partial_update_schema = Item
+
+
+def test_apply_patch_validation_error_on_source_object_is_not_bad_request():
     with pytest.raises(ValidationError):
-        instance.apply_patch({"id": 1}, JsonPatchModel([]))
+        ItemPatcher().apply_patch({"id": 1}, JsonPatchModel([]))
 
 
-def test_apply_patch_rejects_root_replace_with_non_object(view):
-    instance = view.__new__(view)
+def test_apply_patch_rejects_root_replace_with_non_object():
     operations = JsonPatchModel([{"op": "replace", "path": "", "value": [1, 2]}])
     with pytest.raises(BadRequest):
-        instance.apply_patch({"id": 1, "name": "first"}, operations)
+        ItemPatcher().apply_patch({"id": 1, "name": "first"}, operations)
+
+
+def test_apply_patch_rejects_unknown_fields():
+    operations = JsonPatchModel([{"op": "add", "path": "/unknown", "value": 42}])
+    with pytest.raises(BadRequest):
+        ItemPatcher().apply_patch({"id": 1, "name": "first"}, operations)

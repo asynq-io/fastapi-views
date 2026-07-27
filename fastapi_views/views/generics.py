@@ -110,7 +110,7 @@ class GenericView(APIView):
         schema = getattr(cls, param)
         func.__annotations__[param] = schema
 
-    def get_kwargs(self, action: Action | None = None) -> dict[str, Any]:  # noqa: ARG002
+    def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
         return {}
 
 

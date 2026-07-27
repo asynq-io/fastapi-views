@@ -691,6 +691,7 @@ all = [
     { name = "jinja2" },
     { name = "joserfc" },
     { name = "jsonpatch" },
+    { name = "jsonpointer" },
     { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "prometheus-client" },
@@ -720,6 +721,7 @@ jose = [
 ]
 jsonpatch = [
     { name = "jsonpatch" },
+    { name = "jsonpointer" },
 ]
 logging = [
     { name = "structlog" },
@@ -814,6 +816,8 @@ requires-dist = [
     { name = "joserfc", marker = "extra == 'jose'" },
     { name = "jsonpatch", marker = "extra == 'all'" },
     { name = "jsonpatch", marker = "extra == 'jsonpatch'" },
+    { name = "jsonpointer", marker = "extra == 'all'" },
+    { name = "jsonpointer", marker = "extra == 'jsonpatch'" },
     { name = "opentelemetry-exporter-prometheus", marker = "extra == 'all'" },
     { name = "opentelemetry-exporter-prometheus", marker = "extra == 'opentelemetry'" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'all'" },

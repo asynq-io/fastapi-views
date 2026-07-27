@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import jsonpatch
 import jsonpointer
+from fastapi import Body
 from pydantic import BaseModel, ValidationError
 
 from fastapi_views.exceptions import BadRequest
@@ -33,7 +34,8 @@ class JsonPatchViewMixin:
         The object is projected onto ``partial_update_schema`` and dumped in
         JSON mode, as patch operations compare against raw JSON values. The
         patched document is validated again so the update cannot produce an
-        invalid resource; a patch or validation failure maps to ``400``.
+        invalid resource; a patch or validation failure, or a patch touching
+        fields outside the schema, maps to ``400``.
         """
         schema = self.partial_update_schema
         doc = schema.model_validate(obj, from_attributes=True).model_dump(mode="json")
@@ -51,6 +53,10 @@ class JsonPatchViewMixin:
             for field in doc.keys() | patched_doc.keys()
             if doc.get(field, _MISSING) != patched_doc.get(field, _MISSING)
         }
+        unknown = changed - schema.model_fields.keys()
+        if unknown:
+            msg = f"Unknown fields: {', '.join(sorted(unknown))}"
+            raise BadRequest(msg)
         return patched.model_dump(include=changed)
 
 
@@ -68,7 +74,9 @@ class BaseGenericJsonPatchAPIView(DetailGenericView[PK]):
             return
 
         cls._patch_pk_param(cls.partial_update)
-        cls.partial_update.__annotations__["partial_update_schema"] = JsonPatchModel
+        cls.partial_update.__annotations__["partial_update_schema"] = Annotated[
+            JsonPatchModel, Body(media_type=JsonPatchModel.__content_type__)
+        ]
 
 
 class AsyncGenericJsonPatchAPIView(
@@ -87,6 +95,8 @@ class AsyncGenericJsonPatchAPIView(
         if model is None:
             self.raise_not_found_error()
         data = self.apply_patch(model, partial_update_schema)
+        if not data:
+            return model
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
         if obj is None:
@@ -115,6 +125,8 @@ class GenericJsonPatchAPIView(
         if model is None:
             self.raise_not_found_error()
         data = self.apply_patch(model, partial_update_schema)
+        if not data:
+            return model
         self.before_partial_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)
         if obj is None:

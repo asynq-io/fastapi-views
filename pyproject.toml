@@ -65,7 +65,7 @@ jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
 i18n = ["babel", "jinja2"]
 cache = ["redis"]
-jsonpatch = ["jsonpatch"]
+jsonpatch = ["jsonpatch", "jsonpointer"]
 
 all = [
     "uvloop",
@@ -83,6 +83,7 @@ all = [
     "jinja2",
     "redis",
     "jsonpatch",
+    "jsonpointer",
 ]
 
 
