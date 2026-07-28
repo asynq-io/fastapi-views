@@ -10,6 +10,8 @@ from typing import (
     Concatenate,
     Generic,
     TypeVar,
+    get_args,
+    get_origin,
     get_type_hints,
 )
 
@@ -43,6 +45,17 @@ if TYPE_CHECKING:
 
 P = ParamSpec("P")
 T = TypeVar("T")
+
+
+def _contains_response_type(annotation: Any) -> bool:
+    """Whether ``annotation`` is or contains a ``Response`` subclass.
+
+    Recurses through unions, ``Annotated`` and other generics — pydantic cannot
+    build a response field from any annotation embedding a ``Response``.
+    """
+    if get_origin(annotation) is None and isinstance(annotation, type):
+        return issubclass(annotation, Response)
+    return any(_contains_response_type(arg) for arg in get_args(annotation))
 
 
 class View(DependencyMixin, ABC):
@@ -170,6 +183,13 @@ class View(DependencyMixin, ABC):
     def _is_endpoint(cls, member: Any) -> bool:
         return callable(member) and hasattr(member, VIEWSET_ROUTE_FLAG)
 
+    @staticmethod
+    def _is_response_model(annotation: Any) -> bool:
+        """Whether a return annotation is usable as an OpenAPI response model."""
+        if annotation is None or annotation is type(None):
+            return False
+        return not _contains_response_type(annotation)
+
     @classmethod
     def get_custom_api_actions(
         cls,
@@ -181,10 +201,19 @@ class View(DependencyMixin, ABC):
             route_prefix = prefix
             if options.get("detail"):
                 route_prefix += cls.get_action_detail_route()
+            extra: dict[str, Any] = {}
+            # Document what the endpoint actually serializes: the runtime
+            # serializer falls back to the return annotation, so OpenAPI must
+            # prefer it too (before the view-level response_schema default).
+            if "response_model" not in options:
+                return_annotation = get_type_hints(route_endpoint).get("return")
+                if cls._is_response_model(return_annotation):
+                    extra["response_model"] = return_annotation
             yield cls.get_api_action(
                 endpoint,
                 prefix=route_prefix,
                 name=f"{endpoint.__name__} {cls.get_name()}",
+                **extra,
             )
 
     @classmethod
@@ -222,10 +251,15 @@ class View(DependencyMixin, ABC):
         response_headers = kwargs.pop("response_headers", None)
         if response_headers is not None:
             success = kwargs.get("status_code") or HTTP_200_OK
-            entry = kwargs["responses"].setdefault(success, {})
-            entry.setdefault("headers", {}).update(
-                response_headers.get_openapi_headers()
-            )
+            responses = kwargs["responses"]
+            # Copy before mutating: the per-status dict may be the very object
+            # stored on the decorated method, shared across registrations.
+            entry = {**responses.get(success, {})}
+            entry["headers"] = {
+                **entry.get("headers", {}),
+                **response_headers.get_openapi_headers(),
+            }
+            responses[success] = entry
         return kwargs
 
 

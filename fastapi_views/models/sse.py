@@ -3,6 +3,8 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
+from fastapi_views.utils import str_uuid
+
 from .base import OpenAPIBase
 
 
@@ -17,6 +19,6 @@ class IdBaseServerSentEvent(BaseServerSentEvent):
 
 
 class AnyServerSentEvent(BaseServerSentEvent):
-    id: str
+    id: str = Field(default_factory=str_uuid)
     event: str
     data: Any

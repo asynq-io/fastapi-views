@@ -53,19 +53,28 @@ class ViewRouter(APIRouter):
         self._check_not_abstract(view)
         # Sort is stable, so same-specificity routes keep their declared order.
         routes = sorted(view.get_api_actions(prefix), key=_route_sort_key)
+        response_headers = self.response_headers
         for route_params in routes:
             route_params.update(kwargs)
-            if self.response_headers is not None:
-                self._document_response_headers(route_params)
+            if response_headers is not None:
+                self._document_response_headers(route_params, response_headers)
             self.add_api_route(**route_params)
 
-    def _document_response_headers(self, route_params: dict[str, Any]) -> None:
+    def _document_response_headers(
+        self,
+        route_params: dict[str, Any],
+        response_headers: type[ResponseHeaders],
+    ) -> None:
         status_code = route_params.get("status_code") or HTTP_200_OK
         responses = route_params.setdefault("responses", {})
-        entry = responses.setdefault(status_code, {})
-        entry.setdefault("headers", {}).update(
-            self.response_headers.get_openapi_headers(),  # type: ignore[union-attr]
-        )
+        # Copy before mutating: the per-status dict may be the very object
+        # stored on a decorated method, shared across routers.
+        entry = {**responses.get(status_code, {})}
+        entry["headers"] = {
+            **entry.get("headers", {}),
+            **response_headers.get_openapi_headers(),
+        }
+        responses[status_code] = entry
 
     def register_websocket_view(
         self,

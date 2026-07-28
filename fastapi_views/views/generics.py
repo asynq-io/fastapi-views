@@ -35,7 +35,7 @@ from .api import (
 M_co = TypeVar("M_co", covariant=True)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from fastapi_views.types import Action
 
@@ -103,13 +103,6 @@ class WithAsyncRepositoryMixin(Generic[M]):
 
 
 class GenericView(APIView):
-    @classmethod
-    def _patch_schema(cls, func: Callable, action: Action | None = None) -> None:
-        name = action or func.__name__
-        param = f"{name}_schema"
-        schema = getattr(cls, param)
-        func.__annotations__[param] = schema
-
     def get_kwargs(self, _action: Action | None = None, /) -> dict[str, Any]:
         return {}
 
@@ -118,8 +111,8 @@ class DetailGenericView(GenericView, Generic[PK]):
     primary_key: type[PK]
 
     @classmethod
-    def _patch_pk_param(cls, func: Callable) -> None:
-        func.__annotations__["pk"] = Annotated[BaseModel, Depends(cls.primary_key)]
+    def _pk_annotation(cls) -> Any:
+        return Annotated[BaseModel, Depends(cls.primary_key)]
 
     def get_primary_key(
         self,
@@ -134,9 +127,6 @@ class _NoFilter(BaseFilter):
 
 
 class BaseGenericListAPIView(GenericView):
-    if TYPE_CHECKING:
-        list: Callable
-
     response_schema_as_list: bool = False
     filter: type[BaseModel] | None
 
@@ -152,17 +142,17 @@ class BaseGenericListAPIView(GenericView):
             return container_cls[cls.response_schema]
         return cls.response_schema
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-
-        if not hasattr(cls, "filter"):
-            return
-        filter_ = cls.filter or _NoFilter
-
-        cls.list.__annotations__["filter"] = Annotated[
-            BaseFilter,
-            FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
-        ]
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "list":
+            filter_ = cls.filter or _NoFilter
+            return {
+                "filter": Annotated[
+                    BaseFilter,
+                    FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
+                ]
+            }
+        return {}
 
     def _apply_fields_filter(self, filter: BaseFilter) -> None:
         if isinstance(filter, FieldsFilter):
@@ -221,18 +211,13 @@ class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixi
 
 
 class BaseGenericCreateAPIView(GenericView):
-    if TYPE_CHECKING:
-        create: Callable
-
     create_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-
-        if not hasattr(cls, "create_schema"):
-            return
-
-        cls._patch_schema(cls.create)
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "create":
+            return {"create_schema": cls.create_schema}
+        return {}
 
     def raise_conflict(self) -> NoReturn:
         msg = f"{self.get_name()} already exists"
@@ -290,15 +275,11 @@ class GenericCreateAPIView(
 
 
 class BaseGenericRetrieveAPIView(DetailGenericView[PK]):
-    if TYPE_CHECKING:
-        retrieve: Callable
-
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-
-        if not hasattr(cls, "primary_key"):
-            return
-        cls._patch_pk_param(cls.retrieve)
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "retrieve":
+            return {"pk": cls._pk_annotation()}
+        return {}
 
 
 class AsyncGenericRetrieveAPIView(
@@ -326,18 +307,13 @@ class GenericRetrieveAPIView(
 
 
 class BaseGenericUpdateAPIView(DetailGenericView[PK]):
-    if TYPE_CHECKING:
-        update: Callable
-
     update_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "update_schema"):
-            return
-
-        cls._patch_pk_param(cls.update)
-        cls._patch_schema(cls.update)
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "update":
+            return {"pk": cls._pk_annotation(), "update_schema": cls.update_schema}
+        return {}
 
 
 class AsyncGenericUpdateAPIView(
@@ -389,18 +365,16 @@ class GenericUpdateAPIView(
 
 
 class BaseGenericPartialUpdateAPIView(DetailGenericView[PK]):
-    if TYPE_CHECKING:
-        partial_update: Callable
-
     partial_update_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "partial_update_schema"):
-            return
-
-        cls._patch_pk_param(cls.partial_update)
-        cls._patch_schema(cls.partial_update)
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "partial_update":
+            return {
+                "pk": cls._pk_annotation(),
+                "partial_update_schema": cls.partial_update_schema,
+            }
+        return {}
 
 
 class AsyncGenericPartialUpdateAPIView(
@@ -452,16 +426,11 @@ class GenericPartialUpdateAPIView(
 
 
 class BaseGenericDestroyAPIView(DetailGenericView[PK]):
-    if TYPE_CHECKING:
-        destroy: Callable
-
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-
-        if not hasattr(cls, "primary_key"):
-            return
-
-        cls._patch_pk_param(cls.destroy)
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "destroy":
+            return {"pk": cls._pk_annotation()}
+        return {}
 
 
 class AsyncGenericDestroyAPIView(

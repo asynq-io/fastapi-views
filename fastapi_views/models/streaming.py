@@ -7,7 +7,7 @@ from abc import abstractmethod
 from datetime import datetime, timezone
 from typing import Annotated, Any, Generic, Literal
 
-from pydantic import Field, PositiveInt
+from pydantic import Field, NonNegativeInt
 from typing_extensions import Self, TypeAliasType, TypeVar
 
 from .base import BaseSchema
@@ -17,6 +17,7 @@ T = TypeVar("T", default=dict[str, Any])
 
 
 def timestamp() -> int:
+    """Current UTC time as a unix timestamp in whole seconds."""
     return int(datetime.now(tz=timezone.utc).timestamp())
 
 
@@ -24,18 +25,25 @@ class _BaseEvent(IdBaseServerSentEvent):
     @classmethod
     @abstractmethod
     def new(cls, *args: Any, **kwargs: Any) -> Self:
+        """Build the event from its payload fields."""
         raise NotImplementedError
 
 
 class TimestampData(BaseSchema):
+    """Payload base carrying the UTC timestamp of the event."""
+
     timestamp: int = Field(default_factory=timestamp, description="UTC timestamp")
 
 
 class StartedData(TimestampData):
+    """Payload of :class:`ResponseStarted`."""
+
     type: Literal["response.started"] = "response.started"
 
 
 class ResponseStarted(_BaseEvent):
+    """Event emitted when the response stream starts."""
+
     event: Literal["response.started"] = "response.started"
     data: StartedData
 
@@ -45,11 +53,15 @@ class ResponseStarted(_BaseEvent):
 
 
 class ErrorData(BaseSchema):
+    """Payload of :class:`ResponseError`."""
+
     type: Literal["response.error"] = "response.error"
     error: str
 
 
 class ResponseError(_BaseEvent):
+    """Event emitted when the stream fails with an error."""
+
     event: Literal["response.error"] = "response.error"
     data: ErrorData
 
@@ -59,6 +71,8 @@ class ResponseError(_BaseEvent):
 
 
 class ResultData(BaseSchema, Generic[T]):
+    """Payload of :class:`ResponseResult`: a batch of result items."""
+
     type: Literal["response.result"] = "response.result"
     items: list[T] = Field(description="List of results")
     index: int | None = Field(None, description="Optional result index (page number)")
@@ -68,6 +82,8 @@ class ResultData(BaseSchema, Generic[T]):
 
 
 class ResponseResult(_BaseEvent, Generic[T]):
+    """Event carrying a batch of result items."""
+
     event: Literal["response.result"] = "response.result"
     data: ResultData[T]
 
@@ -85,13 +101,17 @@ class ResponseResult(_BaseEvent, Generic[T]):
 
 
 class FinishedData(TimestampData):
+    """Payload of :class:`ResponseFinished`."""
+
     type: Literal["response.finished"] = "response.finished"
-    duration_s: PositiveInt | None = Field(
+    duration_s: NonNegativeInt | None = Field(
         None, description="Optional duration in seconds"
     )
 
 
 class ResponseFinished(_BaseEvent):
+    """Event emitted when the stream completes successfully."""
+
     event: Literal["response.finished"] = "response.finished"
     data: FinishedData
 
@@ -101,10 +121,14 @@ class ResponseFinished(_BaseEvent):
 
 
 class CancelledData(TimestampData):
+    """Payload of :class:`ResponseCancelled`."""
+
     type: Literal["response.cancelled"] = "response.cancelled"
 
 
 class ResponseCancelled(_BaseEvent):
+    """Event emitted when the stream is cancelled."""
+
     event: Literal["response.cancelled"] = "response.cancelled"
     data: CancelledData
 

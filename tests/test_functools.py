@@ -43,6 +43,10 @@ class DummySchema(BaseSchema):
     x: str
 
 
+class DummyEvent(AnyServerSentEvent):
+    data: DummySchema
+
+
 @pytest.fixture
 def error_app():
     app = FastAPI()
@@ -83,6 +87,32 @@ def test_errors_multiple_exceptions_different_statuses():
     result = errors(NotFound, BadRequest)
     assert 404 in result
     assert 400 in result
+
+
+def test_errors_documents_problem_json_content():
+    result = errors(NotFound)
+    assert set(result) == {404}
+    response = result[404]
+    assert "description" in response
+    content = response["content"]
+    assert set(content) == {"application/problem+json"}
+    schema = content["application/problem+json"]["schema"]
+    assert "properties" in schema
+    assert "anyOf" not in schema
+
+
+def test_errors_same_status_uses_anyof_schema():
+    class WidgetMissing(NotFound):
+        """Widget is missing."""
+
+    class GadgetMissing(NotFound):
+        """Gadget is missing."""
+
+    result = errors(WidgetMissing, GadgetMissing)
+    response = result[404]
+    assert "description" not in response
+    schema = response["content"]["application/problem+json"]["schema"]
+    assert len(schema["anyOf"]) == 2
 
 
 def test_errors_empty():
@@ -259,9 +289,9 @@ async def test_sse_route_sync_generator(error_app, error_client):
 @pytest.mark.anyio
 async def test_sse_route_async_generator(error_app, error_client):
     class AsyncSseView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="", response_model=DummyEvent)
         async def stream(self):
-            yield AnyServerSentEvent(id="1", event="update", data={"x": "async"})
+            yield DummyEvent(id="1", event="update", data=DummySchema(x="async"))
 
     router = ViewRouter()
     router.register_view(AsyncSseView, prefix="/sse-async")
@@ -270,16 +300,18 @@ async def test_sse_route_async_generator(error_app, error_client):
     response = await error_client.get("/sse-async")
     assert response.status_code == HTTP_200_OK
     assert "text/event-stream" in response.headers["content-type"]
+    assert "x" in response.text
+
+    operation = error_app.openapi()["paths"]["/sse-async"]["get"]
+    assert "text/event-stream" in operation["responses"]["200"]["content"]
 
 
 @pytest.mark.anyio
 async def test_sse_route_with_retry(error_app, error_client):
     class SseRetryView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="", response_model=DummyEvent)
         def stream(self):
-            yield AnyServerSentEvent(
-                id="1", event="tick", data=DummySchema(x="a"), retry=1000
-            )
+            yield DummyEvent(id="1", event="tick", data=DummySchema(x="a"), retry=1000)
 
     router = ViewRouter()
     router.register_view(SseRetryView, prefix="/sse-retry")
