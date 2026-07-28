@@ -8,16 +8,16 @@ Every bulk operation is **all-or-nothing**: the view delegates the whole batch t
 
 ## The bulk repository protocol
 
-Bulk views talk to your data layer through `AsyncBulkRepository` (or the sync `BulkRepository`), which extends the regular repository protocol:
+Bulk views talk to your data layer through `AsyncBulkRepository` (or the sync `BulkRepository`), a standalone protocol requiring exactly the three methods the bulk views call:
 
 ```python
-class AsyncBulkRepository(AsyncRepository[M]):
-    async def bulk_create(self, items: Sequence[Mapping[str, Any]]) -> Sequence[M]: ...
-    async def bulk_update(self, items: Sequence[Mapping[str, Any]]) -> Sequence[M]: ...
-    # bulk-delete reuses the inherited `delete(**kwargs)`
+class AsyncBulkRepository(Protocol[M]):
+    async def bulk_create(self, items: Sequence[Mapping[str, Any]], **options: Any) -> Sequence[M]: ...
+    async def bulk_update(self, items: Sequence[Mapping[str, Any]], **options: Any) -> Sequence[M]: ...
+    async def delete(self, *args: Any, **kwargs: Any) -> None: ...  # used by bulk-delete
 ```
 
-`bulk_create` / `bulk_update` receive a list of plain dicts (validated request bodies). Bulk **delete** does not need a dedicated method — it resolves a filter to keyword arguments and calls the repository's existing `delete`.
+`bulk_create` / `bulk_update` receive a list of plain dicts (validated request bodies), plus any `repository_options` declared on the view. Bulk **delete** does not need a dedicated method — it resolves a filter to keyword arguments and calls `delete`.
 
 ---
 
@@ -122,7 +122,7 @@ class ItemViewSet(AsyncBulkAPIViewSet):
 
 ## Individual bulk views
 
-Use a single bulk view when you do not want all three actions. Each requires only the repository methods it uses:
+Use a single bulk view when you do not want all three actions. All share the same `AsyncBulkRepository` / `BulkRepository` protocol:
 
 | Class | Action |
 |-------|--------|

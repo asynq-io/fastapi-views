@@ -24,6 +24,10 @@ if TYPE_CHECKING:
 
 _MISSING = object()
 
+PartialUpdateSchema = Annotated[
+    JsonPatchModel, Body(media_type=JsonPatchModel.__content_type__)
+]
+
 
 class JsonPatchViewMixin:
     partial_update_schema: type[BaseModel]
@@ -68,15 +72,15 @@ class BaseGenericJsonPatchAPIView(DetailGenericView[PK]):
 
     partial_update_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "partial_update_schema"):
-            return
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "partial_update":
+            return {
+                "pk": cls._pk_annotation(),
+                "partial_update_schema": PartialUpdateSchema,
+            }
 
-        cls._patch_pk_param(cls.partial_update)
-        cls.partial_update.__annotations__["partial_update_schema"] = Annotated[
-            JsonPatchModel, Body(media_type=JsonPatchModel.__content_type__)
-        ]
+        return {}
 
 
 class AsyncGenericJsonPatchAPIView(

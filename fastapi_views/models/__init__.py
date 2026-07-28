@@ -5,7 +5,7 @@ from .common import (
     IdCreatedUpdatedSchema,
     IdSchema,
 )
-from .errors import ErrorDetails, const_type, create_error_model
+from .errors import ErrorDetails, ErrorDetailsType, const_type, create_error_model
 from .headers import ResponseHeaders
 from .sse import AnyServerSentEvent, BaseServerSentEvent, IdBaseServerSentEvent
 
@@ -16,6 +16,7 @@ __all__ = [
     "CamelCaseSchema",
     "CreatedUpdatedSchema",
     "ErrorDetails",
+    "ErrorDetailsType",
     "IdBaseServerSentEvent",
     "IdCreatedUpdatedSchema",
     "IdSchema",
