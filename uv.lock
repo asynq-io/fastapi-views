@@ -676,7 +676,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-views"
-version = "2.0.0"
+version = "1.8.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
