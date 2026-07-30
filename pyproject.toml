@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "2.0.0"
+version = "1.8.2"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -86,7 +86,6 @@ all = [
     "jsonpointer",
 ]
 
-
 [dependency-groups]
 dev = [
     {include-group = "lint"},
@@ -130,7 +129,6 @@ module-root = ""
 [build-system]
 requires = ["uv_build>=0.9.16,<0.10.0"]
 build-backend = "uv_build"
-
 
 [tool.pytest.ini_options]
 timeout = 3
