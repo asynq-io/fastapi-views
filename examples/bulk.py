@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -45,7 +48,7 @@ class ItemRepository:
         self._data: dict[UUID, Item] = {}
 
     async def bulk_create(
-        self, items: list[dict[str, Any]], **_options: Any
+        self, items: Sequence[Mapping[str, Any]], **_options: Any
     ) -> list[Item]:
         created = [Item(id=uuid4(), **item) for item in items]
         for item in created:
@@ -53,14 +56,14 @@ class ItemRepository:
         return created
 
     async def bulk_update(
-        self, items: list[dict[str, Any]], **_options: Any
+        self, items: Sequence[Mapping[str, Any]], **_options: Any
     ) -> list[Item]:
         updated = [Item(**item) for item in items]
         for item in updated:
             self._data[item.id] = item
         return updated
 
-    async def delete(self, **kwargs: Any) -> None:
+    async def delete(self, *_args: Any, **kwargs: Any) -> None:
         name = kwargs.get("name")
         for key, item in list(self._data.items()):
             if name is None or item.name == name:
@@ -76,7 +79,7 @@ class ItemViewSet(AsyncBulkAPIViewSet):
     create_schema = CreateItem
     bulk_update_schema = UpdateItem
     filter = ItemFilter  # selects rows for bulk-delete (e.g. ?name=widget)
-    repository = ItemRepository()  # type: ignore[assignment]
+    repository = ItemRepository()
 
 
 router = ViewRouter(prefix="/items")

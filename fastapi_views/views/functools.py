@@ -110,8 +110,9 @@ def action(
       (e.g. ``POST /{id}/publish``),
     * documents ``response_headers`` on the success response.
 
-    The OpenAPI response model comes from an explicit ``response_model`` option;
-    otherwise it falls back to the view's ``response_schema``.
+    The OpenAPI response model comes from an explicit ``response_model`` option,
+    otherwise from the method's return annotation, finally falling back to the
+    view's ``response_schema``.
 
     Example::
 

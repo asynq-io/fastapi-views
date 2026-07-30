@@ -22,14 +22,12 @@ from fastapi_views.filters.models import BaseFilter
 from .api import APIView
 from .functools import errors
 from .generics import (
-    AsyncRepository,
     GenericView,
-    Repository,
     _NoFilter,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
 
     from pydantic import BaseModel
 
@@ -43,24 +41,27 @@ M_co = TypeVar("M_co", covariant=True)
 # --------------------------------------------------------------------------- #
 # Repository protocols                                                         #
 # --------------------------------------------------------------------------- #
-class AsyncBulkRepository(AsyncRepository[M_co], Protocol[M_co]):
+class AsyncBulkRepository(Protocol[M_co]):
     """Repository contract required by the async bulk views.
 
-    Extends :class:`~fastapi_views.views.generics.AsyncRepository` (bulk delete
-    reuses its ``delete``). Implementations are expected to perform each operation
-    atomically (one transaction) so the all-or-nothing guarantee holds.
+    Only the three methods the bulk views call are required: ``bulk_create``,
+    ``bulk_update`` and ``delete`` (used by bulk-delete). Implementations are
+    expected to perform each operation atomically (one transaction) so the
+    all-or-nothing guarantee holds.
     """
 
     async def bulk_create(
-        self, items: Sequence[Mapping[str, Any]]
+        self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> Sequence[M_co]: ...
 
     async def bulk_update(
-        self, items: Sequence[Mapping[str, Any]]
+        self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> Sequence[M_co]: ...
 
+    async def delete(self, *args: Any, **kwargs: Any) -> None: ...
 
-class BulkRepository(Repository[M_co], Protocol[M_co]):
+
+class BulkRepository(Protocol[M_co]):
     """Synchronous counterpart of :class:`AsyncBulkRepository`."""
 
     def bulk_create(
@@ -70,6 +71,8 @@ class BulkRepository(Repository[M_co], Protocol[M_co]):
     def bulk_update(
         self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> Sequence[M_co]: ...
+
+    def delete(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 class WithAsyncBulkRepositoryMixin(Generic[M]):
@@ -313,16 +316,13 @@ class BaseGenericBulkAPIView(GenericView):
 
 
 class BaseGenericBulkCreateAPIView(BaseGenericBulkAPIView):
-    if TYPE_CHECKING:
-        bulk_create: Callable
-
     create_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "create_schema"):
-            return
-        cls.bulk_create.__annotations__["items"] = list[cls.create_schema]  # type: ignore[name-defined]
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "bulk_create":
+            return {"items": list[cls.create_schema]}  # type: ignore[name-defined]
+        return {}
 
 
 class AsyncGenericBulkCreateAPIView(
@@ -343,10 +343,10 @@ class AsyncGenericBulkCreateAPIView(
         return objects
 
     async def before_bulk_create(self, data: list[dict[str, Any]]) -> None:
-        pass
+        """Hook receiving the validated payloads before the repository call."""
 
     async def after_bulk_create(self, objects: Sequence[M]) -> None:
-        pass
+        """Hook receiving the created objects before the response is built."""
 
 
 class GenericBulkCreateAPIView(
@@ -367,24 +367,21 @@ class GenericBulkCreateAPIView(
         return objects
 
     def before_bulk_create(self, data: list[dict[str, Any]]) -> None:
-        pass
+        """Hook receiving the validated payloads before the repository call."""
 
     def after_bulk_create(self, objs: Sequence[M]) -> None:
-        pass
+        """Hook receiving the created objects before the response is built."""
 
 
 class BaseGenericBulkUpdateAPIView(BaseGenericBulkAPIView):
-    if TYPE_CHECKING:
-        bulk_update: Callable
-
     #: Per-item schema for bulk updates — must carry the primary key.
     bulk_update_schema: type[BaseModel]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "bulk_update_schema"):
-            return
-        cls.bulk_update.__annotations__["items"] = list[cls.bulk_update_schema]  # type: ignore[name-defined]
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "bulk_update":
+            return {"items": list[cls.bulk_update_schema]}  # type: ignore[name-defined]
+        return {}
 
 
 class AsyncGenericBulkUpdateAPIView(
@@ -405,10 +402,10 @@ class AsyncGenericBulkUpdateAPIView(
         return objs
 
     async def before_bulk_update(self, data: list[dict[str, Any]]) -> None:
-        pass
+        """Hook receiving the validated payloads before the repository call."""
 
     async def after_bulk_update(self, objs: Sequence[M]) -> None:
-        pass
+        """Hook receiving the updated objects before the response is built."""
 
 
 class GenericBulkUpdateAPIView(
@@ -429,30 +426,29 @@ class GenericBulkUpdateAPIView(
         return objs
 
     def before_bulk_update(self, data: list[dict[str, Any]]) -> None:
-        pass
+        """Hook receiving the validated payloads before the repository call."""
 
     def after_bulk_update(self, objs: Sequence[M]) -> None:
-        pass
+        """Hook receiving the updated objects before the response is built."""
 
 
 class BaseGenericBulkDestroyAPIView(GenericView):
-    if TYPE_CHECKING:
-        bulk_delete: Callable
-
     #: Filter model selecting which rows to delete. Delete-by-id is just a filter
     #: with an ``id__in`` field; swap it for any criteria. Set to ``None`` to allow
     #: an unfiltered delete of everything matched by :meth:`get_kwargs`.
     filter: type[BaseModel] | None
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if not hasattr(cls, "filter"):
-            return
-        filter_ = cls.filter or _NoFilter
-        cls.bulk_delete.__annotations__["filter"] = Annotated[
-            BaseFilter,
-            FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
-        ]
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "bulk_delete":
+            filter_ = cls.filter or _NoFilter
+            return {
+                "filter": Annotated[
+                    BaseFilter,
+                    FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
+                ]
+            }
+        return {}
 
     def resolve_filter(
         self, filter: BaseFilter
@@ -482,10 +478,10 @@ class AsyncGenericBulkDestroyAPIView(
         await self.after_bulk_delete(filter)
 
     async def before_bulk_delete(self, filter: BaseFilter) -> None:
-        pass
+        """Hook invoked with the resolved filter before rows are deleted."""
 
     async def after_bulk_delete(self, filter: BaseFilter) -> None:
-        pass
+        """Hook invoked with the resolved filter after rows were deleted."""
 
 
 class GenericBulkDestroyAPIView(
@@ -502,10 +498,10 @@ class GenericBulkDestroyAPIView(
         self.after_bulk_delete(filter)
 
     def before_bulk_delete(self, filter: BaseFilter) -> None:
-        pass
+        """Hook invoked with the resolved filter before rows are deleted."""
 
     def after_bulk_delete(self, filter: BaseFilter) -> None:
-        pass
+        """Hook invoked with the resolved filter after rows were deleted."""
 
 
 # --------------------------------------------------------------------------- #

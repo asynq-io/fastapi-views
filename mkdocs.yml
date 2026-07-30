@@ -26,6 +26,7 @@ nav:
       - "Viewset": usage/viewset.md
       - "Generics": usage/generics.md
       - "Bulk actions": usage/bulk.md
+      - "JSON Patch": usage/jsonpatch.md
       - "Filters": usage/filters.md
       - "Caching": usage/cache.md
       - "Opentelemetry": usage/opentelemetry.md

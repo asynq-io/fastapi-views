@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
     from .i18n.translations import TranslationManager
 
+logger = logging.getLogger(__name__)
+
 
 def simplify_operation_ids(app: FastAPI) -> None:
     """Simplify operation IDs so that generated clients have simpler api function names"""
@@ -40,7 +42,15 @@ def _collect_local_defs(node: Any, schemas: dict[str, Any]) -> None:
         defs = node.pop("$defs", None)
         if isinstance(defs, dict):
             for name, definition in defs.items():
-                schemas.setdefault(name, definition)
+                existing = schemas.get(name)
+                if existing is None:
+                    schemas[name] = definition
+                elif existing != definition:
+                    logger.warning(
+                        "Conflicting OpenAPI schema definitions for %r; "
+                        "keeping the first one",
+                        name,
+                    )
         for value in node.values():
             _collect_local_defs(value, schemas)
     elif isinstance(node, list):
