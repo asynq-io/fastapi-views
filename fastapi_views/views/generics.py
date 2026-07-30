@@ -385,7 +385,7 @@ class AsyncGenericPartialUpdateAPIView(
     """AsyncGenericPartialUpdateAPIView"""
 
     async def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
-        args, kwargs = self.get_primary_key(pk, action="update")
+        args, kwargs = self.get_primary_key(pk, action="partial_update")
         data = partial_update_schema.model_dump(exclude_unset=True)
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
@@ -409,7 +409,7 @@ class GenericPartialUpdateAPIView(
     """GenericPartialUpdateAPIView"""
 
     def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
-        args, kwargs = self.get_primary_key(pk, action="update")
+        args, kwargs = self.get_primary_key(pk, action="partial_update")
         data = partial_update_schema.model_dump(exclude_unset=True)
         self.before_partial_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)

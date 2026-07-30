@@ -1,6 +1,6 @@
 [project]
 name = "fastapi-views"
-version = "1.8.2"
+version = "2.0.0"
 description = "FastAPI Class Views and utilities"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -55,7 +55,7 @@ uvloop = ["uvloop"]
 uvicorn = ["uvicorn"]
 cli = ["typer"]
 prometheus = ["starlette-exporter"]
-opentelemetry = ["opentelemetry-instrumentation-fastapi"]
+opentelemetry = ["opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-prometheus", "prometheus-client"]
 
 standard = ["uvloop", "uvicorn", "starlette-exporter", "opentelemetry-instrumentation-fastapi", "typer"]
 
@@ -65,13 +65,16 @@ jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
 i18n = ["babel", "jinja2"]
 cache = ["redis"]
+jsonpatch = ["jsonpatch", "jsonpointer"]
 
 all = [
     "uvloop",
     "uvicorn",
     "typer",
     "starlette-exporter",
+    "prometheus-client",
     "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-exporter-prometheus",
     "websockets",
     "joserfc",
     "auth0-api-python",
@@ -79,6 +82,8 @@ all = [
     "babel",
     "jinja2",
     "redis",
+    "jsonpatch",
+    "jsonpointer",
 ]
 
 
@@ -109,7 +114,6 @@ lint = [
     "opentelemetry-api>=1.28.0,<2.0.0",
     "opentelemetry-sdk>=1.28.0,<2.0.0",
     "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
-    "opentelemetry-instrumentation-logging>=0.60b1",
 ]
 
 docs = [

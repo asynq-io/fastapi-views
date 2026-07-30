@@ -12,10 +12,11 @@ from typing_extensions import NotRequired
 from .handlers import add_error_handlers
 from .middlewares import RequestLimitMiddleware
 from .opentelemetry import maybe_instrument_app
-from .prometheus import add_prometheus_middleware
+from .prometheus import add_prometheus_exporter, add_prometheus_middleware
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+    from opentelemetry.sdk.resources import Resource
 
     from .i18n.translations import TranslationManager
 
@@ -98,6 +99,7 @@ def configure_app(  # noqa: PLR0913
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
+    prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
     translation_manager: TranslationManager | None = None,
@@ -109,8 +111,12 @@ def configure_app(  # noqa: PLR0913
     if enable_error_handlers:
         add_error_handlers(app)
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
+    if enable_prometheus_middleware and prometheus_exporter_resource:
+        raise ValueError("Only one prometheus exporter can be configured")
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
+    if prometheus_exporter_resource:
+        add_prometheus_exporter(app, resource=prometheus_exporter_resource)
     if simplify_openapi_ids:
         simplify_operation_ids(app)
     if gzip_middleware_min_size:
