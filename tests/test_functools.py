@@ -16,7 +16,8 @@ from starlette.status import (
 from fastapi_views import ViewRouter
 from fastapi_views.exceptions import BadRequest, NotFound
 from fastapi_views.handlers import add_error_handlers
-from fastapi_views.models import BaseSchema, ServerSentEvent
+from fastapi_views.models import BaseSchema
+from fastapi_views.models.sse import AnyServerSentEvent
 from fastapi_views.views.api import APIView, ListAPIView, View
 from fastapi_views.views.functools import (
     catch,
@@ -40,6 +41,10 @@ if TYPE_CHECKING:
 
 class DummySchema(BaseSchema):
     x: str
+
+
+class DummyEvent(AnyServerSentEvent):
+    data: DummySchema
 
 
 @pytest.fixture
@@ -78,29 +83,36 @@ def test_serialize_sse_no_retry():
     assert "retry" not in result
 
 
-def test_errors_single_exception():
-    result = errors(NotFound)
-    assert 404 in result
-    assert "model" in result[404]
-
-
-def test_errors_multiple_exceptions_same_status():
-    class Error1(BadRequest):
-        pass
-
-    class Error2(BadRequest):
-        pass
-
-    result = errors(Error1, Error2)
-    assert 400 in result
-    # When multiple exceptions share a status, model should be a Union
-    assert "model" in result[400]
-
-
 def test_errors_multiple_exceptions_different_statuses():
     result = errors(NotFound, BadRequest)
     assert 404 in result
     assert 400 in result
+
+
+def test_errors_documents_problem_json_content():
+    result = errors(NotFound)
+    assert set(result) == {404}
+    response = result[404]
+    assert "description" in response
+    content = response["content"]
+    assert set(content) == {"application/problem+json"}
+    schema = content["application/problem+json"]["schema"]
+    assert "properties" in schema
+    assert "anyOf" not in schema
+
+
+def test_errors_same_status_uses_anyof_schema():
+    class WidgetMissing(NotFound):
+        """Widget is missing."""
+
+    class GadgetMissing(NotFound):
+        """Gadget is missing."""
+
+    result = errors(WidgetMissing, GadgetMissing)
+    response = result[404]
+    assert "description" not in response
+    schema = response["content"]["application/problem+json"]["schema"]
+    assert len(schema["anyOf"]) == 2
 
 
 def test_errors_empty():
@@ -131,7 +143,7 @@ async def test_catch_async_handles_exception(error_app, error_client):
     response = await error_client.get("/catch-async")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert "caught error" in data["detail"]
 
 
@@ -208,7 +220,7 @@ async def test_catch_defined_async(error_app, error_client):
     response = await error_client.get("/catch-defined")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert data["detail"] == "defined error message"
 
 
@@ -232,7 +244,7 @@ async def test_catch_defined_sync(error_app, error_client):
     response = await error_client.get("/catch-def-sync")
     assert response.status_code == HTTP_400_BAD_REQUEST
     data = response.json()
-    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Content-Type"] == "application/problem+json"
     assert data["detail"] == "sync defined error"
 
 
@@ -257,10 +269,10 @@ async def test_catch_defined_no_raises_no_exception(error_app, error_client):
 @pytest.mark.anyio
 async def test_sse_route_sync_generator(error_app, error_client):
     class SseView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="")
         def stream(self):
-            yield {"event": "data", "data": {"x": "hello"}, "id": "1"}
-            yield {"event": "data", "data": {"x": "world"}, "id": "2"}
+            yield AnyServerSentEvent(id="1", event="data", data={"x": "hello"})
+            yield AnyServerSentEvent(id="2", event="data", data={"x": "world"})
 
     router = ViewRouter()
     router.register_view(SseView, prefix="/sse-sync")
@@ -277,9 +289,9 @@ async def test_sse_route_sync_generator(error_app, error_client):
 @pytest.mark.anyio
 async def test_sse_route_async_generator(error_app, error_client):
     class AsyncSseView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="", response_model=DummyEvent)
         async def stream(self):
-            yield {"event": "update", "data": {"x": "async"}, "id": "1"}
+            yield DummyEvent(id="1", event="update", data=DummySchema(x="async"))
 
     router = ViewRouter()
     router.register_view(AsyncSseView, prefix="/sse-async")
@@ -288,14 +300,18 @@ async def test_sse_route_async_generator(error_app, error_client):
     response = await error_client.get("/sse-async")
     assert response.status_code == HTTP_200_OK
     assert "text/event-stream" in response.headers["content-type"]
+    assert "x" in response.text
+
+    operation = error_app.openapi()["paths"]["/sse-async"]["get"]
+    assert "text/event-stream" in operation["responses"]["200"]["content"]
 
 
 @pytest.mark.anyio
 async def test_sse_route_with_retry(error_app, error_client):
     class SseRetryView(APIView):
-        @sse_route(path="", response_model=DummySchema)
+        @sse_route(path="", response_model=DummyEvent)
         def stream(self):
-            yield ServerSentEvent(event="tick", data=DummySchema(x="a"), retry=1000)
+            yield DummyEvent(id="1", event="tick", data=DummySchema(x="a"), retry=1000)
 
     router = ViewRouter()
     router.register_view(SseRetryView, prefix="/sse-retry")

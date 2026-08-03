@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal, TypedDict, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, TypeVar
 
 from fastapi import Response
 from pydantic import TypeAdapter
@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from fastapi.routing import APIRoute
     from pydantic.main import IncEx
     from starlette.routing import BaseRoute
+
+    from fastapi_views.models import ResponseHeaders
 
 Endpoint = Callable[..., Response | Awaitable[Response]]
 T = TypeVar("T")
@@ -28,6 +30,9 @@ Action = Literal[
     "destroy",
     "partial_update",
     "events",
+    "bulk_create",
+    "bulk_update",
+    "bulk_delete",
 ]
 WebSocketAction = Literal["receive", "send"]
 
@@ -65,6 +70,9 @@ class BaseRouteOptions(TypedDict, total=False):
     callbacks: list[BaseRoute] | None
     openapi_extra: dict[str, Any] | None
     generate_unique_id_function: Callable[[APIRoute], str]
+    #: Response headers documented on the success response (consumed by the view,
+    #: not passed to FastAPI's ``add_api_route``).
+    response_headers: type[ResponseHeaders]
 
 
 class RouteOptions(BaseRouteOptions, total=False):
@@ -73,3 +81,23 @@ class RouteOptions(BaseRouteOptions, total=False):
 
 class PathRouteOptions(RouteOptions, total=False):
     path: str
+
+
+class ServerSentEventType(Protocol):
+    """Structural type for Server-Sent Events.
+
+    Members are read-only properties so any object exposing these
+    attributes matches, including models narrowing `event` to a `Literal`.
+    """
+
+    @property
+    def id(self) -> Any: ...
+
+    @property
+    def event(self) -> str: ...
+
+    @property
+    def data(self) -> Any: ...
+
+    @property
+    def retry(self) -> int | None: ...

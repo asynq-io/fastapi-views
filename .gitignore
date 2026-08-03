@@ -38,4 +38,5 @@ openapi.json
 openapi.yaml
 .ropeproject/
 .claude
+.serena/
 ui/

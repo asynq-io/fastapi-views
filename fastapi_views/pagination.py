@@ -40,6 +40,7 @@ class BasePage(BaseSchema, Generic[T]):
 
 
 class TokenPage(BasePage[T]):
+    cursor: PageToken | None = Field(None, description="Current page token")
     next_page: PageToken | None = Field(None, description="Next page token")
     previous_page: PageToken | None = Field(None, description="Previous page token")
 

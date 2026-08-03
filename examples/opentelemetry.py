@@ -3,7 +3,6 @@ import socket
 
 from fastapi import FastAPI
 from opentelemetry import trace
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -13,8 +12,7 @@ from opentelemetry.sdk.trace.export import (
 
 from fastapi_views import configure_app
 
-logging.basicConfig(level=logging.INFO)
-resource = Resource(
+resource = Resource.create(
     attributes={
         "service.name": "test-api",
         "service.version": "0.1.0",
@@ -24,12 +22,16 @@ resource = Resource(
 provider = TracerProvider(resource=resource)
 trace.set_tracer_provider(provider)
 provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
-LoggingInstrumentor().instrument()
 
 
 app = FastAPI(title="My API")
 
-configure_app(app)
+configure_app(
+    app,
+    enable_prometheus_middleware=False,
+    prometheus_exporter_resource=resource,
+    log_config={"log_level": logging.INFO, "log_format": "console"},
+)
 
 
 @app.get("/test")

@@ -24,7 +24,41 @@ if TYPE_CHECKING:
 
 class DependencyMixin:
     @classmethod
-    def _patch_endpoint_signature(cls, endpoint: Any, method: Callable) -> None:
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:  # noqa: ARG003
+        """Parameter-annotation overrides this class contributes for ``action``.
+
+        Override in a subclass to inject real type objects (schemas,
+        dependencies) into the endpoint signature of the given action. No
+        ``super()`` call is needed: contributions from every class in the
+        MRO are collected and merged, with the most derived class winning
+        on duplicate parameter names.
+        """
+        return {}
+
+    @classmethod
+    def _collect_extra_annotations(cls, action: str) -> dict[str, Any]:
+        annotations: dict[str, Any] = {}
+        for base in reversed(cls.__mro__):
+            hook = vars(base).get("get_extra_annotations")
+            if isinstance(hook, classmethod):
+                annotations |= hook.__func__(cls, action)
+        return annotations
+
+    @classmethod
+    def _patch_endpoint_signature(
+        cls,
+        endpoint: Any,
+        method: Callable,
+    ) -> None:
+        """Copy ``method``'s signature onto ``endpoint`` for FastAPI.
+
+        The first parameter becomes the view dependency, and the extra
+        annotations collected for the action (the method's name) override
+        same-named parameters with real type objects, so generic views
+        inject their configured schemas into the generated endpoint without
+        ever mutating the view method.
+        """
+        annotations = cls._collect_extra_annotations(method.__name__)
         old_signature = inspect.signature(method)
         old_parameters: list[inspect.Parameter] = list(
             old_signature.parameters.values(),
@@ -32,7 +66,10 @@ class DependencyMixin:
         old_first_parameter = old_parameters[0]
         new_first_parameter = old_first_parameter.replace(default=Depends(cls))
         new_parameters = [new_first_parameter] + [
-            parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
+            parameter.replace(
+                kind=inspect.Parameter.KEYWORD_ONLY,
+                annotation=annotations.get(parameter.name, parameter.annotation),
+            )
             for parameter in old_parameters[1:]
         ]
         new_signature = old_signature.replace(parameters=new_parameters)
@@ -45,7 +82,6 @@ class DependencyMixin:
 class DetailViewMixin:
     detail_route: str = "/{id}"
     raise_on_none: bool = True
-    request: Request
     get_name: Callable[..., str]
     error_message = "{} does not exist"
 
@@ -63,8 +99,6 @@ class _Sentinel(Exception):
 
 
 class ErrorHandlerMixin:
-    request: Request
-
     raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {}
 
     def get_error_message(self, key: type[Exception]) -> str | dict[str, Any]:
@@ -76,7 +110,6 @@ class ErrorHandlerMixin:
             kwargs["detail"] = kw
         elif isinstance(kw, Mapping):
             kwargs.update(kw)
-        kwargs.setdefault("instance", self.request.url.path)
         kwargs.setdefault("title", type(exc).__name__)
         kwargs.setdefault("detail", str(exc))
         kwargs.setdefault("status", HTTP_400_BAD_REQUEST)

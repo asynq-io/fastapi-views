@@ -12,12 +12,15 @@ from typing_extensions import NotRequired
 from .handlers import add_error_handlers
 from .middlewares import RequestLimitMiddleware
 from .opentelemetry import maybe_instrument_app
-from .prometheus import add_prometheus_middleware
+from .prometheus import add_prometheus_exporter, add_prometheus_middleware
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+    from opentelemetry.sdk.resources import Resource
 
     from .i18n.translations import TranslationManager
+
+logger = logging.getLogger(__name__)
 
 
 def simplify_operation_ids(app: FastAPI) -> None:
@@ -25,6 +28,34 @@ def simplify_operation_ids(app: FastAPI) -> None:
     for route in app.routes:
         if isinstance(route, APIRoute):
             route.operation_id = route.name.replace(" ", "")
+
+
+def _collect_local_defs(node: Any, schemas: dict[str, Any]) -> None:
+    """Move `$defs` of hand-authored content schemas into components.
+
+    Schemas passed directly as OpenAPI response content (e.g. SSE events)
+    are opaque to FastAPI, so the models they reference are never registered
+    in `components/schemas`. Their definitions travel in `$defs` instead
+    and are relocated here to make the references resolvable.
+    """
+    if isinstance(node, dict):
+        defs = node.pop("$defs", None)
+        if isinstance(defs, dict):
+            for name, definition in defs.items():
+                existing = schemas.get(name)
+                if existing is None:
+                    schemas[name] = definition
+                elif existing != definition:
+                    logger.warning(
+                        "Conflicting OpenAPI schema definitions for %r; "
+                        "keeping the first one",
+                        name,
+                    )
+        for value in node.values():
+            _collect_local_defs(value, schemas)
+    elif isinstance(node, list):
+        for value in node:
+            _collect_local_defs(value, schemas)
 
 
 def custom_openapi(self: FastAPI) -> dict[str, Any]:
@@ -46,6 +77,10 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
                 responses = param.get("responses")
                 if "422" in responses:
                     del responses["422"]
+        _collect_local_defs(
+            self.openapi_schema.get("paths", {}),
+            self.openapi_schema.setdefault("components", {}).setdefault("schemas", {}),
+        )
         schemas = self.openapi_schema.get("components", {}).get("schemas", {})
         for k in ("ValidationError", "HTTPValidationError"):
             if k in schemas:
@@ -64,6 +99,7 @@ def configure_app(  # noqa: PLR0913
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
+    prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
     translation_manager: TranslationManager | None = None,
@@ -75,8 +111,12 @@ def configure_app(  # noqa: PLR0913
     if enable_error_handlers:
         add_error_handlers(app)
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
+    if enable_prometheus_middleware and prometheus_exporter_resource:
+        raise ValueError("Only one prometheus exporter can be configured")
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
+    if prometheus_exporter_resource:
+        add_prometheus_exporter(app, resource=prometheus_exporter_resource)
     if simplify_openapi_ids:
         simplify_operation_ids(app)
     if gzip_middleware_min_size:

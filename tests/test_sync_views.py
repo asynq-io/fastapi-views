@@ -12,6 +12,7 @@ from starlette.status import (
 
 from fastapi_views.exceptions import NotFound
 from fastapi_views.models import BaseSchema
+from fastapi_views.models.sse import AnyServerSentEvent
 from fastapi_views.views.api import (
     APIView,
     CreateAPIView,
@@ -360,8 +361,8 @@ class TestSSEView(ServerSentEventsAPIView):
     response_schema = DummySchema
 
     async def events(self):
-        yield "data_event", {"x": "first"}
-        yield "data_event", {"x": "second"}
+        yield AnyServerSentEvent(id="1", event="data_event", data={"x": "first"})
+        yield AnyServerSentEvent(id="2", event="data_event", data={"x": "second"})
 
 
 @pytest.mark.usefixtures("sse_events_view")

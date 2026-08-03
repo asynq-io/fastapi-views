@@ -106,7 +106,7 @@ class TranslationManager(ABC):
             return text
         try:
             return self.formatter.format(text, **kwargs)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning("Unhandled formatting exception", exc_info=e)
             return text
 
