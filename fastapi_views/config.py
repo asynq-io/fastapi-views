@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import functools
 import logging
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
-from typing_extensions import NotRequired
 
 from .handlers import add_error_handlers
-from .middlewares import RequestLimitMiddleware
+from .headers import DEFAULT_REQUEST_HEADER_FILTER, HeaderFilter
 from .opentelemetry import maybe_instrument_app
 from .prometheus import add_prometheus_exporter, add_prometheus_middleware
 
@@ -89,50 +88,49 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
     return self.openapi_schema
 
 
-class LogConfig(TypedDict):
-    log_format: Literal["console", "json"]
-    log_level: NotRequired[int]
-
-
 def configure_app(  # noqa: PLR0913
     app: FastAPI,
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
+    enable_request_logging_middleware: bool = True,
     prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
     translation_manager: TranslationManager | None = None,
     limits: int | None = 1000,
-    log_config: LogConfig | None = None,
+    request_header_filter: HeaderFilter = DEFAULT_REQUEST_HEADER_FILTER,
     **tracing_options: Any,
 ) -> None:
     maybe_instrument_app(app, **tracing_options)
     if enable_error_handlers:
-        add_error_handlers(app)
+        add_error_handlers(app, request_header_filter)
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
     if enable_prometheus_middleware and prometheus_exporter_resource:
         raise ValueError("Only one prometheus exporter can be configured")
-    if enable_prometheus_middleware:
-        add_prometheus_middleware(app)
     if prometheus_exporter_resource:
         add_prometheus_exporter(app, resource=prometheus_exporter_resource)
     if simplify_openapi_ids:
         simplify_operation_ids(app)
-    if gzip_middleware_min_size:
-        app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
+
+    # Middlewares are registered innermost-first: `add_middleware` prepends to
+    # the stack, so the last one added is the first to see a request.
+    if limits:
+        from .middlewares.limits import RequestLimitMiddleware
+
+        app.add_middleware(RequestLimitMiddleware, limits)
     if translation_manager:
         from .i18n import LocaleMiddleware, configure_translations
 
         app.add_middleware(LocaleMiddleware, translation_manager)
         configure_translations(translation_manager)
-    if limits:
-        app.add_middleware(RequestLimitMiddleware, limits)
+    if gzip_middleware_min_size:
+        app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
+    if enable_prometheus_middleware:
+        add_prometheus_middleware(app)
+    if enable_request_logging_middleware:
+        from .middlewares.structlog import RequestLoggingMiddleware
 
-    if log_config:
-        from .logging.config import configure_logging
-        from .logging.middleware import RequestLoggingMiddleware
-
-        log_config.setdefault("log_level", logging.INFO)
-        configure_logging(**log_config)
-        app.add_middleware(RequestLoggingMiddleware)
+        app.add_middleware(
+            RequestLoggingMiddleware, request_header_filter=request_header_filter
+        )

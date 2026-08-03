@@ -85,8 +85,12 @@ class ScopesAuth(TokenAuth):
     def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
         return self.scope_validator.has_scope(scope, granted_scopes)
 
+    def get_granted_scopes(self, token: dict[str, Any]) -> Sequence[Scope]:
+        """Scopes carried by ``token``, from the space delimited ``scope`` claim."""
+        return token.get("scope", "").split(" ")
+
     def validate_scopes(self, token: dict[str, Any], scopes: SecurityScopes) -> None:
-        granted = token.get("scope", "").split(" ")
+        granted = self.get_granted_scopes(token)
         for scope in scopes.scopes:
             if not self.has_scope(scope, granted):
                 raise Forbidden(detail=f"Token is missing required scope: {scope}")

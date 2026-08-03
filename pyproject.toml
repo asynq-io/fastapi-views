@@ -86,12 +86,14 @@ all = [
     "jsonpointer",
 ]
 
+
 [dependency-groups]
 dev = [
     {include-group = "lint"},
     {include-group = "test"},
     {include-group = "docs"},
     "ipython",
+    "sqlargon>=0.6.13",
 ]
 
 test = [

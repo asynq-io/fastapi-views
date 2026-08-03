@@ -2,10 +2,9 @@ from typing import Any
 
 from auth0_api_python.api_client import ApiClient, BaseAuthError
 
+from fastapi_views.auth.abc import AuthorizationScheme, ScopesAuth
+from fastapi_views.auth.scopes import ScopeValidator
 from fastapi_views.exceptions import APIError
-
-from .abc import AuthorizationScheme, ScopesAuth
-from .scopes import ScopeValidator
 
 
 class Auth0(ScopesAuth):

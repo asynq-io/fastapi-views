@@ -5,6 +5,7 @@ from .models import (
     Filter,
     ModelFilter,
     OrderingFilter,
+    PaginationFilter,
     SearchFilter,
 )
 
@@ -16,5 +17,6 @@ __all__ = [
     "ModelFilter",
     "NestedFilter",
     "OrderingFilter",
+    "PaginationFilter",
     "SearchFilter",
 ]

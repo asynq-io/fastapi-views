@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
-
-from fastapi_views.logging._compat import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
 
     Fallbacks = Mapping[str | tuple[str, ...], str | Sequence[str]]
 
-logger = get_logger("translations.manager")
+logger = logging.getLogger("translations.manager")
 
 
 class TranslationManager(ABC):
