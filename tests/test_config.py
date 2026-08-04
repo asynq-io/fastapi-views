@@ -1,14 +1,75 @@
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from opentelemetry.sdk.resources import Resource
 
 from fastapi_views import configure_app
-from fastapi_views.config import custom_openapi, simplify_operation_ids
+from fastapi_views.config import (
+    _collect_local_defs,
+    custom_openapi,
+    simplify_operation_ids,
+)
+from fastapi_views.i18n import LocaleMiddleware, NoTranslations
+from fastapi_views.i18n import translations as translations_module
 
 
 def test_configure_app(app):
     configure_app(app)
+
+
+def test_configure_app_rejects_middleware_and_exporter(app):
+    with pytest.raises(ValueError, match="Only one prometheus exporter"):
+        configure_app(app, prometheus_exporter_resource=Resource.create())
+
+
+def test_configure_app_with_prometheus_exporter(app):
+    configure_app(
+        app,
+        enable_prometheus_middleware=False,
+        prometheus_exporter_resource=Resource.create(),
+    )
+    assert any(getattr(route, "path", None) == "/metrics" for route in app.routes)
+
+
+def test_configure_app_with_translation_manager(app):
+    manager = NoTranslations(default="en", supported_locales=["en"])
+    original = translations_module._manager
+    try:
+        configure_app(app, translation_manager=manager)
+    finally:
+        translations_module._manager = original
+    assert any(m.cls is LocaleMiddleware for m in app.user_middleware)
+
+
+def test_collect_local_defs_moves_defs_to_components():
+    schemas = {}
+    node = {
+        "content": {
+            "schema": {
+                "$defs": {"Item": {"type": "object"}},
+                "$ref": "#/components/schemas/Item",
+            }
+        }
+    }
+    _collect_local_defs(node, schemas)
+    assert schemas == {"Item": {"type": "object"}}
+    assert "$defs" not in node["content"]["schema"]
+
+
+def test_collect_local_defs_skips_identical_definition():
+    schemas = {"Item": {"type": "object"}}
+    _collect_local_defs({"$defs": {"Item": {"type": "object"}}}, schemas)
+    assert schemas == {"Item": {"type": "object"}}
+
+
+def test_collect_local_defs_keeps_first_definition_on_conflict(caplog):
+    schemas = {"Item": {"type": "object"}}
+    with caplog.at_level("WARNING"):
+        _collect_local_defs({"$defs": {"Item": {"type": "string"}}}, schemas)
+    assert schemas == {"Item": {"type": "object"}}
+    assert "Conflicting OpenAPI schema definitions" in caplog.text
 
 
 def test_simplify_operation_ids():

@@ -2,30 +2,26 @@ from __future__ import annotations
 
 import functools
 import re
-from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-    get_type_hints,
-)
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar, get_type_hints
 
 from pydantic import TypeAdapter
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from .backends import CacheBackend, EncodableT, KeyT
 
 _KEY_PATTERN = re.compile(r"\{(\w+)\}")
 
 P = ParamSpec("P")
 T = TypeVar("T")
-VT = TypeVar("VT")
 
-Fn: TypeAlias = Callable[P, Awaitable[T]]
-AsyncDecorator: TypeAlias = Callable[[Fn[P, T]], Fn[P, T]]
+
+class AsyncDecorator(Protocol):
+    def __call__(
+        self, func: Callable[P, Awaitable[T]], /
+    ) -> Callable[P, Awaitable[T]]: ...
 
 
 def _resolve_return_type(func: Callable[..., Any]) -> Any:
@@ -67,7 +63,7 @@ class Cache:
         return await self.backend.pop(key)
 
     def _format_key(
-        self, key: Callable[P, KeyT] | KeyT, *args: P.args, **kwargs: P.kwargs
+        self, key: Callable[..., KeyT] | KeyT, *args: Any, **kwargs: Any
     ) -> KeyT:
         if callable(key):
             return key(*args, **kwargs)
@@ -77,11 +73,13 @@ class Cache:
 
     def __call__(
         self,
-        key: KeyT | Callable[P, KeyT],
+        key: KeyT | Callable[..., KeyT],
         ttl: int | None = None,
-    ) -> AsyncDecorator[P, T] | AsyncDecorator[P, VT]:
+    ) -> AsyncDecorator:
 
-        def decorator(func: Fn[P, T]) -> Fn[P, T]:
+        def decorator(
+            func: Callable[P, Awaitable[T]],
+        ) -> Callable[P, Awaitable[T]]:
             return_type = _resolve_return_type(func)
             adapter = _get_type_adapter(return_type)
 

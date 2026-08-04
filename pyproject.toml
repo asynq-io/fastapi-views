@@ -84,7 +84,6 @@ all = [
     "jsonpointer",
 ]
 
-
 [dependency-groups]
 dev = [
     {include-group = "lint"},

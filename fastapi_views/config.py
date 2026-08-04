@@ -88,7 +88,7 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
     return self.openapi_schema
 
 
-def configure_app(  # noqa: PLR0913
+def configure_app(  # noqa: C901, PLR0913
     app: FastAPI,
     *,
     enable_error_handlers: bool = True,
@@ -108,6 +108,8 @@ def configure_app(  # noqa: PLR0913
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
     if enable_prometheus_middleware and prometheus_exporter_resource:
         raise ValueError("Only one prometheus exporter can be configured")
+    if enable_prometheus_middleware:
+        add_prometheus_middleware(app)
     if prometheus_exporter_resource:
         add_prometheus_exporter(app, resource=prometheus_exporter_resource)
     if simplify_openapi_ids:

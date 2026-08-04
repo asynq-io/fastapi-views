@@ -113,7 +113,6 @@ class ItemViewSet(AsyncBulkAPIViewSet):
 ```
 
 Per-item bulk update (`PUT /bulk-update`) always responds `204 No Content` — its `executemany`-style repository call cannot return rows.
-
 ---
 
 ## Lifecycle hooks
