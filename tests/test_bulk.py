@@ -45,6 +45,10 @@ class UpdateItem(BaseModel):
     name: str
 
 
+class ItemValues(BaseModel):
+    name: str
+
+
 class NameFilter(BaseFilter):
     name: str | None = None
 
@@ -52,44 +56,58 @@ class NameFilter(BaseFilter):
 class RecordingAsyncRepository:
     def __init__(self) -> None:
         self.bulk_create_options: list[dict[str, Any]] = []
+        self.bulk_update_items: list[list[dict[str, Any]]] = []
         self.bulk_update_options: list[dict[str, Any]] = []
+        self.update_many_calls: list[tuple[dict[str, Any], dict[str, Any]]] = []
         self.delete_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
-    async def bulk_create(
+    async def create_many(
         self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> list[dict[str, Any]]:
         self.bulk_create_options.append(options)
         return [{"id": uuid4(), **item} for item in items]
 
+    async def update_many(
+        self, values: Mapping[str, Any], *args: Any, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        self.update_many_calls.append((dict(values), kwargs))
+        return [{"id": uuid4(), **values}]
+
     async def bulk_update(
         self, items: Sequence[Mapping[str, Any]], **options: Any
-    ) -> list[dict[str, Any]]:
+    ) -> None:
+        self.bulk_update_items.append([dict(item) for item in items])
         self.bulk_update_options.append(options)
-        return [dict(item) for item in items]
 
-    async def delete(self, *args: Any, **kwargs: Any) -> None:
+    async def delete_many(self, *args: Any, **kwargs: Any) -> None:
         self.delete_calls.append((args, kwargs))
 
 
 class RecordingSyncRepository:
     def __init__(self) -> None:
         self.bulk_create_options: list[dict[str, Any]] = []
+        self.bulk_update_items: list[list[dict[str, Any]]] = []
         self.bulk_update_options: list[dict[str, Any]] = []
+        self.update_many_calls: list[tuple[dict[str, Any], dict[str, Any]]] = []
         self.delete_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
-    def bulk_create(
+    def create_many(
         self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> list[dict[str, Any]]:
         self.bulk_create_options.append(options)
         return [{"id": uuid4(), **item} for item in items]
 
-    def bulk_update(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+    def update_many(
+        self, values: Mapping[str, Any], *args: Any, **kwargs: Any
     ) -> list[dict[str, Any]]:
-        self.bulk_update_options.append(options)
-        return [dict(item) for item in items]
+        self.update_many_calls.append((dict(values), kwargs))
+        return [{"id": uuid4(), **values}]
 
-    def delete(self, *args: Any, **kwargs: Any) -> None:
+    def bulk_update(self, items: Sequence[Mapping[str, Any]], **options: Any) -> None:
+        self.bulk_update_items.append([dict(item) for item in items])
+        self.bulk_update_options.append(options)
+
+    def delete_many(self, *args: Any, **kwargs: Any) -> None:
         self.delete_calls.append((args, kwargs))
 
 
@@ -107,6 +125,7 @@ async def test_async_bulk_create():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingAsyncRepository()
 
@@ -122,20 +141,45 @@ async def test_async_bulk_create():
 
 @pytest.mark.anyio
 async def test_async_bulk_update():
+    repo = RecordingAsyncRepository()
+
     class ItemViewSet(AsyncBulkAPIViewSet):
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
-        repository = RecordingAsyncRepository()
+        repository = repo
 
-    item_id = str(uuid4())
+    item_id = uuid4()
     async with view_client(ItemViewSet) as client:
         response = await client.put(
-            "/test/bulk-update", json=[{"id": item_id, "name": "updated"}]
+            "/test/bulk-update", json=[{"id": str(item_id), "name": "updated"}]
+        )
+        assert response.status_code == HTTP_204_NO_CONTENT
+        assert response.content == b""
+        assert repo.bulk_update_items == [[{"id": item_id, "name": "updated"}]]
+
+
+@pytest.mark.anyio
+async def test_async_update_many():
+    repo = RecordingAsyncRepository()
+
+    class ItemViewSet(AsyncBulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(ItemViewSet) as client:
+        response = await client.patch(
+            "/test/bulk-update", params={"name": "old"}, json={"name": "new"}
         )
         assert response.status_code == HTTP_200_OK
-        assert response.json() == [{"id": item_id, "name": "updated"}]
+        assert [item["name"] for item in response.json()] == ["new"]
+        assert repo.update_many_calls == [({"name": "new"}, {"name": "old"})]
 
 
 @pytest.mark.anyio
@@ -146,6 +190,7 @@ async def test_async_bulk_delete_forwards_filter_kwargs():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = repo
 
@@ -163,6 +208,7 @@ async def test_bulk_create_without_return():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingAsyncRepository()
 
@@ -173,18 +219,19 @@ async def test_bulk_create_without_return():
 
 
 @pytest.mark.anyio
-async def test_bulk_update_without_return():
+async def test_update_many_without_return():
     class ItemViewSet(AsyncBulkAPIViewSet):
         return_on_update = False
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingAsyncRepository()
 
     async with view_client(ItemViewSet) as client:
-        response = await client.put(
-            "/test/bulk-update", json=[{"id": str(uuid4()), "name": "a"}]
+        response = await client.patch(
+            "/test/bulk-update", params={"name": "a"}, json={"name": "b"}
         )
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
@@ -198,6 +245,7 @@ async def test_sync_bulk_viewset_end_to_end():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = repo
 
@@ -210,12 +258,19 @@ async def test_sync_bulk_viewset_end_to_end():
         updated = await client.put(
             "/test/bulk-update", json=[{"id": item_id, "name": "b"}]
         )
-        assert updated.status_code == HTTP_200_OK
-        assert updated.json() == [{"id": item_id, "name": "b"}]
+        assert updated.status_code == HTTP_204_NO_CONTENT
+        assert repo.bulk_update_items == [[{"id": UUID(item_id), "name": "b"}]]
 
-        deleted = await client.delete("/test/bulk-delete", params={"name": "b"})
+        patched = await client.patch(
+            "/test/bulk-update", params={"name": "b"}, json={"name": "c"}
+        )
+        assert patched.status_code == HTTP_200_OK
+        assert [item["name"] for item in patched.json()] == ["c"]
+        assert repo.update_many_calls == [({"name": "c"}, {"name": "b"})]
+
+        deleted = await client.delete("/test/bulk-delete", params={"name": "c"})
         assert deleted.status_code == HTTP_204_NO_CONTENT
-        assert repo.delete_calls == [((), {"name": "b"})]
+        assert repo.delete_calls == [((), {"name": "c"})]
 
 
 @pytest.mark.anyio
@@ -226,6 +281,7 @@ async def test_sync_bulk_viewset_without_return():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingSyncRepository()
 
@@ -234,11 +290,11 @@ async def test_sync_bulk_viewset_without_return():
         assert created.status_code == HTTP_201_CREATED
         assert created.content == b""
 
-        updated = await client.put(
-            "/test/bulk-update", json=[{"id": str(uuid4()), "name": "b"}]
+        patched = await client.patch(
+            "/test/bulk-update", params={"name": "a"}, json={"name": "b"}
         )
-        assert updated.status_code == HTTP_200_OK
-        assert updated.content == b""
+        assert patched.status_code == HTTP_200_OK
+        assert patched.content == b""
 
 
 def test_async_generic_bulk_create_view_registers_only_bulk_create():
@@ -293,6 +349,7 @@ async def test_bulk_hooks_receive_expected_arguments():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingAsyncRepository()
 
@@ -305,31 +362,40 @@ async def test_bulk_hooks_receive_expected_arguments():
         async def before_bulk_update(self, data):
             calls.append(("before_update", data))
 
-        async def after_bulk_update(self, objs):
-            calls.append(("after_update", list(objs)))
+        async def after_bulk_update(self):
+            calls.append(("after_update", None))
 
-        async def before_bulk_delete(self, filter):
-            calls.append(("before_delete", filter))
+        async def before_update_many(self, values):
+            calls.append(("before_update_many", values))
 
-        async def after_bulk_delete(self, filter):
-            calls.append(("after_delete", filter))
+        async def after_update_many(self, objs):
+            calls.append(("after_update_many", list(objs)))
+
+        async def before_bulk_delete(self):
+            calls.append(("before_delete", None))
+
+        async def after_bulk_delete(self):
+            calls.append(("after_delete", None))
 
     item_id = uuid4()
     async with view_client(HookedViewSet) as client:
         await client.post("/test/bulk-create", json=[{"name": "a"}])
         await client.put("/test/bulk-update", json=[{"id": str(item_id), "name": "b"}])
-        await client.delete("/test/bulk-delete", params={"name": "b"})
+        await client.patch(
+            "/test/bulk-update", params={"name": "b"}, json={"name": "c"}
+        )
+        await client.delete("/test/bulk-delete", params={"name": "c"})
 
     assert calls[0] == ("before_create", [{"name": "a"}])
     assert calls[1][0] == "after_create"
     assert [obj["name"] for obj in calls[1][1]] == ["a"]
     assert calls[2] == ("before_update", [{"id": item_id, "name": "b"}])
-    assert calls[3] == ("after_update", [{"id": item_id, "name": "b"}])
-    assert calls[4][0] == "before_delete"
-    assert isinstance(calls[4][1], NameFilter)
-    assert calls[4][1].name == "b"
-    assert calls[5][0] == "after_delete"
-    assert calls[5][1] is calls[4][1]
+    assert calls[3] == ("after_update", None)
+    assert calls[4] == ("before_update_many", {"name": "c"})
+    assert calls[5][0] == "after_update_many"
+    assert [obj["name"] for obj in calls[5][1]] == ["c"]
+    assert calls[6] == ("before_delete", None)
+    assert calls[7] == ("after_delete", None)
 
 
 @pytest.mark.anyio
@@ -341,6 +407,7 @@ async def test_repository_options_forwarded_to_repository():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = repo
 
@@ -371,6 +438,10 @@ class UpdateAlpha(BaseModel):
     name: str
 
 
+class ValuesAlpha(BaseModel):
+    name: str
+
+
 class BetaItem(BaseModel):
     id: UUID
     title: str
@@ -385,11 +456,16 @@ class UpdateBeta(BaseModel):
     title: str
 
 
+class ValuesBeta(BaseModel):
+    title: str
+
+
 class AlphaViewSet(AsyncBulkAPIViewSet):
     api_component_name = "Alpha"
     response_schema = AlphaItem
     create_schema = CreateAlpha
     bulk_update_schema = UpdateAlpha
+    update_schema = ValuesAlpha
     filter = None
     repository = RecordingAsyncRepository()
 
@@ -399,6 +475,7 @@ class BetaViewSet(AsyncBulkAPIViewSet):
     response_schema = BetaItem
     create_schema = CreateBeta
     bulk_update_schema = UpdateBeta
+    update_schema = ValuesBeta
     filter = None
     repository = RecordingAsyncRepository()
 
@@ -427,6 +504,13 @@ def test_two_bulk_viewsets_document_their_own_schemas():
     assert body_item_ref("/b/bulk-create", "post") == "#/components/schemas/CreateBeta"
     assert body_item_ref("/a/bulk-update", "put") == "#/components/schemas/UpdateAlpha"
     assert body_item_ref("/b/bulk-update", "put") == "#/components/schemas/UpdateBeta"
+
+    def body_ref(path: str, method: str) -> str:
+        operation = spec["paths"][path][method]
+        return operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+
+    assert body_ref("/a/bulk-update", "patch") == "#/components/schemas/ValuesAlpha"
+    assert body_ref("/b/bulk-update", "patch") == "#/components/schemas/ValuesBeta"
 
     def response_item_ref(path: str, method: str, status: int) -> str:
         operation = spec["paths"][path][method]
@@ -467,6 +551,7 @@ def test_bulk_openapi_documents_status_codes():
         response_schema = Item
         create_schema = CreateItem
         bulk_update_schema = UpdateItem
+        update_schema = ItemValues
         filter = NameFilter
         repository = RecordingAsyncRepository()
 
@@ -475,6 +560,14 @@ def test_bulk_openapi_documents_status_codes():
 
     create_responses = spec["paths"]["/items/bulk-create"]["post"]["responses"]
     schema = create_responses["201"]["content"]["application/json"]["schema"]
+    assert schema["type"] == "array"
+    assert schema["items"]["$ref"] == "#/components/schemas/Item"
+
+    update_responses = spec["paths"]["/items/bulk-update"]["put"]["responses"]
+    assert "204" in update_responses
+
+    patch_responses = spec["paths"]["/items/bulk-update"]["patch"]["responses"]
+    schema = patch_responses["200"]["content"]["application/json"]["schema"]
     assert schema["type"] == "array"
     assert schema["items"]["$ref"] == "#/components/schemas/Item"
 

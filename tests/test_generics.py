@@ -17,11 +17,11 @@ from starlette.status import (
 from fastapi_views.exceptions import NotFound
 from fastapi_views.filters.models import (
     BaseFilter,
+    CursorPaginationFilter,
     FieldsFilter,
     PaginationFilter,
-    TokenPaginationFilter,
 )
-from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.pagination import CursorPage, NumberedPage
 from fastapi_views.views.generics import (
     AsyncGenericCreateAPIView,
     AsyncGenericListAPIView,
@@ -77,9 +77,9 @@ class ItemRepository:
     async def list(self) -> Sequence[dict[str, Any]]:
         return list(self._data.values())
 
-    async def delete(self, **kwargs: Any) -> None:
+    async def delete_one(self, **kwargs: Any) -> dict[str, Any] | None:
         item_id = kwargs["id"]
-        self._data.pop(item_id, None)
+        return self._data.pop(item_id, None)
 
     async def update_one(
         self,
@@ -186,21 +186,21 @@ def test_generic_list_view_response_schema_pagination_filter():
     assert schema == NumberedPage[MySchema]
 
 
-def test_generic_list_view_response_schema_token_filter():
+def test_generic_list_view_response_schema_cursor_filter():
     class MySchema(BaseModel):
         name: str
 
-    class TokenPaginatedView(BaseGenericListAPIView):
+    class CursorPaginatedView(BaseGenericListAPIView):
         response_schema = MySchema
-        filter = TokenPaginationFilter
+        filter = CursorPaginationFilter
 
         def list(self, _filter):
             return []
 
     schema = BaseGenericListAPIView.__dict__["get_response_schema"].__func__(
-        TokenPaginatedView, "list"
+        CursorPaginatedView, "list"
     )
-    assert schema == TokenPage[MySchema]
+    assert schema == CursorPage[MySchema]
 
 
 def test_generic_list_view_response_schema_non_list_action():

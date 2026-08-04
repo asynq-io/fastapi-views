@@ -7,6 +7,7 @@ from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
     FieldsFilter,
+    OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
 )
@@ -96,6 +97,9 @@ class ObjectFilterResolver(FilterResolver[Objects]):
     def apply_pagination_filter(
         self, queryset: Objects, filter: BasePaginationFilter, **_: Any
     ) -> Objects:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, OffsetLimitFilter):
             return queryset[filter.offset : filter.offset + filter.limit]
+        if isinstance(filter, PaginationFilter):
+            offset = (filter.page - 1) * filter.page_size
+            return queryset[offset : offset + filter.page_size]
         raise NotImplementedError

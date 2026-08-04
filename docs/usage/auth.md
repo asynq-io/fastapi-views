@@ -435,3 +435,30 @@ configure_app(app)
 
 The same dependencies work on individual routes via the standard FastAPI `dependencies=[...]`
 argument or as an `Annotated` parameter.
+
+### Per-action dependencies
+
+When different actions need different requirements, set `action_dependencies` on the
+view class — e.g. different scopes for reads and writes:
+
+```python
+from fastapi_views.views.generics import AsyncGenericViewSet
+
+
+class ItemViewSet(AsyncGenericViewSet):
+    api_component_name = "Item"
+    ...
+    action_dependencies = {
+        "list": [auth.requires("items:read")],
+        "retrieve": [auth.requires("items:read")],
+        "create": [auth.requires("items:edit")],
+        "update": [auth.requires("items:edit")],
+        "partial_update": [auth.requires("items:edit")],
+        "destroy": [auth.requires("items:edit")],
+    }
+```
+
+Bulk views support the same attribute with the `bulk_create`, `bulk_update`,
+`update_many` and `bulk_delete` actions. Per-action dependencies compose with `dependencies=[...]`
+passed to `ViewRouter(...)` or `register_view(...)`, and can be computed dynamically
+by overriding `get_dependencies(action)` instead.

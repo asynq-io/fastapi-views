@@ -38,6 +38,7 @@ Returning `None` from `create` raises `409 Conflict`. Returning `None` from `get
 | `partial_update_schema` | Pydantic model for the PATCH request body |
 | `filter` | Filter class for the list action (see [Filters](filters.md)) |
 | `repository` | Repository instance (sync or async) |
+| `action_dependencies` | Route-level dependencies applied per action, e.g. auth scopes (see [Auth](auth.md)) |
 
 ```python
 from __future__ import annotations

@@ -59,7 +59,6 @@ opentelemetry = ["opentelemetry-instrumentation-fastapi", "opentelemetry-exporte
 
 standard = ["uvloop", "uvicorn", "starlette-exporter", "opentelemetry-instrumentation-fastapi", "typer"]
 
-logging = ["structlog"]
 websockets = ["websockets"]
 jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
@@ -78,7 +77,6 @@ all = [
     "websockets",
     "joserfc",
     "auth0-api-python",
-    "structlog",
     "babel",
     "jinja2",
     "redis",
@@ -92,8 +90,10 @@ dev = [
     {include-group = "lint"},
     {include-group = "test"},
     {include-group = "docs"},
+    "aiosqlite>=0.22.1",
+    "greenlet>=3.5.4",
     "ipython",
-    "sqlargon>=0.6.13",
+    "sqlargon[pagination]==1.0.2b1",
 ]
 
 test = [
@@ -153,6 +153,7 @@ venv = ".venv"
 python_version = "3.10"
 exclude = ["^tmp/"]
 # strict = true
+disable_error_code = ["annotation-unchecked"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 follow_imports = "normal"

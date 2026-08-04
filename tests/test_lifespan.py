@@ -5,11 +5,11 @@ from typing import Annotated
 
 import pytest
 from asgi_lifespan import LifespanManager
-from fastapi import Request
+from fastapi import Request  # noqa: TC002  # resolved at runtime by FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from fastapi_views.lifespan import FromScope
-from fastapi_views.middlewares.lifespan import LifespanMiddleware
+from fastapi_views.middlewares.lifespan import StatefulLifespanMiddleware
 
 
 @asynccontextmanager
@@ -23,7 +23,7 @@ async def fake_db(events):
 async def test_lifespan_middleware_provides_app_scoped_dependency(app):
     events = []
 
-    app.add_middleware(LifespanMiddleware, db=lambda: fake_db(events))
+    app.add_middleware(StatefulLifespanMiddleware, db=lambda: fake_db(events))
 
     @app.get("/db")
     async def get_db(db: Annotated[dict, FromScope("db")]) -> dict:
@@ -43,7 +43,7 @@ async def test_lifespan_middleware_provides_app_scoped_dependency(app):
 async def test_lifespan_middleware_accepts_context_manager_instance(app):
     events = []
 
-    app.add_middleware(LifespanMiddleware, db=fake_db(events))
+    app.add_middleware(StatefulLifespanMiddleware, db=fake_db(events))
 
     @app.get("/db")
     async def get_db(request: Request) -> dict:
@@ -71,7 +71,7 @@ async def test_lifespan_middleware_tears_down_multiple_dependencies_in_reverse_o
         events.append(f"teardown {name}")
 
     app.add_middleware(
-        LifespanMiddleware,
+        StatefulLifespanMiddleware,
         first=lambda: dependency("first"),
         second=lambda: dependency("second"),
     )

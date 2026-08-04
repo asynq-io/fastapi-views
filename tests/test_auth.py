@@ -431,7 +431,6 @@ async def test_api_key_honors_custom_header_name(app, client):
 
 try:
     from auth0_api_python.api_client import BaseAuthError
-
     from fastapi_views.auth.auth0 import Auth0
 
     HAS_AUTH0 = True

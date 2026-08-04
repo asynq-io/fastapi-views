@@ -10,10 +10,11 @@ from typing_extensions import Self
 from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
+    CursorPaginationFilter,
     FieldsFilter,
+    OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
-    TokenPaginationFilter,
 )
 from fastapi_views.filters.operations import (
     LogicalOperation,
@@ -210,11 +211,14 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
     def apply_pagination_filter(
         self, queryset: _Queryset, filter: BasePaginationFilter, **context: Any
     ) -> _Queryset:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, OffsetLimitFilter):
             return queryset.offset(filter.offset).limit(filter.limit)
-        if isinstance(filter, TokenPaginationFilter):
-            return self.apply_token_pagination(
-                queryset, filter.page_token, filter.page_size, **context
+        if isinstance(filter, PaginationFilter):
+            offset = (filter.page - 1) * filter.page_size
+            return queryset.offset(offset).limit(filter.page_size)
+        if isinstance(filter, CursorPaginationFilter):
+            return self.apply_cursor_pagination(
+                queryset, filter.cursor, filter.page_size, **context
             )
         raise NotImplementedError
 
@@ -232,7 +236,7 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             order_by.extend(extra)
         return order_by
 
-    def apply_token_pagination(
+    def apply_cursor_pagination(
         self,
         queryset: _Queryset,
         page: str | None,

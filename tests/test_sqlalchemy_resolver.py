@@ -7,12 +7,12 @@ from unittest.mock import patch
 import pytest
 
 from fastapi_views.filters.models import (
+    CursorPaginationFilter,
     FieldsFilter,
     ModelFilter,
     OrderingFilter,
     PaginationFilter,
     SearchFilter,
-    TokenPaginationFilter,
 )
 from fastapi_views.filters.operations import (
     FilterOperation,
@@ -479,29 +479,29 @@ def test_apply_filter_exclude_paginate(
     assert result._limit_val is None
 
 
-def test_apply_filter_token_pagination_raises(
+def test_apply_filter_cursor_pagination_raises(
     resolver: SQLAlchemyFilterResolver,
     qs: MockQueryset,
 ) -> None:
-    f = TokenPaginationFilter(page_size=10)
+    f = CursorPaginationFilter(page_size=10)
     with pytest.raises(NotImplementedError):
         resolver.apply_filter(f, qs)
 
 
-def test_apply_token_pagination_raises(
+def test_apply_cursor_pagination_raises(
     resolver: SQLAlchemyFilterResolver,
     qs: MockQueryset,
 ) -> None:
     with pytest.raises(NotImplementedError):
-        resolver.apply_token_pagination(qs, "some_token", 10)
+        resolver.apply_cursor_pagination(qs, "some_cursor", 10)
 
 
-def test_apply_token_pagination_no_token_raises(
+def test_apply_cursor_pagination_no_cursor_raises(
     resolver: SQLAlchemyFilterResolver,
     qs: MockQueryset,
 ) -> None:
     with pytest.raises(NotImplementedError):
-        resolver.apply_token_pagination(qs, None, 10)
+        resolver.apply_cursor_pagination(qs, None, 10)
 
 
 def test_apply_fields_filter(

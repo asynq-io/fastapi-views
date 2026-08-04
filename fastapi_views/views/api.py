@@ -39,7 +39,9 @@ from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DependencyMixin, DetailViewMixin, ErrorHandlerMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
+
+    from fastapi import params
 
     from fastapi_views.models import ResponseHeaders
 
@@ -269,6 +271,8 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     """
 
     response_schema: T | None = None
+    #: Extra route-level dependencies applied per action, e.g. auth scopes.
+    action_dependencies: ClassVar[Mapping[Action, Sequence[params.Depends]]] = {}
     default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
@@ -278,6 +282,18 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         self.validation_context = None
         self.serializer_options = self.default_serializer_options.copy()
         super().__init__(request, response)
+
+    @classmethod
+    def get_dependencies(cls, action: Action | None = None) -> list[params.Depends]:
+        """Route-level dependencies for ``action``'s endpoint.
+
+        Returns the :attr:`action_dependencies` entry for ``action``, e.g.
+        auth scopes such as ``auth.requires("items:read")``. Override for
+        fully dynamic per-action dependencies.
+        """
+        if action is None:
+            return []
+        return list(cls.action_dependencies.get(action, ()))
 
     @classmethod
     def get_response_headers(
@@ -352,6 +368,13 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
             kwargs.setdefault("operation_id", f"{action}_{cls.get_slug_name()}")
 
         kwargs.setdefault("response_model", cls.get_response_schema(action))
+
+        dependencies = [
+            *cls.get_dependencies(action),
+            *(kwargs.get("dependencies") or ()),
+        ]
+        if dependencies:
+            kwargs["dependencies"] = dependencies
 
         extra_responses = cls.get_extra_responses(
             action=action,

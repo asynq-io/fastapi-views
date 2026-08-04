@@ -44,35 +44,39 @@ M_co = TypeVar("M_co", covariant=True)
 class AsyncBulkRepository(Protocol[M_co]):
     """Repository contract required by the async bulk views.
 
-    Only the three methods the bulk views call are required: ``bulk_create``,
-    ``bulk_update`` and ``delete`` (used by bulk-delete). Implementations are
-    expected to perform each operation atomically (one transaction) so the
-    all-or-nothing guarantee holds.
+    Only the methods the bulk views call are required: ``create_many`` and
+    ``bulk_update`` receive one mapping per item; ``update_many`` applies a
+    single values mapping to every row matching the criteria; ``delete_many``
+    removes the matching rows. Implementations are expected to perform each
+    operation atomically (one transaction) so the all-or-nothing guarantee
+    holds.
     """
 
-    async def bulk_create(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+    async def create_many(
+        self, items: Sequence[Mapping[str, Any]]
     ) -> Sequence[M_co]: ...
 
-    async def bulk_update(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+    async def update_many(
+        self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
     ) -> Sequence[M_co]: ...
 
-    async def delete(self, *args: Any, **kwargs: Any) -> None: ...
+    async def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
+
+    async def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 class BulkRepository(Protocol[M_co]):
     """Synchronous counterpart of :class:`AsyncBulkRepository`."""
 
-    def bulk_create(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+    def create_many(self, items: Sequence[Mapping[str, Any]]) -> Sequence[M_co]: ...
+
+    def update_many(
+        self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
     ) -> Sequence[M_co]: ...
 
-    def bulk_update(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
-    ) -> Sequence[M_co]: ...
+    def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
 
-    def delete(self, *args: Any, **kwargs: Any) -> None: ...
+    def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 class WithAsyncBulkRepositoryMixin(Generic[M]):
@@ -163,24 +167,24 @@ class AsyncBulkCreateAPIView(BaseBulkCreateAPIView, Generic[P]):
 
 
 class BaseBulkUpdateAPIView(APIView):
-    bulk_update_route: str = "/bulk-update"
-    return_on_update: bool = True
+    """Per-item bulk update: many rows, each with its own values.
 
-    @classmethod
-    def get_response_schema(cls, action: Action | None = None) -> Any:
-        if action == "bulk_update":
-            return list[cls.response_schema]  # type: ignore[name-defined]
-        return super().get_response_schema(action)
+    Backed by an ``executemany``-style repository call which cannot return
+    rows, so the route responds with ``204 No Content``.
+    """
+
+    bulk_update_route: str = "/bulk-update"
 
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
-        status_code = cls.get_status_code("bulk_update", HTTP_200_OK)
+        status_code = cls.get_status_code("bulk_update", HTTP_204_NO_CONTENT)
         yield cls.get_api_action(
             prefix=prefix,
             path=cls.bulk_update_route,
             endpoint=cls.get_bulk_update_endpoint(status_code),
             methods=["PUT"],
             status_code=status_code,
+            response_class=Response,
             action="bulk_update",
             extra_errors=(NotFound, Conflict),
         )
@@ -193,19 +197,15 @@ class BaseBulkUpdateAPIView(APIView):
 
 
 class BulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
-    """Sync bulk update."""
+    """Sync per-item bulk update."""
 
     @classmethod
     def get_bulk_update_endpoint(cls, status_code: int) -> Endpoint:
-        schema = cls.get_response_schema(action="bulk_update")
-
         def endpoint(
             self: BulkUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
-            objs = self.bulk_update(*args, **kwargs)
-            if not self.return_on_update:
-                objs = None
-            return self.get_response(objs, status_code=status_code, schema=schema)
+            self.bulk_update(*args, **kwargs)
+            return Response(status_code=status_code)
 
         cls._patch_endpoint_signature(endpoint, cls.bulk_update)
         return endpoint
@@ -216,25 +216,103 @@ class BulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
 
 
 class AsyncBulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
-    """Async bulk update."""
+    """Async per-item bulk update."""
 
     @classmethod
     def get_bulk_update_endpoint(cls, status_code: int) -> Endpoint:
-        schema = cls.get_response_schema(action="bulk_update")
-
         async def endpoint(
             self: AsyncBulkUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
-            objs = await self.bulk_update(*args, **kwargs)
-            if not self.return_on_update:
-                objs = None
-            return self.get_response(objs, status_code=status_code, schema=schema)
+            await self.bulk_update(*args, **kwargs)
+            return Response(status_code=status_code)
 
         cls._patch_endpoint_signature(endpoint, cls.bulk_update)
         return endpoint
 
     @abstractmethod
     async def bulk_update(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+        raise NotImplementedError
+
+
+class BaseUpdateManyAPIView(APIView):
+    """Filtered update: apply one set of values to every row a filter selects.
+
+    The repository call can use ``RETURNING``, so the route responds with the
+    updated objects by default.
+    """
+
+    update_many_route: str = "/bulk-update"
+    return_on_update: bool = True
+
+    @classmethod
+    def get_response_schema(cls, action: Action | None = None) -> Any:
+        if action == "update_many":
+            return list[cls.response_schema]  # type: ignore[name-defined]
+        return super().get_response_schema(action)
+
+    @classmethod
+    def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
+        status_code = cls.get_status_code("update_many", HTTP_200_OK)
+        yield cls.get_api_action(
+            prefix=prefix,
+            path=cls.update_many_route,
+            endpoint=cls.get_update_many_endpoint(status_code),
+            methods=["PATCH"],
+            status_code=status_code,
+            action="update_many",
+            extra_errors=(Conflict,),
+        )
+        yield from super().get_api_actions(prefix)
+
+    @classmethod
+    @abstractmethod
+    def get_update_many_endpoint(cls, status_code: int) -> Endpoint:
+        raise NotImplementedError
+
+
+class UpdateManyAPIView(BaseUpdateManyAPIView, Generic[P]):
+    """Sync filtered update."""
+
+    @classmethod
+    def get_update_many_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="update_many")
+
+        def endpoint(
+            self: UpdateManyAPIView, *args: P.args, **kwargs: P.kwargs
+        ) -> Response:
+            objs = self.update_many(*args, **kwargs)
+            if not self.return_on_update:
+                objs = None
+            return self.get_response(objs, status_code=status_code, schema=schema)
+
+        cls._patch_endpoint_signature(endpoint, cls.update_many)
+        return endpoint
+
+    @abstractmethod
+    def update_many(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+        raise NotImplementedError
+
+
+class AsyncUpdateManyAPIView(BaseUpdateManyAPIView, Generic[P]):
+    """Async filtered update."""
+
+    @classmethod
+    def get_update_many_endpoint(cls, status_code: int) -> Endpoint:
+        schema = cls.get_response_schema(action="update_many")
+
+        async def endpoint(
+            self: AsyncUpdateManyAPIView, *args: P.args, **kwargs: P.kwargs
+        ) -> Response:
+            objs = await self.update_many(*args, **kwargs)
+            if not self.return_on_update:
+                objs = None
+            return self.get_response(objs, status_code=status_code, schema=schema)
+
+        cls._patch_endpoint_signature(endpoint, cls.update_many)
+        return endpoint
+
+    @abstractmethod
+    async def update_many(self, *args: P.args, **kwargs: P.kwargs) -> Any:
         raise NotImplementedError
 
 
@@ -336,7 +414,7 @@ class AsyncGenericBulkCreateAPIView(
         extra = self.get_kwargs("bulk_create")
         data = [item.model_dump() | extra for item in items]
         await self.before_bulk_create(data)
-        objects = await self.repository.bulk_create(
+        objects = await self.repository.create_many(
             data, **self.get_repository_options("bulk_create")
         )
         await self.after_bulk_create(objects)
@@ -360,7 +438,7 @@ class GenericBulkCreateAPIView(
         extra = self.get_kwargs("bulk_create")
         data = [item.model_dump() | extra for item in items]
         self.before_bulk_create(data)
-        objects = self.repository.bulk_create(
+        objects = self.repository.create_many(
             data, **self.get_repository_options("bulk_create")
         )
         self.after_bulk_create(objects)
@@ -389,23 +467,22 @@ class AsyncGenericBulkUpdateAPIView(
     AsyncBulkUpdateAPIView,
     WithAsyncBulkRepositoryMixin[M],
 ):
-    """Async repository-backed bulk update."""
+    """Async repository-backed per-item bulk update."""
 
-    async def bulk_update(self, items: list[BaseModel]) -> Sequence[M]:
+    async def bulk_update(self, items: list[BaseModel]) -> None:
         extra = self.get_kwargs("bulk_update")
         data = [item.model_dump() | extra for item in items]
         await self.before_bulk_update(data)
-        objs = await self.repository.bulk_update(
+        await self.repository.bulk_update(
             data, **self.get_repository_options("bulk_update")
         )
-        await self.after_bulk_update(objs)
-        return objs
+        await self.after_bulk_update()
 
     async def before_bulk_update(self, data: list[dict[str, Any]]) -> None:
         """Hook receiving the validated payloads before the repository call."""
 
-    async def after_bulk_update(self, objs: Sequence[M]) -> None:
-        """Hook receiving the updated objects before the response is built."""
+    async def after_bulk_update(self) -> None:
+        """Hook invoked after rows were updated."""
 
 
 class GenericBulkUpdateAPIView(
@@ -413,55 +490,114 @@ class GenericBulkUpdateAPIView(
     BulkUpdateAPIView,
     WithBulkRepositoryMixin[M],
 ):
-    """Sync repository-backed bulk update."""
+    """Sync repository-backed per-item bulk update."""
 
-    def bulk_update(self, items: list[BaseModel]) -> Sequence[M]:
+    def bulk_update(self, items: list[BaseModel]) -> None:
         extra = self.get_kwargs("bulk_update")
         data = [item.model_dump() | extra for item in items]
         self.before_bulk_update(data)
-        objs = self.repository.bulk_update(
-            data, **self.get_repository_options("bulk_update")
-        )
-        self.after_bulk_update(objs)
-        return objs
+        self.repository.bulk_update(data, **self.get_repository_options("bulk_update"))
+        self.after_bulk_update()
 
     def before_bulk_update(self, data: list[dict[str, Any]]) -> None:
         """Hook receiving the validated payloads before the repository call."""
 
-    def after_bulk_update(self, objs: Sequence[M]) -> None:
-        """Hook receiving the updated objects before the response is built."""
+    def after_bulk_update(self) -> None:
+        """Hook invoked after rows were updated."""
 
 
-class BaseGenericBulkDestroyAPIView(GenericView):
-    #: Filter model selecting which rows to delete. Delete-by-id is just a filter
-    #: with an ``id__in`` field; swap it for any criteria. Set to ``None`` to allow
-    #: an unfiltered delete of everything matched by :meth:`get_kwargs`.
+class BaseGenericFilteredBulkAPIView(GenericView):
+    #: Filter model selecting which rows the action applies to. Acting by id is
+    #: just a filter with an ``id__in`` field; swap it for any criteria. Set to
+    #: ``None`` to act on everything matched by :meth:`get_kwargs`.
     filter: type[BaseModel] | None
 
     @classmethod
-    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
-        if action == "bulk_delete":
-            filter_ = cls.filter or _NoFilter
-            return {
-                "filter": Annotated[
-                    BaseFilter,
-                    FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
-                ]
-            }
-        return {}
+    def _filter_annotation(cls) -> Any:
+        filter_ = cls.filter or _NoFilter
+        return Annotated[
+            BaseFilter,
+            FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
+        ]
 
     def resolve_filter(
         self, filter: BaseFilter
     ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         return (), filter.as_kwargs()
 
-    def get_delete_args(
-        self, filter: BaseFilter
+    def get_filter_args(
+        self, filter: BaseFilter, action: Action | None = None
     ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         if type(filter) is _NoFilter:
-            return (), self.get_kwargs("bulk_delete")
-        filter.with_kwargs(**self.get_kwargs("bulk_delete"))
+            return (), self.get_kwargs(action)
+        filter.with_kwargs(**self.get_kwargs(action))
         return self.resolve_filter(filter)
+
+
+class BaseGenericUpdateManyAPIView(BaseGenericFilteredBulkAPIView):
+    #: Schema of the values applied to every row selected by the filter.
+    update_schema: type[BaseModel]
+
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "update_many":
+            return {
+                "values": cls.update_schema,
+                "filter": cls._filter_annotation(),
+            }
+        return {}
+
+
+class AsyncGenericUpdateManyAPIView(
+    BaseGenericUpdateManyAPIView,
+    AsyncUpdateManyAPIView,
+    WithAsyncBulkRepositoryMixin[M],
+):
+    """Async filtered update: one set of values applied to the matched rows."""
+
+    async def update_many(self, values: BaseModel, filter: BaseFilter) -> Sequence[M]:
+        data = values.model_dump(exclude_unset=True)
+        args, kwargs = self.get_filter_args(filter, "update_many")
+        await self.before_update_many(data)
+        objs = await self.repository.update_many(data, *args, **kwargs)
+        await self.after_update_many(objs)
+        return objs
+
+    async def before_update_many(self, values: dict[str, Any]) -> None:
+        """Hook receiving the validated values before the repository call."""
+
+    async def after_update_many(self, objs: Sequence[M]) -> None:
+        """Hook receiving the updated objects before the response is built."""
+
+
+class GenericUpdateManyAPIView(
+    BaseGenericUpdateManyAPIView,
+    UpdateManyAPIView,
+    WithBulkRepositoryMixin[M],
+):
+    """Sync filtered update: one set of values applied to the matched rows."""
+
+    def update_many(self, values: BaseModel, filter: BaseFilter) -> Sequence[M]:
+        data = values.model_dump(exclude_unset=True)
+        args, kwargs = self.get_filter_args(filter, "update_many")
+        self.before_update_many(data)
+        objs = self.repository.update_many(data, *args, **kwargs)
+        self.after_update_many(objs)
+        return objs
+
+    def before_update_many(self, values: dict[str, Any]) -> None:
+        """Hook receiving the validated values before the repository call."""
+
+    def after_update_many(self, objs: Sequence[M]) -> None:
+        """Hook receiving the updated objects before the response is built."""
+
+
+class BaseGenericBulkDestroyAPIView(BaseGenericFilteredBulkAPIView):
+    @classmethod
+    def get_extra_annotations(cls, action: str) -> dict[str, Any]:
+        if action == "bulk_delete":
+            return {"filter": cls._filter_annotation()}
+        return {}
 
 
 class AsyncGenericBulkDestroyAPIView(
@@ -469,19 +605,19 @@ class AsyncGenericBulkDestroyAPIView(
     AsyncBulkDestroyAPIView,
     WithAsyncBulkRepositoryMixin[M],
 ):
-    """Async bulk delete: resolve the filter, then ``repository.delete``."""
+    """Async bulk delete: resolve the filter, then ``repository.delete_many``."""
 
     async def bulk_delete(self, filter: BaseFilter) -> None:
-        await self.before_bulk_delete(filter)
-        args, kwargs = self.get_delete_args(filter)
-        await self.repository.delete(*args, **kwargs)
-        await self.after_bulk_delete(filter)
+        await self.before_bulk_delete()
+        args, kwargs = self.get_filter_args(filter, "bulk_delete")
+        await self.repository.delete_many(*args, **kwargs)
+        await self.after_bulk_delete()
 
-    async def before_bulk_delete(self, filter: BaseFilter) -> None:
-        """Hook invoked with the resolved filter before rows are deleted."""
+    async def before_bulk_delete(self) -> None:
+        """Hook invoked before rows are deleted."""
 
-    async def after_bulk_delete(self, filter: BaseFilter) -> None:
-        """Hook invoked with the resolved filter after rows were deleted."""
+    async def after_bulk_delete(self) -> None:
+        """Hook invoked after rows were deleted."""
 
 
 class GenericBulkDestroyAPIView(
@@ -489,19 +625,19 @@ class GenericBulkDestroyAPIView(
     BulkDestroyAPIView,
     WithBulkRepositoryMixin[M],
 ):
-    """Sync bulk delete: resolve the filter, then ``repository.delete``."""
+    """Sync bulk delete: resolve the filter, then ``repository.delete_many``."""
 
     def bulk_delete(self, filter: BaseFilter) -> None:
-        self.before_bulk_delete(filter)
-        args, kwargs = self.get_delete_args(filter)
-        self.repository.delete(*args, **kwargs)
-        self.after_bulk_delete(filter)
+        self.before_bulk_delete()
+        args, kwargs = self.get_filter_args(filter, "bulk_delete")
+        self.repository.delete_many(*args, **kwargs)
+        self.after_bulk_delete()
 
-    def before_bulk_delete(self, filter: BaseFilter) -> None:
-        """Hook invoked with the resolved filter before rows are deleted."""
+    def before_bulk_delete(self) -> None:
+        """Hook invoked before rows are deleted."""
 
-    def after_bulk_delete(self, filter: BaseFilter) -> None:
-        """Hook invoked with the resolved filter after rows were deleted."""
+    def after_bulk_delete(self) -> None:
+        """Hook invoked after rows were deleted."""
 
 
 # --------------------------------------------------------------------------- #
@@ -510,14 +646,16 @@ class GenericBulkDestroyAPIView(
 class AsyncBulkAPIViewSet(
     AsyncGenericBulkCreateAPIView,
     AsyncGenericBulkUpdateAPIView,
+    AsyncGenericUpdateManyAPIView,
     AsyncGenericBulkDestroyAPIView,
 ):
-    """All three async bulk actions. Mix in alongside a regular viewset."""
+    """All four async bulk actions. Mix in alongside a regular viewset."""
 
 
 class BulkAPIViewSet(
     GenericBulkCreateAPIView,
     GenericBulkUpdateAPIView,
+    GenericUpdateManyAPIView,
     GenericBulkDestroyAPIView,
 ):
-    """All three sync bulk actions. Mix in alongside a regular viewset."""
+    """All four sync bulk actions. Mix in alongside a regular viewset."""

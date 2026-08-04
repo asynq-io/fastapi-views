@@ -15,7 +15,7 @@ from joserfc.jwt import BaseClaimsRegistry
 from fastapi_views.exceptions import Unauthorized
 from fastapi_views.models import BaseSchema
 
-from .abc import AuthorizationScheme, ScopesAuth
+from .abc import AuthorizationScheme, ScopesAuth, TokenWrapper
 from .scopes import ScopeValidator
 
 try:
@@ -84,10 +84,11 @@ class JWTAuth(ScopesAuth):
         self,
         config: JWTConfig,
         scheme: AuthorizationScheme | None = None,
+        custom_class: TokenWrapper | None = None,
         scope_validator: ScopeValidator | None = None,
     ) -> None:
         self.config = config
-        super().__init__(scheme, scope_validator)
+        super().__init__(scheme, scope_validator, custom_class)
 
     @cached_property
     def jwks(self) -> jwk.KeySetSerialization:

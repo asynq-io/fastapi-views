@@ -10,11 +10,12 @@ from fastapi_views.filters.dependencies import FilterDepends
 from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
+    CursorPaginationFilter,
     FieldsFilter,
+    OffsetLimitFilter,
     PaginationFilter,
-    TokenPaginationFilter,
 )
-from fastapi_views.pagination import BasePage, NumberedPage, TokenPage
+from fastapi_views.pagination import BasePage, CursorPage, NumberedPage, OffsetPage
 
 from .api import (
     APIView,
@@ -48,8 +49,9 @@ class Id(BaseModel):
     id: int
 
 
-class Page(Generic[M_co]):
-    items: Sequence[M_co]
+class Page(Protocol[M_co]):
+    @property
+    def items(self) -> Sequence[M_co]: ...
 
 
 class Repository(Protocol[M_co]):
@@ -63,7 +65,7 @@ class Repository(Protocol[M_co]):
 
     def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
-    def delete(self, *args: Any, **kwargs: Any) -> None: ...
+    def delete_one(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
     def update_one(
         self,
@@ -84,7 +86,7 @@ class AsyncRepository(Protocol[M_co]):
 
     async def list(self, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
 
-    async def delete(self, *args: Any, **kwargs: Any) -> None: ...
+    async def delete_one(self, *args: Any, **kwargs: Any) -> M_co | None: ...
 
     async def update_one(
         self,
@@ -137,8 +139,10 @@ class BaseGenericListAPIView(GenericView):
             if cls.filter is not None:
                 if issubclass(cls.filter, PaginationFilter):
                     container_cls = NumberedPage
-                elif issubclass(cls.filter, TokenPaginationFilter):
-                    container_cls = TokenPage
+                elif issubclass(cls.filter, OffsetLimitFilter):
+                    container_cls = OffsetPage
+                elif issubclass(cls.filter, CursorPaginationFilter):
+                    container_cls = CursorPage
             return container_cls[cls.response_schema]
         return cls.response_schema
 
@@ -212,6 +216,7 @@ class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixi
 
 class BaseGenericCreateAPIView(GenericView):
     create_schema: type[BaseModel]
+    raise_conflict_create_none: bool = True
 
     @classmethod
     def get_extra_annotations(cls, action: str) -> dict[str, Any]:
@@ -231,13 +236,14 @@ class AsyncGenericCreateAPIView(
 ):
     """AsyncGenericCreateAPIView"""
 
-    async def create(self, create_schema: BaseModel) -> M:
+    async def create(self, create_schema: BaseModel) -> M | None:
         data = create_schema.model_dump()
         kwargs = self.get_kwargs("create")
         data.update(kwargs)
         await self.before_create(data)
         obj = await self.repository.create(**data)
-        if obj is None:
+
+        if obj is None and self.raise_conflict_create_none:
             self.raise_conflict()
         await self.after_create(obj)
         return obj
@@ -245,7 +251,7 @@ class AsyncGenericCreateAPIView(
     async def before_create(self, data: dict[str, Any]) -> None:
         pass
 
-    async def after_create(self, obj: M) -> None:
+    async def after_create(self, obj: M | None) -> None:
         pass
 
 
@@ -256,13 +262,13 @@ class GenericCreateAPIView(
 ):
     """GenericCreateAPIView"""
 
-    def create(self, create_schema: BaseModel) -> M:
+    def create(self, create_schema: BaseModel) -> M | None:
         data = create_schema.model_dump()
         kwargs = self.get_kwargs("create")
         data.update(kwargs)
         self.before_create(data)
         obj = self.repository.create(**data)
-        if obj is None:
+        if obj is None and self.raise_conflict_create_none:
             self.raise_conflict()
         self.after_create(obj)
         return obj
@@ -270,7 +276,7 @@ class GenericCreateAPIView(
     def before_create(self, data: dict[str, Any]) -> None:
         pass
 
-    def after_create(self, obj: M) -> None:
+    def after_create(self, obj: M | None) -> None:
         pass
 
 
@@ -323,20 +329,18 @@ class AsyncGenericUpdateAPIView(
 ):
     """AsyncGenericUpdateAPIView"""
 
-    async def update(self, pk: PK, update_schema: BaseModel) -> M:
+    async def update(self, pk: PK, update_schema: BaseModel) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = update_schema.model_dump()
         await self.before_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
-        if obj is None:
-            self.raise_not_found_error()
         await self.after_update(obj)
         return obj
 
     async def before_update(self, data: dict[str, Any]) -> None:
         pass
 
-    async def after_update(self, obj: M) -> None:
+    async def after_update(self, obj: M | None) -> None:
         pass
 
 
@@ -347,20 +351,18 @@ class GenericUpdateAPIView(
 ):
     """GenericUpdateAPIView"""
 
-    def update(self, pk: PK, update_schema: BaseModel) -> M:
+    def update(self, pk: PK, update_schema: BaseModel) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="update")
         data = update_schema.model_dump()
         self.before_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)
-        if obj is None:
-            self.raise_not_found_error()
         self.after_update(obj)
         return obj
 
     def before_update(self, data: dict[str, Any]) -> None:
         pass
 
-    def after_update(self, obj: M) -> None:
+    def after_update(self, obj: M | None) -> None:
         pass
 
 
@@ -389,15 +391,13 @@ class AsyncGenericPartialUpdateAPIView(
         data = partial_update_schema.model_dump(exclude_unset=True)
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
-        if obj is None:
-            self.raise_not_found_error()
         await self.after_partial_update(obj)
         return obj
 
     async def before_partial_update(self, data: dict[str, Any]) -> None:
         pass
 
-    async def after_partial_update(self, obj: M) -> None:
+    async def after_partial_update(self, obj: M | None) -> None:
         pass
 
 
@@ -413,15 +413,13 @@ class GenericPartialUpdateAPIView(
         data = partial_update_schema.model_dump(exclude_unset=True)
         self.before_partial_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)
-        if obj is None:
-            self.raise_not_found_error()
         self.after_partial_update(obj)
         return obj
 
     def before_partial_update(self, data: dict[str, Any]) -> None:
         pass
 
-    def after_partial_update(self, obj: M) -> None:
+    def after_partial_update(self, obj: M | None) -> None:
         pass
 
 
@@ -442,7 +440,7 @@ class AsyncGenericDestroyAPIView(
 
     async def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
-        await self.repository.delete(*args, **kwargs)
+        await self.repository.delete_one(*args, **kwargs)
 
 
 class GenericDestroyAPIView(
@@ -454,7 +452,7 @@ class GenericDestroyAPIView(
 
     def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
-        self.repository.delete(*args, **kwargs)
+        self.repository.delete_one(*args, **kwargs)
 
 
 class AsyncGenericViewSet(

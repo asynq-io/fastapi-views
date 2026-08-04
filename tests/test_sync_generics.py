@@ -53,9 +53,9 @@ class SyncItemRepository:
     def list(self) -> Sequence[dict[str, Any]]:
         return list(self._data.values())
 
-    def delete(self, **kwargs: Any) -> None:
+    def delete_one(self, **kwargs: Any) -> dict[str, Any] | None:
         item_id = kwargs["id"]
-        self._data.pop(item_id, None)
+        return self._data.pop(item_id, None)
 
     def update_one(
         self,

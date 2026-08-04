@@ -31,6 +31,7 @@ __all__ = [
 T = TypeVar("T")
 
 AuthorizationScheme = Callable[..., str | Awaitable[str | None] | None]
+TokenWrapper = Callable[[dict[str, Any]], Any]
 
 
 def http_bearer() -> AuthorizationScheme:
@@ -67,10 +68,15 @@ class AuthBase:
 
 
 class TokenAuth(AuthBase):
-    def __init__(self, scheme: AuthorizationScheme | None = None) -> None:
+    def __init__(
+        self,
+        scheme: AuthorizationScheme | None = None,
+        custom_class: TokenWrapper | None = None,
+    ) -> None:
         if scheme is None:
             scheme = http_bearer()
         super().__init__(scheme)
+        self.custom_class = custom_class
 
 
 class ScopesAuth(TokenAuth):
@@ -78,9 +84,10 @@ class ScopesAuth(TokenAuth):
         self,
         scheme: AuthorizationScheme | None = None,
         scope_validator: ScopeValidator | None = None,
+        custom_class: TokenWrapper | None = None,
     ) -> None:
+        super().__init__(scheme, custom_class)
         self.scope_validator = scope_validator or HierarchicalScopeValidator()
-        super().__init__(scheme)
 
     def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
         return self.scope_validator.has_scope(scope, granted_scopes)
@@ -109,7 +116,8 @@ class ScopesAuth(TokenAuth):
                 self.unauthorized()
             token = await self.verify(raw)
             self.validate_scopes(token, scopes)
-
+            if self.custom_class:
+                token = self.custom_class(token)
             return token
 
         return dependency
