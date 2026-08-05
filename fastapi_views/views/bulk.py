@@ -50,10 +50,14 @@ class AsyncBulkRepository(Protocol[M_co]):
     removes the matching rows. Implementations are expected to perform each
     operation atomically (one transaction) so the all-or-nothing guarantee
     holds.
+
+    Any ``repository_options`` configured on the view are forwarded to
+    ``create_many`` and ``bulk_update`` as extra keyword arguments, so
+    implementations used with options must accept them.
     """
 
     async def create_many(
-        self, items: Sequence[Mapping[str, Any]]
+        self, items: Sequence[Mapping[str, Any]], **options: Any
     ) -> Sequence[M_co]: ...
 
     async def update_many(
@@ -68,7 +72,9 @@ class AsyncBulkRepository(Protocol[M_co]):
 class BulkRepository(Protocol[M_co]):
     """Synchronous counterpart of :class:`AsyncBulkRepository`."""
 
-    def create_many(self, items: Sequence[Mapping[str, Any]]) -> Sequence[M_co]: ...
+    def create_many(
+        self, items: Sequence[Mapping[str, Any]], **options: Any
+    ) -> Sequence[M_co]: ...
 
     def update_many(
         self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any

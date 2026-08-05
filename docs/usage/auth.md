@@ -290,7 +290,7 @@ extra). It is itself a `ScopesAuth`, so `authenticated()` and `requires()` work 
 ```python
 from auth0_api_python.api_client import ApiClient
 
-from fastapi_views.auth.auth0 import Auth0
+from fastapi_views.integrations.auth0 import Auth0
 
 api_client = ApiClient(
     domain="your-tenant.auth0.com",

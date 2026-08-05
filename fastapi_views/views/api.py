@@ -674,10 +674,10 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = self.update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -701,10 +701,10 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = await self.update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -752,10 +752,10 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = self.partial_update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)
@@ -779,10 +779,10 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = await self.partial_update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)

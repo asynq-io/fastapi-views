@@ -70,7 +70,9 @@ class ItemRepository:
                 updated.append(item)
         return updated
 
-    async def bulk_update(self, items: Sequence[Mapping[str, Any]]) -> None:
+    async def bulk_update(
+        self, items: Sequence[Mapping[str, Any]], **_options: Any
+    ) -> None:
         for item in items:
             updated = Item(**item)
             self._data[updated.id] = updated

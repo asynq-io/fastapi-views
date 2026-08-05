@@ -17,7 +17,6 @@ from sqlargon.pagination import (
 from fastapi_views.filters.resolvers.sqlalchemy import SQLAlchemyFilterResolver
 
 if TYPE_CHECKING:
-    from sqlargon.typing import MultipleValues
     from typing_extensions import Self
 
     from fastapi_views.filters import BaseFilter, BasePaginationFilter
@@ -44,19 +43,6 @@ class FilterableRepository(
     ) -> Self:
         query = self.apply_filter(filter, self.query, exclude=exclude, **context)
         return self.copy(query)
-
-    async def bulk_update(
-        self,
-        values: MultipleValues,
-        on_: set[str] | None = None,
-        *args: Any,
-    ) -> None:
-        """Per-item bulk update; ``on_`` defaults to the primary-key columns."""
-        if not values:
-            return
-        await super().bulk_update(
-            values, on_ or self._get_default_index_elements(), *args
-        )
 
 
 class PaginatedRepository(FilterableRepository[Model], abstract=True):

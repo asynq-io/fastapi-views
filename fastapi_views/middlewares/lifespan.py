@@ -33,6 +33,13 @@ class LifespanMiddleware(ABC):
             return
 
         state = scope.setdefault("state", {})
+        torn_down = False
+
+        async def teardown_once() -> None:
+            nonlocal torn_down
+            if not torn_down:
+                torn_down = True
+                await self.teardown()
 
         async def receive_hook() -> Message:
             message = await receive()
@@ -41,11 +48,20 @@ class LifespanMiddleware(ABC):
             return message
 
         async def send_hook(message: Message) -> None:
-            if message["type"].startswith("lifespan.shutdown."):
-                await self.teardown()
+            if message["type"] in (
+                "lifespan.startup.failed",
+                "lifespan.shutdown.complete",
+                "lifespan.shutdown.failed",
+            ):
+                await teardown_once()
             await send(message)
 
-        await self.app(scope, receive_hook, send_hook)
+        try:
+            await self.app(scope, receive_hook, send_hook)
+        finally:
+            # A failed startup can abort the lifespan without any shutdown
+            # message, so dependencies entered so far are released here.
+            await teardown_once()
 
 
 class StatefulLifespanMiddleware(LifespanMiddleware):

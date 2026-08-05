@@ -207,6 +207,7 @@ async def test_request_logging_middleware_logs_and_reraises_unhandled_exception(
     assert exception_log["exc_info"] is True
     assert exception_log["url"] == "http://testserver/fail?x=1"
     assert exception_log["query_params"] == {"x": "1"}
+    assert exception_log["duration_ms"] >= 0
     assert sent == []
 
 

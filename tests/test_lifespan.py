@@ -85,3 +85,26 @@ async def test_lifespan_middleware_tears_down_multiple_dependencies_in_reverse_o
         "teardown second",
         "teardown first",
     ]
+
+
+@pytest.mark.anyio
+async def test_lifespan_middleware_tears_down_entered_dependencies_on_startup_failure(
+    app,
+):
+    events = []
+
+    def broken():
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    app.add_middleware(
+        StatefulLifespanMiddleware,
+        db=lambda: fake_db(events),
+        cache=broken,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with LifespanManager(app):
+            pass
+
+    assert events == ["setup", "teardown"]

@@ -47,7 +47,7 @@ class ConstAPIKeyAuth(APIKeyAuth):
         async def _dependency(
             raw: Annotated[str | None, Depends(self.scheme)],
         ) -> Any:
-            if self._test_user:
+            if self._test_user is not None:
                 return self._test_user
             if raw is None:
                 self.unauthorized()

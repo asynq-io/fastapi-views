@@ -202,6 +202,20 @@ async def test_async_update_raise_on_none():
 
 
 @pytest.mark.anyio
+async def test_async_update_no_return_still_raises_not_found():
+    class NoReturnNotFoundUpdateView(AsyncUpdateAPIView):
+        detail_route = ""
+        return_on_update = False
+
+        async def update(self) -> None:
+            return None
+
+    async with view_client(NoReturnNotFoundUpdateView, error_handlers=True) as c:
+        response = await c.put("/test")
+        assert response.status_code == HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
 async def test_async_partial_update_raise_on_none():
     class RaiseOnNonePartialView(AsyncPartialUpdateAPIView):
         detail_route = ""
@@ -230,6 +244,20 @@ async def test_async_partial_update_no_return():
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
         assert "Content-Type" not in response.headers
+
+
+@pytest.mark.anyio
+async def test_async_partial_update_no_return_still_raises_not_found():
+    class NoReturnNotFoundPartialView(AsyncPartialUpdateAPIView):
+        detail_route = ""
+        return_on_update = False
+
+        async def partial_update(self) -> None:
+            return None
+
+    async with view_client(NoReturnNotFoundPartialView, error_handlers=True) as c:
+        response = await c.patch("/test")
+        assert response.status_code == HTTP_404_NOT_FOUND
 
 
 @pytest.mark.anyio

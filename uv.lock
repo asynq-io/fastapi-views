@@ -721,6 +721,7 @@ all = [
     { name = "prometheus-client" },
     { name = "redis" },
     { name = "starlette-exporter" },
+    { name = "structlog" },
     { name = "typer" },
     { name = "uvicorn" },
     { name = "uvloop" },
@@ -761,6 +762,9 @@ standard = [
     { name = "typer" },
     { name = "uvicorn" },
     { name = "uvloop" },
+]
+structlog = [
+    { name = "structlog" },
 ]
 uvicorn = [
     { name = "uvicorn" },
@@ -858,6 +862,8 @@ requires-dist = [
     { name = "starlette-exporter", marker = "extra == 'all'" },
     { name = "starlette-exporter", marker = "extra == 'prometheus'" },
     { name = "starlette-exporter", marker = "extra == 'standard'" },
+    { name = "structlog", marker = "extra == 'all'" },
+    { name = "structlog", marker = "extra == 'structlog'" },
     { name = "typer", marker = "extra == 'all'" },
     { name = "typer", marker = "extra == 'cli'" },
     { name = "typer", marker = "extra == 'standard'" },
@@ -870,7 +876,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "websockets", "jose", "auth0", "i18n", "cache", "jsonpatch", "all"]
+provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "structlog", "websockets", "jose", "auth0", "i18n", "cache", "jsonpatch", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -895,7 +901,7 @@ dev = [
     { name = "pytest-timeout" },
     { name = "ruff" },
     { name = "sqlalchemy", specifier = ">=2.0.48" },
-    { name = "sqlargon", extras = ["pagination"], specifier = "==1.0.2b1" },
+    { name = "sqlargon", extras = ["pagination"], specifier = "==1.0.3b1" },
     { name = "structlog", specifier = ">=26.1.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
     { name = "watchdog" },
@@ -2625,7 +2631,7 @@ wheels = [
 
 [[package]]
 name = "sqlargon"
-version = "1.0.2b1"
+version = "1.0.3b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alembic" },
@@ -2635,9 +2641,9 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/81/54e46cc754492c52da73d46cb3f68569c0477d05b0d28c10e8cd8f15de93/sqlargon-1.0.2b1.tar.gz", hash = "sha256:d12c7eb6dcc339429beb26a2e41beeb751462a096276c3da10257ce498388a6d", size = 35962, upload-time = "2026-08-04T12:53:09.154Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/43/17ddec9a852a1578dabb51937a30122facebed5879fd56fe8067f31797be/sqlargon-1.0.3b1.tar.gz", hash = "sha256:0899df5c7f91bcf8869ffa30e848ae8e2d25eb47cfd0427b377556dd035f9b6a", size = 35988, upload-time = "2026-08-05T13:00:59.76Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/37/6451b8b5c267c6b2a65b44d28f46bbf889bb5a63f9541cf1bbc16ffe4c85/sqlargon-1.0.2b1-py3-none-any.whl", hash = "sha256:763c883d53bf11ab7abdd04ee6e45c018c853d936061f5f4b4bf89b79ee1da3d", size = 49470, upload-time = "2026-08-04T12:53:08.087Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/6b/8ba688fc199a4d20eca4da29d221cd2db18ee40efc4dc20db0b127846c91/sqlargon-1.0.3b1-py3-none-any.whl", hash = "sha256:cb0fd51208775a6d23df1189839994c87a24a12b441146a708bd62864a2445e4", size = 49493, upload-time = "2026-08-05T13:00:58.691Z" },
 ]
 
 [package.optional-dependencies]

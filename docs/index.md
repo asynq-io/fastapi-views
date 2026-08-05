@@ -20,7 +20,7 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **Class-based views** — `View`, `APIView`, `ViewSet`, and `GenericViewSet` at three levels of abstraction; mix-in only the actions you need
 - **Full CRUD in one class** — `list`, `create`, `retrieve`, `update`, `partial_update`, `destroy` with correct HTTP semantics out of the box (`201 Created`, `204 No Content`, `Location` header, etc.)
 - **Generic views with the repository pattern** — plug in any data source (SQLAlchemy, Motor, plain dicts) via a simple protocol; no ORM dependency
-- **DRF-style filters** — `ModelFilter`, `OrderingFilter`, `SearchFilter`, `PaginationFilter`, `TokenPaginationFilter`, `FieldsFilter`, and a combined `Filter` class; built-in SQLAlchemy and Python object resolvers
+- **DRF-style filters** — `ModelFilter`, `OrderingFilter`, `SearchFilter`, `PaginationFilter`, `CursorPaginationFilter`, `FieldsFilter`, and a combined `Filter` class; built-in SQLAlchemy and Python object resolvers
 - **RFC 9457 Problem Details** — every error response is machine-readable; built-in classes for the most common cases; custom errors auto-register in the OpenAPI spec
 - **Fast Pydantic v2 serialization** — `TypeAdapter` cached per schema type avoids the double validation/model instantiation that FastAPI does by default, reducing per-request overhead
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
@@ -156,7 +156,7 @@ The `Filter` system mirrors Django REST Framework's `FilterSet` API:
 - **`OrderingFilter`** — sort by whitelisted fields using `?sort=name` or `?sort=-created_at`
 - **`SearchFilter`** — full-text search across multiple fields with `?q=…`
 - **`PaginationFilter`** — page-number pagination returning a `NumberedPage`
-- **`TokenPaginationFilter`** — cursor-based pagination returning a `TokenPage`
+- **`CursorPaginationFilter`** — cursor-based pagination returning a `CursorPage`
 - **`FieldsFilter`** — sparse fieldsets; return only requested fields with `?fields=id,name`
 - **`Filter`** — convenience class combining all of the above
 

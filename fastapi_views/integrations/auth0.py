@@ -15,7 +15,7 @@ class Auth0(ScopesAuth):
         scheme: AuthorizationScheme | None = None,
         scope_validator: ScopeValidator | None = None,
         custom_class: TokenWrapper | None = None,
-        permission_key: Literal["permissions", "scope"] = "permissions",
+        permission_key: Literal["permissions", "scope"] = "scope",
     ) -> None:
         super().__init__(scheme, scope_validator, custom_class)
         self.api_client = api_client

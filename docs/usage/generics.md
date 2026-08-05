@@ -197,7 +197,7 @@ class ItemViewSet(AsyncGenericViewSet):
 
 ## Filters and pagination
 
-Set the `filter` attribute to a filter class to enable filtering, sorting, searching, and pagination on the list endpoint. When a `PaginationFilter` (or subclass) is used, the list endpoint returns a `NumberedPage` instead of a plain list. With `TokenPaginationFilter`, it returns a `TokenPage`.
+Set the `filter` attribute to a filter class to enable filtering, sorting, searching, and pagination on the list endpoint. When a `PaginationFilter` (or subclass) is used, the list endpoint returns a `NumberedPage` instead of a plain list. With `CursorPaginationFilter`, it returns a `CursorPage`.
 
 ```python
 from fastapi_views.filters.models import PaginationFilter

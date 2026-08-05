@@ -109,6 +109,7 @@ class RequestLoggingMiddleware:
                 )
         except Exception:
             if not excluded:
+                duration_ms = round((time.monotonic() - start_time) * 1000, 2)
                 request_logger.exception(
                     "unhandled_exception",
                     url=str(request.url),

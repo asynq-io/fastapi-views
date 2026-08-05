@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from opentelemetry.sdk.resources import Resource
+from starlette_exporter import PrometheusMiddleware
 
 from fastapi_views import configure_app
 from fastapi_views.config import (
@@ -13,10 +14,26 @@ from fastapi_views.config import (
 )
 from fastapi_views.i18n import LocaleMiddleware, NoTranslations
 from fastapi_views.i18n import translations as translations_module
+from fastapi_views.middlewares.structlog import RequestLoggingMiddleware
 
 
 def test_configure_app(app):
     configure_app(app)
+
+
+def test_configure_app_registers_prometheus_middleware_once(app):
+    configure_app(app)
+    assert sum(1 for m in app.user_middleware if m.cls is PrometheusMiddleware) == 1
+
+
+def test_configure_app_enables_request_logging_when_structlog_installed(app):
+    configure_app(app)
+    assert any(m.cls is RequestLoggingMiddleware for m in app.user_middleware)
+
+
+def test_configure_app_disables_request_logging_middleware(app):
+    configure_app(app, enable_request_logging_middleware=False)
+    assert all(m.cls is not RequestLoggingMiddleware for m in app.user_middleware)
 
 
 def test_configure_app_rejects_middleware_and_exporter(app):

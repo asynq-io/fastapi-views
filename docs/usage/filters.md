@@ -73,9 +73,9 @@ from fastapi_views.filters.models import PaginationFilter
 
 `page_size` defaults to `100` and is capped at `MAX_PAGE_SIZE` (default 500, configurable via the `MAX_PAGE_SIZE` environment variable).
 
-### `TokenPaginationFilter`
+### `CursorPaginationFilter`
 
-Cursor-based pagination using an opaque `?page_token`. The token is base64-encoded internally. The list action returns a `TokenPage` when this filter is active.
+Cursor-based pagination using an opaque `?cursor` (plus `?page_size`). The cursor is base64-encoded internally. The list action returns a `CursorPage` when this filter is active.
 
 ### `FieldsFilter`
 

@@ -59,6 +59,7 @@ opentelemetry = ["opentelemetry-instrumentation-fastapi", "opentelemetry-exporte
 
 standard = ["uvloop", "uvicorn", "starlette-exporter", "opentelemetry-instrumentation-fastapi", "typer"]
 
+structlog = ["structlog"]
 websockets = ["websockets"]
 jose = ["joserfc"]
 auth0 = ["auth0-api-python"]
@@ -74,6 +75,7 @@ all = [
     "prometheus-client",
     "opentelemetry-instrumentation-fastapi",
     "opentelemetry-exporter-prometheus",
+    "structlog",
     "websockets",
     "joserfc",
     "auth0-api-python",
@@ -92,7 +94,7 @@ dev = [
     "aiosqlite>=0.22.1",
     "greenlet>=3.5.4",
     "ipython",
-    "sqlargon[pagination]==1.0.2b1",
+    "sqlargon[pagination]==1.0.3b1",
     "structlog>=26.1.0",
 ]
 

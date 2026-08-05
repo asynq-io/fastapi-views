@@ -62,7 +62,7 @@ class AuthBase:
         async def _dependency(
             raw: Annotated[str | None, Depends(self.scheme)],
         ) -> Any:
-            if self._test_user:
+            if self._test_user is not None:
                 return self._test_user
             if raw is None:
                 self.unauthorized()
@@ -73,8 +73,10 @@ class AuthBase:
     @contextmanager
     def with_test_user(self, user: Any) -> Generator[Any, None, None]:
         self._test_user = user
-        yield
-        self._test_user = None
+        try:
+            yield
+        finally:
+            self._test_user = None
 
 
 class TokenAuth(AuthBase):
@@ -122,7 +124,7 @@ class ScopesAuth(TokenAuth):
             scopes: SecurityScopes,
             raw: Annotated[str | None, Depends(self.scheme)],
         ) -> Any:
-            if self._test_user:
+            if self._test_user is not None:
                 return self._test_user
             if raw is None:
                 self.unauthorized()

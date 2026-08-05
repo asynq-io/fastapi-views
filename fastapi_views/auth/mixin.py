@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from typing import ClassVar
+
 from fastapi import params
 
 from fastapi_views.exceptions import APIError, BadRequest, Forbidden, Unauthorized
@@ -11,23 +14,32 @@ class AutoScopesAuthView(APIView):
     auth: ScopesAuth
     resource: str | None = None
     default_errors: tuple[type[APIError], ...] = (BadRequest, Unauthorized, Forbidden)
+    #: Scope prefix required per action; extend when registering custom actions.
+    action_scopes: ClassVar[Mapping[Action, str]] = {
+        "list": "read",
+        "retrieve": "read",
+        "events": "read",
+        "create": "edit",
+        "update": "edit",
+        "partial_update": "edit",
+        "bulk_create": "edit",
+        "bulk_update": "edit",
+        "update_many": "edit",
+        "destroy": "delete",
+        "bulk_delete": "delete",
+    }
 
     @classmethod
     def get_dependencies(cls, action: Action | None = None) -> list[params.Depends]:
+        dependencies = super().get_dependencies(action)
         if action is None:
-            return []
+            return dependencies
+        if action not in cls.action_scopes:
+            msg = (
+                f"No scope configured for action {action!r} on {cls.__name__}; "
+                "add it to `action_scopes`"
+            )
+            raise LookupError(msg)
         resource_name = cls.resource or cls.get_name()
-        if action in ("list", "retrieve", "events"):
-            return [cls.auth.requires(f"read:{resource_name}")]
-        if action in (
-            "create",
-            "update",
-            "partial_update",
-            "bulk_create",
-            "bulk_update",
-            "update_many",
-        ):
-            return [cls.auth.requires(f"edit:{resource_name}")]
-        if action in ("destroy", "bulk_delete"):
-            return [cls.auth.requires(f"delete:{resource_name}")]
-        return []
+        scope = f"{cls.action_scopes[action]}:{resource_name}"
+        return [cls.auth.requires(scope), *dependencies]

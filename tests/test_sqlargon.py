@@ -280,12 +280,6 @@ async def test_bulk_repository_bulk_update_matches_on_primary_key():
 
 @pytest.mark.anyio
 @pytest.mark.usefixtures("seeded_db")
-async def test_bulk_repository_bulk_update_with_empty_items_is_a_noop():
-    assert await FruitRepository().bulk_update([]) is None
-
-
-@pytest.mark.anyio
-@pytest.mark.usefixtures("seeded_db")
 async def test_bulk_repository_update_many_by_criteria():
     updated = await FruitRepository().update_many({"name": "apricot"}, id=1)
     assert [(fruit.id, fruit.name) for fruit in updated] == [(1, "apricot")]

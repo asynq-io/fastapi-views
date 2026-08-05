@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from joserfc import jwk, jwt
 from starlette.status import (
     HTTP_200_OK,
@@ -12,6 +12,7 @@ from starlette.status import (
     HTTP_403_FORBIDDEN,
 )
 
+from fastapi_views.auth import AutoScopesAuthView
 from fastapi_views.auth.api_key import APIKeyAuth
 from fastapi_views.auth.jwt import (
     BearerAccessToken,
@@ -483,3 +484,117 @@ async def test_auth0_verify_maps_auth_error_to_api_error():
     error = exc_info.value
     assert error.status_code == HTTP_401_UNAUTHORIZED
     assert error.as_model().detail == "token expired"
+
+
+@auth0_required
+def test_auth0_reads_scope_claim_by_default():
+    auth = Auth0(AsyncMock())
+    granted = auth.get_granted_scopes({"scope": "read:items edit:items"})
+    assert granted == ["read:items", "edit:items"]
+
+
+@auth0_required
+def test_auth0_reads_permissions_claim_when_configured():
+    auth = Auth0(AsyncMock(), permission_key="permissions")
+    granted = auth.get_granted_scopes({"permissions": ["read:items"]})
+    assert granted == ["read:items"]
+
+
+# --------------------------------------------------------------------------- #
+# Test user override
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.anyio
+async def test_with_test_user_bypasses_verification(jwt_auth, app, client):
+    @app.get("/me")
+    async def me(token=jwt_auth.authenticated()):
+        return token
+
+    with jwt_auth.with_test_user({"sub": "tester"}):
+        response = await client.get("/me")
+
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {"sub": "tester"}
+    # override is cleared once the context exits
+    assert (await client.get("/me")).status_code == HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.anyio
+async def test_with_test_user_honors_falsy_user(jwt_auth, app, client):
+    @app.get("/me")
+    async def me(token=jwt_auth.authenticated()):
+        return token
+
+    with jwt_auth.with_test_user({}):
+        response = await client.get("/me")
+
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {}
+
+
+def test_with_test_user_is_reset_when_body_raises(jwt_auth):
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        jwt_auth.with_test_user({"sub": "t"}),
+    ):
+        raise RuntimeError("boom")
+
+    assert jwt_auth._test_user is None
+
+
+# --------------------------------------------------------------------------- #
+# AutoScopesAuthView
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("action", "scope"),
+    [
+        ("list", "read:items"),
+        ("retrieve", "read:items"),
+        ("create", "edit:items"),
+        ("update", "edit:items"),
+        ("bulk_update", "edit:items"),
+        ("destroy", "delete:items"),
+        ("bulk_delete", "delete:items"),
+    ],
+)
+def test_auto_scopes_auth_view_maps_action_to_scope(jwt_auth, action, scope):
+    class ItemsView(AutoScopesAuthView):
+        auth = jwt_auth
+        resource = "items"
+
+    (dependency,) = ItemsView.get_dependencies(action)
+    assert list(dependency.scopes) == [scope]
+
+
+def test_auto_scopes_auth_view_returns_no_dependencies_without_action(jwt_auth):
+    class ItemsView(AutoScopesAuthView):
+        auth = jwt_auth
+        resource = "items"
+
+    assert ItemsView.get_dependencies() == []
+
+
+def test_auto_scopes_auth_view_rejects_unknown_action(jwt_auth):
+    class ItemsView(AutoScopesAuthView):
+        auth = jwt_auth
+        resource = "items"
+
+    unknown_action: Any = "publish"
+    with pytest.raises(LookupError, match="publish"):
+        ItemsView.get_dependencies(unknown_action)
+
+
+def test_auto_scopes_auth_view_merges_action_dependencies(jwt_auth):
+    marker = Depends(lambda: None)
+
+    class ItemsView(AutoScopesAuthView):
+        auth = jwt_auth
+        resource = "items"
+        action_dependencies: ClassVar = {"retrieve": [marker]}
+
+    scope_dependency, extra = ItemsView.get_dependencies("retrieve")
+    assert list(scope_dependency.scopes) == ["read:items"]
+    assert extra is marker

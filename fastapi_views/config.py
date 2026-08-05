@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import importlib.util
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -93,7 +94,7 @@ def configure_app(  # noqa: C901, PLR0913
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
-    enable_request_logging_middleware: bool = True,
+    enable_request_logging_middleware: bool | None = None,
     prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
@@ -108,8 +109,6 @@ def configure_app(  # noqa: C901, PLR0913
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
     if enable_prometheus_middleware and prometheus_exporter_resource:
         raise ValueError("Only one prometheus exporter can be configured")
-    if enable_prometheus_middleware:
-        add_prometheus_middleware(app)
     if prometheus_exporter_resource:
         add_prometheus_exporter(app, resource=prometheus_exporter_resource)
     if simplify_openapi_ids:
@@ -130,6 +129,10 @@ def configure_app(  # noqa: C901, PLR0913
         app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
+    if enable_request_logging_middleware is None:
+        enable_request_logging_middleware = (
+            importlib.util.find_spec("structlog") is not None
+        )
     if enable_request_logging_middleware:
         from .middlewares.structlog import RequestLoggingMiddleware
 
