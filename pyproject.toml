@@ -95,7 +95,6 @@ dev = [
     "greenlet>=3.5.4",
     "ipython",
     "sqlargon[pagination]==1.0.3b1",
-    "structlog>=26.1.0",
 ]
 
 test = [

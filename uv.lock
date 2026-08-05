@@ -802,7 +802,6 @@ dev = [
     { name = "ruff" },
     { name = "sqlalchemy" },
     { name = "sqlargon", extra = ["pagination"] },
-    { name = "structlog" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
 ]
@@ -902,7 +901,6 @@ dev = [
     { name = "ruff" },
     { name = "sqlalchemy", specifier = ">=2.0.48" },
     { name = "sqlargon", extras = ["pagination"], specifier = "==1.0.3b1" },
-    { name = "structlog", specifier = ">=26.1.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
     { name = "watchdog" },
 ]
