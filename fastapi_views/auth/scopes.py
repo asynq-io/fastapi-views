@@ -1,19 +1,19 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Final
 
 from pydantic import StringConstraints
 
-Read = "read"
-Edit = "edit"
-All = "*"
+Read: Final[str] = "read"
+Edit: Final[str] = "edit"
+Delete: Final[str] = "delete"
+All: Final[str] = "*"
 
 Scope = Annotated[
     str,
     StringConstraints(
         min_length=1,
-        max_length=255,
-        to_lower=True,
+        max_length=2048,
         strip_whitespace=True,
     ),
 ]
@@ -36,7 +36,7 @@ class SimpleScopeValidator(ScopeValidator):
 
 
 class HierarchicalScopeValidator(ScopeValidator):
-    """Parse scopes into ``resource:action`` segments and validate hierarchically.
+    """Parse scopes into ``action:resource`` segments and validate hierarchically.
 
     A granted scope covers a required one when its resource matches (or is the
     ``*`` wildcard) and its action matches, is the ``*`` wildcard, or implies the
@@ -46,16 +46,17 @@ class HierarchicalScopeValidator(ScopeValidator):
     scope_hierarchy: ClassVar[dict[str, set[str]]] = {
         Read: set(),
         Edit: {Read},
-        All: {Read, Edit},
+        Delete: {Read},
+        All: {Read, Edit, Delete},
     }
 
     def _resolve_action(self, action: str) -> set[str]:
         return self.scope_hierarchy.get(action, set()) | {action}
 
     def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
-        required_resource, _, required_action = scope.partition(":")
+        required_action, _, required_resource = scope.partition(":")
         for s in granted_scopes:
-            granted_resource, _, granted_action = s.partition(":")
+            granted_action, _, granted_resource = s.partition(":")
             if granted_resource not in (required_resource, All):
                 continue
             if granted_action == All or required_action in self._resolve_action(

@@ -110,7 +110,7 @@ from fastapi_views.auth.jwt import BearerAccessToken
 @app.post("/token")
 async def login() -> BearerAccessToken:
     # ... verify credentials ...
-    return auth.create_access_token({"sub": "user-1", "scope": "items:read"})
+    return auth.create_access_token({"sub": "user-1", "scope": "read:items"})
 ```
 
 `create_access_token` fills in sensible defaults with `setdefault`, so explicit values always win:
@@ -185,7 +185,7 @@ async def jwks():
 space-delimited `scope` claim when issuing the token:
 
 ```python
-auth.encode({"sub": "user-1", "scope": "items:read items:write"})
+auth.encode({"sub": "user-1", "scope": "read:items write:items"})
 ```
 
 ### `requires(*scopes)`
@@ -195,13 +195,13 @@ Pass every scope an endpoint requires as positional arguments. The token must sa
 
 ```python
 @app.get("/reports")
-async def get_report(token: Annotated[dict, auth.requires("reports:read")]):
+async def get_report(token: Annotated[dict, auth.requires("read:reports")]):
     ...
 
 
 @app.post("/reports")
 async def create_report(
-    token: Annotated[dict, auth.requires("reports:read", "reports:write")],
+    token: Annotated[dict, auth.requires("read:reports", "write:reports")],
 ):
     ...
 ```
@@ -212,21 +212,22 @@ A missing scope produces:
 {
   "status": 403,
   "title": "Forbidden",
-  "detail": "Token is missing required scope: reports:write"
+  "detail": "Token is missing required scope: write:reports"
 }
 ```
 
-Scopes follow the `resource:action` pattern (e.g. `items:read`, `orders:*`).
+Scopes follow the `action:resource` pattern (e.g. `read:items`, `*:orders`), matching the
+shape of Auth0 permissions.
 
 ### Scope validation
 
 How a required scope is matched against a token's granted scopes is delegated to a
 `ScopeValidator`. Two strategies ship out of the box:
 
-- `HierarchicalScopeValidator` (the default) parses scopes into `resource:action` segments
+- `HierarchicalScopeValidator` (the default) parses scopes into `action:resource` segments
   and resolves them hierarchically
 - `SimpleScopeValidator` grants access only when the required scope is present verbatim
-  among the granted scopes (a plain contains/equality check, with no `resource:action`
+  among the granted scopes (a plain contains/equality check, with no `action:resource`
   structure assumed)
 
 Select a strategy with the `scope_validator` argument:
@@ -241,10 +242,11 @@ auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
 
 The default `HierarchicalScopeValidator` resolves scopes hierarchically:
 
-- a wildcard action grants every action on a resource — `items:*` satisfies `items:read`
-- a wildcard resource grants the action everywhere — `*:read` satisfies `items:read`
-- the default action hierarchy is `edit` ⊃ `read` and `*` ⊃ `{read, edit}`, so a token
-  with `items:edit` satisfies an `items:read` requirement
+- a wildcard action grants every action on a resource — `*:items` satisfies `read:items`
+- a wildcard resource grants the action everywhere — `read:*` satisfies `read:items`
+- the default action hierarchy is `edit` ⊃ `read`, `delete` ⊃ `read` and
+  `*` ⊃ `{read, edit, delete}`, so a token with `edit:items` satisfies a `read:items`
+  requirement
 
 Customise the hierarchy by subclassing and overriding the `scope_hierarchy` class attribute
 (mapping each action to the set of actions it implies):

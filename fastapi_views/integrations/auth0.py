@@ -39,6 +39,3 @@ class Auth0(ScopesAuth):
                 status=e.get_status_code(),
                 headers=e.get_headers(),
             ) from None
-
-
-# user: Annotated[User, auth.requires()] ???

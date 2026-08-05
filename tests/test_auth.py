@@ -237,15 +237,15 @@ async def test_verify_enforces_issuer_claim():
 @pytest.mark.parametrize(
     ("required", "granted", "expected"),
     [
-        ("user:read", ["user:read"], True),
-        ("user:read", ["user:*"], True),  # wildcard action grants everything
-        ("user:read", ["*:read"], True),  # wildcard resource
-        ("user:read", ["user:edit"], True),  # edit implies read (hierarchy)
-        ("user:edit", ["user:read"], False),  # read does not imply edit
-        ("user:edit", ["user:*"], True),
-        ("post:read", ["user:read"], False),  # different resource
-        ("user:read", ["other:read", "user:edit"], True),  # any granted match
-        ("user:read", [], False),
+        ("read:user", ["read:user"], True),
+        ("read:user", ["*:user"], True),  # wildcard action grants everything
+        ("read:user", ["read:*"], True),  # wildcard resource
+        ("read:user", ["edit:user"], True),  # edit implies read (hierarchy)
+        ("edit:user", ["read:user"], False),  # read does not imply edit
+        ("edit:user", ["*:user"], True),
+        ("read:post", ["read:user"], False),  # different resource
+        ("read:user", ["read:other", "edit:user"], True),  # any granted match
+        ("read:user", [], False),
     ],
 )
 def test_has_scope(jwt_auth, required, granted, expected):
@@ -253,10 +253,11 @@ def test_has_scope(jwt_auth, required, granted, expected):
 
 
 def test_resolve_action_includes_self_and_implied():
-    # explicit hierarchy: edit implies read, all implies read+edit
+    # explicit hierarchy: edit/delete imply read, all implies read+edit+delete
     validator = HierarchicalScopeValidator()
     assert validator._resolve_action("edit") == {"edit", "read"}
-    assert validator._resolve_action("*") == {"*", "read", "edit"}
+    assert validator._resolve_action("delete") == {"delete", "read"}
+    assert validator._resolve_action("*") == {"*", "read", "edit", "delete"}
     assert validator._resolve_action("unknown") == {"unknown"}
 
 
@@ -267,11 +268,11 @@ def test_scopes_auth_defaults_to_hierarchical_validator(jwt_auth):
 @pytest.mark.parametrize(
     ("required", "granted", "expected"),
     [
-        ("user:read", ["user:read"], True),  # exact match
-        ("user:read", ["user:read", "post:edit"], True),  # contained verbatim
-        ("user:read", ["user:*"], False),  # no wildcard expansion
-        ("user:read", ["user:edit"], False),  # no hierarchy
-        ("user:read", [], False),
+        ("read:user", ["read:user"], True),  # exact match
+        ("read:user", ["read:user", "edit:post"], True),  # contained verbatim
+        ("read:user", ["*:user"], False),  # no wildcard expansion
+        ("read:user", ["edit:user"], False),  # no hierarchy
+        ("read:user", [], False),
     ],
 )
 def test_simple_scope_validator(required, granted, expected):
@@ -282,8 +283,8 @@ def test_scopes_auth_uses_injected_validator(config):
     auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
     assert isinstance(auth.scope_validator, SimpleScopeValidator)
     # delegates to the simple strategy: hierarchy no longer applies
-    assert auth.has_scope("user:read", ["user:read"]) is True
-    assert auth.has_scope("user:read", ["user:edit"]) is False
+    assert auth.has_scope("read:user", ["read:user"]) is True
+    assert auth.has_scope("read:user", ["edit:user"]) is False
 
 
 @pytest.mark.anyio
@@ -291,11 +292,11 @@ async def test_endpoint_forbids_with_simple_validator(config, app, client):
     auth = JWTAuth(config, scope_validator=SimpleScopeValidator())
 
     @app.get("/items")
-    async def items(token=auth.requires("user:read")):
+    async def items(token=auth.requires("read:user")):
         return {"sub": token["sub"]}
 
-    # "user:edit" would satisfy the hierarchical validator but not the simple one
-    bearer = auth.create_access_token({"sub": "user-1", "scope": "user:edit"})
+    # "edit:user" would satisfy the hierarchical validator but not the simple one
+    bearer = auth.create_access_token({"sub": "user-1", "scope": "edit:user"})
     response = await client.get(
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
@@ -345,7 +346,7 @@ async def test_endpoint_rejects_invalid_token(jwt_auth, app, client):
 @pytest.mark.anyio
 async def test_endpoint_requires_scope_rejects_missing_token(jwt_auth, app, client):
     @app.get("/items")
-    async def items(token=jwt_auth.requires("user:read")):
+    async def items(token=jwt_auth.requires("read:user")):
         return {"sub": token["sub"]}
 
     assert (await client.get("/items")).status_code == HTTP_401_UNAUTHORIZED
@@ -354,10 +355,10 @@ async def test_endpoint_requires_scope_rejects_missing_token(jwt_auth, app, clie
 @pytest.mark.anyio
 async def test_endpoint_allows_sufficient_scope(jwt_auth, app, client):
     @app.get("/items")
-    async def items(token=jwt_auth.requires("user:read")):
+    async def items(token=jwt_auth.requires("read:user")):
         return {"sub": token["sub"]}
 
-    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "user:edit"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "edit:user"})
     response = await client.get(
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
@@ -368,15 +369,15 @@ async def test_endpoint_allows_sufficient_scope(jwt_auth, app, client):
 @pytest.mark.anyio
 async def test_endpoint_forbids_insufficient_scope(jwt_auth, app, client):
     @app.get("/items")
-    async def items(token=jwt_auth.requires("user:edit")):
+    async def items(token=jwt_auth.requires("edit:user")):
         return {"sub": token["sub"]}
 
-    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "user:read"})
+    bearer = jwt_auth.create_access_token({"sub": "user-1", "scope": "read:user"})
     response = await client.get(
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
     assert response.status_code == HTTP_403_FORBIDDEN
-    assert "user:edit" in response.json()["detail"]
+    assert "edit:user" in response.json()["detail"]
 
 
 # --------------------------------------------------------------------------- #

@@ -1,5 +1,6 @@
 from abc import abstractmethod
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Generator, Sequence
+from contextlib import contextmanager
 from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, Security
@@ -49,6 +50,7 @@ class AuthBase:
     def __init__(self, scheme: AuthorizationScheme) -> None:
         self.scheme = scheme
         self.dependency = self.get_dependency()
+        self._test_user: Any = None
 
     def authenticated(self) -> Any:
         return Security(self.dependency)
@@ -60,11 +62,19 @@ class AuthBase:
         async def _dependency(
             raw: Annotated[str | None, Depends(self.scheme)],
         ) -> Any:
+            if self._test_user:
+                return self._test_user
             if raw is None:
                 self.unauthorized()
             return raw
 
         return _dependency
+
+    @contextmanager
+    def with_test_user(self, user: Any) -> Generator[Any, None, None]:
+        self._test_user = user
+        yield
+        self._test_user = None
 
 
 class TokenAuth(AuthBase):
@@ -112,6 +122,8 @@ class ScopesAuth(TokenAuth):
             scopes: SecurityScopes,
             raw: Annotated[str | None, Depends(self.scheme)],
         ) -> Any:
+            if self._test_user:
+                return self._test_user
             if raw is None:
                 self.unauthorized()
             token = await self.verify(raw)
