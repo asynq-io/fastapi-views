@@ -9,7 +9,6 @@ from fastapi_views.models.streaming import (
     ResponseEvent,
     ResponseFinished,
     ResponseResult,
-    ResultData,
 )
 from fastapi_views.views import ServerSentEventsAPIView, sse_route
 
@@ -20,14 +19,11 @@ class Item(BaseModel):
 
 
 CustomResult = ResponseResult[Item]
-CustomResultData = ResultData[Item]
 CustomResponseEvent = ResponseEvent[Item]
 
 
 def page(index: int, *items: Item) -> CustomResult:
-    return CustomResult(
-        data=CustomResultData(items=list(items), index=index, total_results=4),
-    )
+    return CustomResult.new(items=list(items), index=index, total_results=4)
 
 
 class SSEView(ServerSentEventsAPIView):

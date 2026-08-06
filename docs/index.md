@@ -29,7 +29,7 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **Conditional requests** — `ConditionalMixin` emits `ETag` / `Last-Modified` validators and answers `304 Not Modified` from a cheap version column, without serialising a body
 - **Documented response headers** — declare a `ResponseHeaders` model on a view, action, or router and the headers show up in the OpenAPI spec
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
-- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
+- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects and failed handshakes are cleaned up without masking the original error
 - **Authentication & authorization** — bearer-token auth built on FastAPI's `Security` system: `JWTAuth` (JWKS import, claims validation, token minting), hierarchical OAuth2 scope enforcement via `requires(*scopes)`, header API-key auth (`APIKeyAuth`, `ConstAPIKeyAuth`), and an Auth0 integration (optional extras)
 - **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`) with configurable locale fallbacks, pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translated[str]` model fields; built-in error messages are translatable out of the box (optional extra)
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
@@ -64,6 +64,7 @@ pip install fastapi-views
 | `i18n` | Internationalization — `babel` and `jinja2` formatters |
 | `cache` | Redis cache backend (`redis`) |
 | `jsonpatch` | JSON Patch support (`jsonpatch`, `jsonpointer`) |
+| `sqlargon` | SQLAlchemy repositories via `sqlargon[pagination]` |
 | `standard` | Curated bundle: `uvloop`, `uvicorn`, `starlette-exporter`, `opentelemetry-instrumentation-fastapi`, `typer` |
 
 Install all extras at once:
@@ -294,7 +295,9 @@ See [Observability](usage/opentelemetry.md).
 
 ### Prometheus metrics
 
-When the `prometheus` extra is installed, `configure_app` mounts a `/metrics` endpoint that exposes standard HTTP request metrics (request count, latency histogram, in-flight requests) compatible with `prometheus_client`.
+When the `prometheus` extra is installed, `configure_app` registers a `/metrics` route exposing standard HTTP request metrics (request count, latency histogram, in-flight requests) compatible with `prometheus_client`. Passing a `prometheus_exporter_resource` instead selects OpenTelemetry-based export, which serves the same path and additionally negotiates the response format via `Accept`.
+
+See [Observability](usage/opentelemetry.md) for the differences between the two modes.
 
 ### Structured request logging
 
@@ -317,8 +320,17 @@ is left to your application.
 - `RequestLoggingMiddleware`, when `enable_request_logging_middleware=True` is passed
 - simplified OpenAPI operation IDs
 
-Passing both `enable_prometheus_middleware=True` (the default) and a
-`prometheus_exporter_resource` raises `ValueError` — pick one exporter.
+`enable_prometheus_middleware` defaults to `None`, meaning "on unless a
+`prometheus_exporter_resource` is given" — so `configure_app(app, prometheus_exporter_resource=r)`
+selects exporter mode on its own. Passing `enable_prometheus_middleware=True` *and* a resource
+raises `ValueError`, since that explicitly asks for two exporters.
+
+Middlewares end up in this order, outermost to innermost:
+
+```
+RequestLoggingMiddleware -> RequestLimitMiddleware -> PrometheusMiddleware
+    -> GZipMiddleware -> LocaleMiddleware -> router
+```
 
 This single call replaces dozens of lines of middleware and exception handler boilerplate.
 
@@ -343,14 +355,15 @@ Generate a static `openapi.json` or `openapi.yaml` file without starting a serve
 pip install 'fastapi-views[cli]'
 
 # Export the spec (defaults to ./openapi.json)
-fastapi-views myapp:app --out openapi.json
+fastapi-views docs myapp:app --out openapi.json
 
 # ...or as YAML
-fastapi-views myapp:app --out openapi.yaml --format yaml
+fastapi-views docs myapp:app --out openapi.yaml --format yaml
 ```
 
 The application is imported from an `<module>:<attribute>` path, resolved against the
-current working directory.
+current working directory. `--format yaml` needs PyYAML, which `fastapi-views` deliberately
+does not declare — install it in your own project when you want YAML output.
 
 ---
 

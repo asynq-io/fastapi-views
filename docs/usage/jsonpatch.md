@@ -26,6 +26,8 @@ Failure modes (in an app set up with `configure_app`, which remaps FastAPI's def
 | Invalid patch (malformed document, bad pointer, failed `test`, invalid result, unknown field) | `400 Bad Request` |
 | Object not found, or deleted between the fetch and the update | `404 Not Found` |
 
+Both are documented in OpenAPI: the operation declares `200`, `400` and `404`, each error body as `application/problem+json`.
+
 Without `configure_app`'s error handlers a *malformed* patch document surfaces as FastAPI's raw `422`, since the rejection happens during request validation rather than in the view.
 
 ---

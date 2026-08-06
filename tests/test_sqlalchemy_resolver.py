@@ -179,7 +179,6 @@ class SearchableFilter(SearchFilter, OrderingFilter):
 
 @pytest.fixture
 def resolver() -> SQLAlchemyFilterResolver:
-    SQLAlchemyFilterResolver._cache.clear()
     r = SQLAlchemyFilterResolver()
     r.filter_model = MockFilterModel
     return r
@@ -338,28 +337,27 @@ def test_resolve_model_field_nested_from_context(
 def test_resolve_model_field_nested_from_registry(
     resolver: SQLAlchemyFilterResolver,
 ) -> None:
-    SQLAlchemyFilterResolver._cache.clear()
     op = FilterOperation(field="items__name", operator="eq", values="test")
     result = resolver.resolve_model_field(op.field)
     assert result is MockModel.name
 
 
 def test_get_model_cls_from_registry(resolver: SQLAlchemyFilterResolver) -> None:
-    SQLAlchemyFilterResolver._cache.clear()
     result = resolver._get_model_cls("users")
     assert result is OtherModel
-    assert "users" in SQLAlchemyFilterResolver._cache
+    assert "users" in resolver._get_model_cache(MockFilterModel.registry)
 
 
 def test_get_model_cls_from_cache(resolver: SQLAlchemyFilterResolver) -> None:
-    SQLAlchemyFilterResolver._cache.clear()
-    SQLAlchemyFilterResolver._cache["cached_model"] = MockModel
-    result = resolver._get_model_cls("cached_model")
+    resolver._get_model_cache(MockFilterModel.registry)["cached_model"] = MockModel
+    try:
+        result = resolver._get_model_cls("cached_model")
+    finally:
+        del resolver._get_model_cache(MockFilterModel.registry)["cached_model"]
     assert result is MockModel
 
 
 def test_get_model_cls_not_found(resolver: SQLAlchemyFilterResolver) -> None:
-    SQLAlchemyFilterResolver._cache.clear()
     result = resolver._get_model_cls("nonexistent_table")
     assert result is None
 
@@ -367,10 +365,41 @@ def test_get_model_cls_not_found(resolver: SQLAlchemyFilterResolver) -> None:
 def test_get_model_cls_registry_lookup_cached(
     resolver: SQLAlchemyFilterResolver,
 ) -> None:
-    SQLAlchemyFilterResolver._cache.clear()
     resolver._get_model_cls("items")  # First: populates cache
     cached_result = resolver._get_model_cls("items")  # Second: from cache
     assert cached_result is MockModel
+
+
+def test_get_model_cls_is_keyed_per_registry() -> None:
+    class OtherItems:
+        __tablename__ = "items"
+        name = MockColumn("other_items_name")
+
+    class OtherRegistry:
+        mappers: ClassVar[list] = [MockMapper(OtherItems)]
+
+    class OtherBaseModel:
+        registry = OtherRegistry()
+
+    first = SQLAlchemyFilterResolver()
+    first.filter_model = MockFilterModel
+    second = SQLAlchemyFilterResolver()
+    second.filter_model = OtherBaseModel
+
+    assert first._get_model_cls("items") is MockModel
+    assert second._get_model_cls("items") is OtherItems
+    assert first._get_model_cls("items") is MockModel
+
+
+def test_model_cache_is_scoped_per_resolver_subclass() -> None:
+    class Subclassed(SQLAlchemyFilterResolver):
+        filter_model = MockFilterModel
+
+    subclassed = Subclassed()
+    subclassed._get_model_cls("items")
+
+    assert "items" in Subclassed.__dict__["_cache"][MockFilterModel.registry]
+    assert Subclassed.__dict__["_cache"] is not SQLAlchemyFilterResolver._cache
 
 
 def test_get_filters_single(resolver: SQLAlchemyFilterResolver) -> None:
@@ -502,6 +531,31 @@ def test_apply_cursor_pagination_no_cursor_raises(
 ) -> None:
     with pytest.raises(NotImplementedError):
         resolver.apply_cursor_pagination(qs, None, 10)
+
+
+def test_apply_cursor_pagination_receives_context(qs: MockQueryset) -> None:
+    calls: list[dict] = []
+
+    class CursorResolver(SQLAlchemyFilterResolver):
+        filter_model = MockFilterModel
+
+        def apply_cursor_pagination(
+            self,
+            queryset: object,
+            page: str | None,
+            page_size: int,
+            **context: object,
+        ) -> object:
+            calls.append({"page": page, "page_size": page_size, "context": context})
+            return queryset
+
+    f = CursorPaginationFilter(cursor="abc", page_size=5)
+    result = CursorResolver().apply_filter(f, qs, table=MockFilterModel)
+
+    assert result is qs
+    assert calls == [
+        {"page": "abc", "page_size": 5, "context": {"table": MockFilterModel}}
+    ]
 
 
 def test_apply_fields_filter(

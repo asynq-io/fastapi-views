@@ -40,26 +40,32 @@ M_co = TypeVar("M_co", covariant=True)
 
 class AsyncBulkRepository(Protocol[M_co]):
     async def create_many(
-        self, items: Sequence[Mapping[str, Any]], /
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
     ) -> Sequence[M_co]: ...
 
     async def update_many(
         self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
     ) -> Sequence[M_co]: ...
 
-    async def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
+    async def bulk_update(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> None: ...
 
     async def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 class BulkRepository(Protocol[M_co]):
-    def create_many(self, items: Sequence[Mapping[str, Any]], /) -> Sequence[M_co]: ...
+    def create_many(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> Sequence[M_co]: ...
 
     def update_many(
         self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
     ) -> Sequence[M_co]: ...
 
-    def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
+    def bulk_update(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> None: ...
 
     def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 
@@ -374,6 +380,27 @@ class BaseGenericBulkAPIView(GenericView):
     ) -> dict[str, Any]:
         return self.repository_options
 
+    def merge_repository_options(
+        self, kwargs: dict[str, Any], action: Action | None = None
+    ) -> dict[str, Any]:
+        """Add :meth:`get_repository_options` to already built keyword arguments.
+
+        Used by the filtered actions, whose repository call already receives the
+        resolved filter as keyword arguments. A key present in both is a
+        configuration error — dropping either the filter criterion or the option
+        would silently change what the request does — so it raises
+        :class:`TypeError`. Override to pick a precedence instead.
+        """
+        options = self.get_repository_options(action)
+        if clashing := kwargs.keys() & options.keys():
+            msg = (
+                f"{type(self).__name__}: repository_options key(s) "
+                f"{sorted(clashing)} collide with the filter criteria of action "
+                f"{action!r}"
+            )
+            raise TypeError(msg)
+        return kwargs | options
+
 
 class BaseGenericBulkCreateAPIView(BaseGenericBulkAPIView):
     create_schema: type[BaseModel]
@@ -396,16 +423,16 @@ class AsyncGenericBulkCreateAPIView(
         extra = self.get_kwargs("bulk_create")
         data = [item.model_dump() | extra for item in items]
         await self.before_bulk_create(data)
-        objects = await self.repository.create_many(
+        objs = await self.repository.create_many(
             data, **self.get_repository_options("bulk_create")
         )
-        await self.after_bulk_create(objects)
-        return objects
+        await self.after_bulk_create(objs)
+        return objs
 
     async def before_bulk_create(self, data: list[dict[str, Any]]) -> None:
         """Hook receiving the validated payloads before the repository call."""
 
-    async def after_bulk_create(self, objects: Sequence[M]) -> None:
+    async def after_bulk_create(self, objs: Sequence[M]) -> None:
         """Hook receiving the created objects before the response is built."""
 
 
@@ -420,11 +447,11 @@ class GenericBulkCreateAPIView(
         extra = self.get_kwargs("bulk_create")
         data = [item.model_dump() | extra for item in items]
         self.before_bulk_create(data)
-        objects = self.repository.create_many(
+        objs = self.repository.create_many(
             data, **self.get_repository_options("bulk_create")
         )
-        self.after_bulk_create(objects)
-        return objects
+        self.after_bulk_create(objs)
+        return objs
 
     def before_bulk_create(self, data: list[dict[str, Any]]) -> None:
         """Hook receiving the validated payloads before the repository call."""
@@ -488,7 +515,7 @@ class GenericBulkUpdateAPIView(
         """Hook invoked after rows were updated."""
 
 
-class BaseGenericFilteredBulkAPIView(GenericView):
+class BaseGenericFilteredBulkAPIView(BaseGenericBulkAPIView):
     #: Filter model selecting which rows the action applies to. Acting by id is
     #: just a filter with an ``id__in`` field; swap it for any criteria. Set to
     #: ``None`` to act on everything matched by :meth:`get_kwargs`.
@@ -541,7 +568,9 @@ class AsyncGenericUpdateManyAPIView(
         data = values.model_dump(exclude_unset=True)
         args, kwargs = self.get_filter_args(filter, "update_many")
         await self.before_update_many(data)
-        objs = await self.repository.update_many(data, *args, **kwargs)
+        objs = await self.repository.update_many(
+            data, *args, **self.merge_repository_options(kwargs, "update_many")
+        )
         await self.after_update_many(objs)
         return objs
 
@@ -563,7 +592,9 @@ class GenericUpdateManyAPIView(
         data = values.model_dump(exclude_unset=True)
         args, kwargs = self.get_filter_args(filter, "update_many")
         self.before_update_many(data)
-        objs = self.repository.update_many(data, *args, **kwargs)
+        objs = self.repository.update_many(
+            data, *args, **self.merge_repository_options(kwargs, "update_many")
+        )
         self.after_update_many(objs)
         return objs
 
@@ -592,7 +623,9 @@ class AsyncGenericBulkDestroyAPIView(
     async def bulk_delete(self, filter: BaseFilter) -> None:
         await self.before_bulk_delete()
         args, kwargs = self.get_filter_args(filter, "bulk_delete")
-        await self.repository.delete_many(*args, **kwargs)
+        await self.repository.delete_many(
+            *args, **self.merge_repository_options(kwargs, "bulk_delete")
+        )
         await self.after_bulk_delete()
 
     async def before_bulk_delete(self) -> None:
@@ -612,7 +645,9 @@ class GenericBulkDestroyAPIView(
     def bulk_delete(self, filter: BaseFilter) -> None:
         self.before_bulk_delete()
         args, kwargs = self.get_filter_args(filter, "bulk_delete")
-        self.repository.delete_many(*args, **kwargs)
+        self.repository.delete_many(
+            *args, **self.merge_repository_options(kwargs, "bulk_delete")
+        )
         self.after_bulk_delete()
 
     def before_bulk_delete(self) -> None:

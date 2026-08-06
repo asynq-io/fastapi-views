@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID, uuid4
 
@@ -22,13 +23,19 @@ from fastapi_views.views.bulk import (
     AsyncBulkAPIViewSet,
     AsyncGenericBulkCreateAPIView,
     AsyncGenericBulkDestroyAPIView,
+    AsyncGenericUpdateManyAPIView,
     BulkAPIViewSet,
+    GenericBulkDestroyAPIView,
+    GenericUpdateManyAPIView,
 )
 
 from .utils import view_client
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from typing import cast
+
+    from fastapi_views.views.bulk import AsyncBulkRepository, BulkRepository
 
 
 class Item(BaseModel):
@@ -62,7 +69,7 @@ class RecordingAsyncRepository:
         self.delete_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     async def create_many(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+        self, items: Sequence[Mapping[str, Any]], /, **options: Any
     ) -> list[dict[str, Any]]:
         self.bulk_create_options.append(options)
         return [{"id": uuid4(), **item} for item in items]
@@ -74,7 +81,7 @@ class RecordingAsyncRepository:
         return [{"id": uuid4(), **values}]
 
     async def bulk_update(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+        self, items: Sequence[Mapping[str, Any]], /, **options: Any
     ) -> None:
         self.bulk_update_items.append([dict(item) for item in items])
         self.bulk_update_options.append(options)
@@ -92,7 +99,7 @@ class RecordingSyncRepository:
         self.delete_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     def create_many(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+        self, items: Sequence[Mapping[str, Any]], /, **options: Any
     ) -> list[dict[str, Any]]:
         self.bulk_create_options.append(options)
         return [{"id": uuid4(), **item} for item in items]
@@ -103,12 +110,71 @@ class RecordingSyncRepository:
         self.update_many_calls.append((dict(values), kwargs))
         return [{"id": uuid4(), **values}]
 
-    def bulk_update(self, items: Sequence[Mapping[str, Any]], **options: Any) -> None:
+    def bulk_update(
+        self, items: Sequence[Mapping[str, Any]], /, **options: Any
+    ) -> None:
         self.bulk_update_items.append([dict(item) for item in items])
         self.bulk_update_options.append(options)
 
     def delete_many(self, *args: Any, **kwargs: Any) -> None:
         self.delete_calls.append((args, kwargs))
+
+
+class StrictAsyncBulkRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def create_many(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        self.calls.append(("create_many", kwargs))
+        return [{"id": uuid4(), **item} for item in items]
+
+    async def update_many(
+        self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        self.calls.append(("update_many", kwargs))
+        return [{"id": uuid4(), **values}]
+
+    async def bulk_update(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> None:
+        self.calls.append(("bulk_update", kwargs))
+
+    async def delete_many(self, *args: Any, **kwargs: Any) -> None:
+        self.calls.append(("delete_many", kwargs))
+
+
+class StrictSyncBulkRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def create_many(
+        self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        self.calls.append(("create_many", kwargs))
+        return [{"id": uuid4(), **item} for item in items]
+
+    def update_many(
+        self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        self.calls.append(("update_many", kwargs))
+        return [{"id": uuid4(), **values}]
+
+    def bulk_update(self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any) -> None:
+        self.calls.append(("bulk_update", kwargs))
+
+    def delete_many(self, *args: Any, **kwargs: Any) -> None:
+        self.calls.append(("delete_many", kwargs))
+
+
+if TYPE_CHECKING:
+    _async_protocol_check: AsyncBulkRepository[dict[str, Any]] = cast(
+        "StrictAsyncBulkRepository", None
+    )
+    _sync_protocol_check: BulkRepository[dict[str, Any]] = cast(
+        "StrictSyncBulkRepository", None
+    )
 
 
 def build_app(view: type, prefix: str = "/items") -> FastAPI:
@@ -367,8 +433,8 @@ async def test_bulk_hooks_receive_expected_arguments():
         async def before_bulk_create(self, data):
             calls.append(("before_create", data))
 
-        async def after_bulk_create(self, objects):
-            calls.append(("after_create", list(objects)))
+        async def after_bulk_create(self, objs):
+            calls.append(("after_create", list(objs)))
 
         async def before_bulk_update(self, data):
             calls.append(("before_update", data))
@@ -407,6 +473,98 @@ async def test_bulk_hooks_receive_expected_arguments():
     assert calls[7] == ("after_delete", None)
 
 
+@pytest.mark.parametrize(
+    "view_cls",
+    [AsyncBulkAPIViewSet, BulkAPIViewSet],
+    ids=["async", "sync"],
+)
+@pytest.mark.parametrize("hook", ["after_bulk_create", "after_update_many"])
+def test_object_hooks_share_one_parameter_name(view_cls: type, hook: str):
+    signature = inspect.signature(getattr(view_cls, hook))
+    assert list(signature.parameters) == ["self", "objs"]
+
+
+@pytest.mark.anyio
+async def test_object_hooks_are_invokable_by_keyword():
+    class AsyncKeywordHookViewSet(AsyncBulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = RecordingAsyncRepository()
+
+    class SyncKeywordHookViewSet(BulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = RecordingSyncRepository()
+
+    async_view = AsyncKeywordHookViewSet.__new__(AsyncKeywordHookViewSet)
+    sync_view = SyncKeywordHookViewSet.__new__(SyncKeywordHookViewSet)
+
+    assert await async_view.after_bulk_create(objs=[]) is None
+    assert await async_view.after_update_many(objs=[]) is None
+    assert sync_view.after_bulk_create(objs=[]) is None
+    assert sync_view.after_update_many(objs=[]) is None
+
+
+@pytest.mark.anyio
+async def test_keyword_hook_overrides_are_called_for_both_flavours():
+    seen: list[tuple[str, list[Any]]] = []
+
+    class AsyncKeywordOverrides(AsyncBulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = RecordingAsyncRepository()
+
+        async def after_bulk_create(self, objs):
+            seen.append(("async_create", list(objs)))
+
+        async def after_update_many(self, objs):
+            seen.append(("async_update_many", list(objs)))
+
+    class SyncKeywordOverrides(BulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = RecordingSyncRepository()
+
+        def after_bulk_create(self, objs):
+            seen.append(("sync_create", list(objs)))
+
+        def after_update_many(self, objs):
+            seen.append(("sync_update_many", list(objs)))
+
+    async with view_client(AsyncKeywordOverrides) as client:
+        await client.post("/test/bulk", json=[{"name": "a"}])
+        await client.patch("/test/bulk", params={"name": "a"}, json={"name": "b"})
+
+    async with view_client(SyncKeywordOverrides) as client:
+        await client.post("/test/bulk", json=[{"name": "c"}])
+        await client.patch("/test/bulk", params={"name": "c"}, json={"name": "d"})
+
+    assert [name for name, _ in seen] == [
+        "async_create",
+        "async_update_many",
+        "sync_create",
+        "sync_update_many",
+    ]
+    assert [obj["name"] for _, objects in seen for obj in objects] == [
+        "a",
+        "b",
+        "c",
+        "d",
+    ]
+
+
 @pytest.mark.anyio
 async def test_repository_options_forwarded_to_repository():
     repo = RecordingAsyncRepository()
@@ -426,6 +584,274 @@ async def test_repository_options_forwarded_to_repository():
 
     assert repo.bulk_create_options == [{"batch_size": 2}]
     assert repo.bulk_update_options == [{"batch_size": 2}]
+
+
+@pytest.mark.anyio
+async def test_repository_options_reach_all_four_actions_via_viewset():
+    repo = RecordingAsyncRepository()
+
+    class OptionsViewSet(AsyncBulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 7}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(OptionsViewSet) as client:
+        await client.post("/test/bulk", json=[{"name": "a"}])
+        await client.put("/test/bulk", json=[{"id": str(uuid4()), "name": "b"}])
+        await client.patch("/test/bulk", params={"name": "b"}, json={"name": "c"})
+        await client.delete("/test/bulk", params={"name": "c"})
+
+    assert repo.bulk_create_options == [{"batch_size": 7}]
+    assert repo.bulk_update_options == [{"batch_size": 7}]
+    assert repo.update_many_calls == [({"name": "c"}, {"name": "b", "batch_size": 7})]
+    assert repo.delete_calls == [((), {"name": "c", "batch_size": 7})]
+
+
+@pytest.mark.anyio
+async def test_repository_options_reach_all_four_actions_via_sync_viewset():
+    repo = RecordingSyncRepository()
+
+    class SyncOptionsViewSet(BulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 3}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(SyncOptionsViewSet) as client:
+        await client.post("/test/bulk", json=[{"name": "a"}])
+        await client.put("/test/bulk", json=[{"id": str(uuid4()), "name": "b"}])
+        await client.patch("/test/bulk", params={"name": "b"}, json={"name": "c"})
+        await client.delete("/test/bulk", params={"name": "c"})
+
+    assert repo.bulk_create_options == [{"batch_size": 3}]
+    assert repo.bulk_update_options == [{"batch_size": 3}]
+    assert repo.update_many_calls == [({"name": "c"}, {"name": "b", "batch_size": 3})]
+    assert repo.delete_calls == [((), {"name": "c", "batch_size": 3})]
+
+
+@pytest.mark.anyio
+async def test_protocol_conforming_async_repository_accepts_repository_options():
+    repo = StrictAsyncBulkRepository()
+
+    class StrictOptionsViewSet(AsyncBulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 11}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(StrictOptionsViewSet) as client:
+        created = await client.post("/test/bulk", json=[{"name": "a"}])
+        assert created.status_code == HTTP_201_CREATED
+        updated = await client.put(
+            "/test/bulk", json=[{"id": str(uuid4()), "name": "b"}]
+        )
+        assert updated.status_code == HTTP_204_NO_CONTENT
+        patched = await client.patch(
+            "/test/bulk", params={"name": "b"}, json={"name": "c"}
+        )
+        assert patched.status_code == HTTP_200_OK
+        deleted = await client.delete("/test/bulk", params={"name": "c"})
+        assert deleted.status_code == HTTP_204_NO_CONTENT
+
+    assert repo.calls == [
+        ("create_many", {"batch_size": 11}),
+        ("bulk_update", {"batch_size": 11}),
+        ("update_many", {"name": "b", "batch_size": 11}),
+        ("delete_many", {"name": "c", "batch_size": 11}),
+    ]
+
+
+@pytest.mark.anyio
+async def test_protocol_conforming_sync_repository_accepts_repository_options():
+    repo = StrictSyncBulkRepository()
+
+    class StrictSyncOptionsViewSet(BulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 13}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(StrictSyncOptionsViewSet) as client:
+        created = await client.post("/test/bulk", json=[{"name": "a"}])
+        assert created.status_code == HTTP_201_CREATED
+        updated = await client.put(
+            "/test/bulk", json=[{"id": str(uuid4()), "name": "b"}]
+        )
+        assert updated.status_code == HTTP_204_NO_CONTENT
+        patched = await client.patch(
+            "/test/bulk", params={"name": "b"}, json={"name": "c"}
+        )
+        assert patched.status_code == HTTP_200_OK
+        deleted = await client.delete("/test/bulk", params={"name": "c"})
+        assert deleted.status_code == HTTP_204_NO_CONTENT
+
+    assert repo.calls == [
+        ("create_many", {"batch_size": 13}),
+        ("bulk_update", {"batch_size": 13}),
+        ("update_many", {"name": "b", "batch_size": 13}),
+        ("delete_many", {"name": "c", "batch_size": 13}),
+    ]
+
+
+@pytest.mark.anyio
+async def test_repository_options_reach_standalone_async_update_many():
+    repo = RecordingAsyncRepository()
+
+    class UpdateManyOnlyView(AsyncGenericUpdateManyAPIView):
+        repository_options: ClassVar[dict[str, Any]] = {"synchronize_session": False}
+        response_schema = Item
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(UpdateManyOnlyView) as client:
+        response = await client.patch(
+            "/test/bulk", params={"name": "old"}, json={"name": "new"}
+        )
+        assert response.status_code == HTTP_200_OK
+
+    assert repo.update_many_calls == [
+        ({"name": "new"}, {"name": "old", "synchronize_session": False})
+    ]
+
+
+@pytest.mark.anyio
+async def test_repository_options_reach_standalone_async_bulk_delete():
+    repo = RecordingAsyncRepository()
+
+    class DeleteOnlyView(AsyncGenericBulkDestroyAPIView):
+        repository_options: ClassVar[dict[str, Any]] = {"synchronize_session": False}
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(DeleteOnlyView) as client:
+        response = await client.delete("/test/bulk", params={"name": "gone"})
+        assert response.status_code == HTTP_204_NO_CONTENT
+
+    assert repo.delete_calls == [
+        ((), {"name": "gone", "synchronize_session": False}),
+    ]
+
+
+@pytest.mark.anyio
+async def test_repository_options_reach_standalone_sync_filtered_views():
+    update_repo = RecordingSyncRepository()
+    delete_repo = RecordingSyncRepository()
+
+    class SyncUpdateManyOnlyView(GenericUpdateManyAPIView):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 5}
+        response_schema = Item
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = update_repo
+
+    class SyncDeleteOnlyView(GenericBulkDestroyAPIView):
+        repository_options: ClassVar[dict[str, Any]] = {"batch_size": 5}
+        filter = NameFilter
+        repository = delete_repo
+
+    async with view_client(SyncUpdateManyOnlyView) as client:
+        await client.patch("/test/bulk", params={"name": "old"}, json={"name": "new"})
+
+    async with view_client(SyncDeleteOnlyView) as client:
+        await client.delete("/test/bulk", params={"name": "gone"})
+
+    assert update_repo.update_many_calls == [
+        ({"name": "new"}, {"name": "old", "batch_size": 5})
+    ]
+    assert delete_repo.delete_calls == [((), {"name": "gone", "batch_size": 5})]
+
+
+@pytest.mark.anyio
+async def test_repository_options_can_vary_per_action():
+    repo = RecordingAsyncRepository()
+
+    class PerActionViewSet(AsyncBulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+        def get_repository_options(self, action=None):
+            return {"action": action}
+
+    async with view_client(PerActionViewSet) as client:
+        await client.patch("/test/bulk", params={"name": "b"}, json={"name": "c"})
+        await client.delete("/test/bulk", params={"name": "c"})
+
+    assert repo.update_many_calls == [
+        ({"name": "c"}, {"name": "b", "action": "update_many"})
+    ]
+    assert repo.delete_calls == [((), {"name": "c", "action": "bulk_delete"})]
+
+
+def test_merge_repository_options_raises_on_filter_key_collision():
+    class CollidingView(AsyncGenericBulkDestroyAPIView):
+        repository_options: ClassVar[dict[str, Any]] = {"name": "override"}
+        filter = NameFilter
+        repository = RecordingAsyncRepository()
+
+    view = CollidingView.__new__(CollidingView)
+    with pytest.raises(TypeError, match="'name'"):
+        view.merge_repository_options({"name": "from-filter"}, "bulk_delete")
+
+
+@pytest.mark.anyio
+async def test_colliding_option_key_raises_on_filtered_actions():
+    repo = RecordingAsyncRepository()
+
+    class CollidingViewSet(AsyncBulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"name": "override"}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(CollidingViewSet) as client:
+        with pytest.raises(TypeError, match="collide with the filter criteria"):
+            await client.patch("/test/bulk", params={"name": "b"}, json={"name": "c"})
+        with pytest.raises(TypeError, match="collide with the filter criteria"):
+            await client.delete("/test/bulk", params={"name": "c"})
+
+    assert repo.update_many_calls == []
+    assert repo.delete_calls == []
+
+
+@pytest.mark.anyio
+async def test_colliding_option_key_is_inert_while_filter_field_unset():
+    repo = RecordingAsyncRepository()
+
+    class CollidingViewSet(AsyncBulkAPIViewSet):
+        repository_options: ClassVar[dict[str, Any]] = {"name": "override"}
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = repo
+
+    async with view_client(CollidingViewSet) as client:
+        response = await client.delete("/test/bulk")
+        assert response.status_code == HTTP_204_NO_CONTENT
+
+    assert repo.delete_calls == [((), {"name": "override"})]
 
 
 class AlphaItem(BaseModel):

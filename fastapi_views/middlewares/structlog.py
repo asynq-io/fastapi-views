@@ -83,7 +83,6 @@ class RequestLoggingMiddleware:
             )
 
         status_code: int | None = None
-        duration_ms: float | None = None
         response_headers: dict[str, str] = {}
 
         async def send_wrapper(message: Message) -> None:
@@ -97,24 +96,16 @@ class RequestLoggingMiddleware:
 
         try:
             await self.app(scope, receive, send_wrapper)
-
-            duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+        except Exception:
+            if status_code is None:
+                status_code = HTTP_500_INTERNAL_SERVER_ERROR
+            raise
+        finally:
             if not excluded:
                 request_logger.log(
                     _get_log_level_for_status(status_code),
                     "response",
                     status_code=status_code,
-                    duration_ms=duration_ms,
+                    duration_ms=round((time.monotonic() - start_time) * 1000, 2),
                     headers=response_headers,
                 )
-        except Exception:
-            if not excluded:
-                duration_ms = round((time.monotonic() - start_time) * 1000, 2)
-                request_logger.exception(
-                    "unhandled_exception",
-                    url=str(request.url),
-                    headers=self._request_header_filter(request.headers),
-                    query_params=dict(request.query_params),
-                    duration_ms=duration_ms,
-                )
-            raise

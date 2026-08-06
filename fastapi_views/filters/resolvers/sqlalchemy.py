@@ -4,6 +4,7 @@ import operator
 from contextlib import suppress
 from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from weakref import WeakKeyDictionary
 
 from typing_extensions import Self
 
@@ -25,7 +26,7 @@ from fastapi_views.filters.operations import (
 from .abc import FilterResolver
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
 try:
     from sqlalchemy import inspect as sa_inspect
@@ -86,7 +87,7 @@ class Column(Protocol):
 
 
 class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
-    _cache: ClassVar[dict[str, Any]] = {}
+    _cache: ClassVar[MutableMapping[Any, dict[str, Any]]] = WeakKeyDictionary()
     filter_model: Any
     operators: ClassVar[dict[str, Callable[[Any, Any], Any]]] = {
         "eq": operator.eq,
@@ -104,13 +105,23 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         "or": operator.or_,
     }
 
+    @classmethod
+    def _get_model_cache(cls, registry: Any) -> dict[str, Any]:
+        cache = cls.__dict__.get("_cache")
+        if cache is None:
+            cache = WeakKeyDictionary()
+            cls._cache = cache
+        return cache.setdefault(registry, {})
+
     def _get_model_cls(self, name: str) -> Any:
-        if name in self._cache:
-            return self._cache[name]
-        for mapper in self.filter_model.registry.mappers:
+        registry = self.filter_model.registry
+        cache = self._get_model_cache(registry)
+        if name in cache:
+            return cache[name]
+        for mapper in registry.mappers:
             model_class = mapper.class_
             if model_class.__tablename__ == name:
-                self._cache[name] = model_class
+                cache[name] = model_class
                 return model_class
         return None
 
@@ -241,6 +252,7 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         queryset: _Queryset,
         page: str | None,
         page_size: int,
+        **context: Any,
     ) -> Any:
         # warning: sqlalchemy itself does not implement token based pagination,
         # it is up to user to implement it using something like sqlakeyset: https://github.com/djrobstep/sqlakeyset

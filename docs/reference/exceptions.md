@@ -54,13 +54,13 @@ Errors are serialized as `application/problem+json`:
   "status": 404,
   "detail": "Item 42 does not exist",
   "instance": "/items/42",
-  "correlation_id": null,
+  "correlation_id": "4bf92f3577b34da6a3ce929d0e0e4736",
   "errors": []
 }
 ```
 
 - `instance` is set to the request path by the handler when not supplied explicitly.
-- `correlation_id` is only present when OpenTelemetry is installed; it is filled from the active trace context.
+- `correlation_id` exists as a field only when `opentelemetry-instrumentation-fastapi` is importable, and is filled from the active trace context. When no span is active it is **omitted from the payload entirely** rather than serialized as `null` — `ErrorDetails` overrides `model_dump` / `model_dump_json` to add it to `exclude` (any `exclude` you pass is preserved). The field is still documented in the OpenAPI schema.
 - `errors` is a free-form list used for nested error details (request validation failures land here).
 - Extra fields declared on a subclass are appended after `errors`.
 - `detail` is passed through the i18n `translate()` helper, so error messages participate in [translations](../usage/i18n.md).
@@ -86,27 +86,47 @@ class ItemNotFound(NotFound):
     # status inherited (404), title -> "Item Not Found", type -> RFC 7231 §6.5.4
 ```
 
-Set `title`, `type`, or `detail` explicitly to override any of the derived values:
+`title` derivation keeps runs of capitals together, so acronyms survive:
+
+| Class name | Derived `title` |
+|------------|-----------------|
+| `UserNotFound` | `User Not Found` |
+| `HTTPError` | `HTTP Error` |
+| `APIKeyInvalid` | `API Key Invalid` |
+| `S3BucketMissing` | `S3 Bucket Missing` |
+| `HTTP` | `HTTP` |
+
+The one remaining edge case is a lowercase letter *inside* a leading acronym, which still
+splits: `OAuth2TokenExpired` becomes `O Auth2 Token Expired`. Set `title` explicitly in
+that case.
+
+Set `title`, `type`, or `detail` explicitly to override any of the derived values — an
+explicit `title` always wins over derivation:
 
 ```python
 class HTTPBackendError(InternalServerError):
-    title = "Upstream Backend Error"       # derivation would yield "H T T P Backend Error"
+    title = "Upstream Backend Error"        # instead of the derived "HTTP Backend Error"
     type = "https://example.com/errors/backend"
     detail = "The upstream backend failed"  # default detail when none is passed
 ```
 
-When `detail` is left unset, the model default is the standard `http.HTTPStatus` description for the status code.
+When `detail` is left unset, the model default is the standard `http.HTTPStatus` description for the status code, falling back to the status **phrase** when that description is empty. No built-in error has an empty default `detail`: `UnprocessableEntity()`, whose `HTTPStatus` description is `""`, yields `detail: "Unprocessable Entity"`.
 
 ### Extra model fields
 
 Plain annotations on the subclass become fields of the generated error model:
 
 ```python
+from typing import ClassVar
+
+
 class OutOfStock(NotFound):
     """Item is out of stock."""
 
-    sku: str                     # required — must be passed when raising
+    sku: str                          # required — must be passed when raising
     error_code: str = "OUT_OF_STOCK"  # annotation + scalar default -> constant field
+    meta: dict = {}                   # optional field with a mutable default
+    warehouse: ClassVar[str] = "eu-1" # class attribute, never serialized
 
 
 raise OutOfStock("Item is no longer available", sku="ABC-1")
@@ -119,24 +139,29 @@ raise OutOfStock("Item is no longer available", sku="ABC-1")
   "status": 404,
   "detail": "Item is no longer available",
   "instance": "/items/ABC-1",
-  "correlation_id": null,
   "errors": [],
   "sku": "ABC-1",
-  "error_code": "OUT_OF_STOCK"
+  "error_code": "OUT_OF_STOCK",
+  "meta": {}
 }
 ```
 
 Rules applied to annotations:
 
-| Declaration | Resulting model field |
-|-------------|-----------------------|
-| `sku: str` | required field |
-| `error_code: str = "OUT_OF_STOCK"` | `Literal["OUT_OF_STOCK"]` constant — documented as `const` in OpenAPI and rejected if a different value is passed |
-| `meta: dict = {}` / `tags: list = []` | field with that mutable default |
+| Declaration | Result |
+|-------------|--------|
+| `sku: str` | required model field — must be passed when raising |
+| `meta: dict = {}` / `tags: list = []` / `codes: set = set()` | optional model field with that mutable default |
+| `error_code: str = "OUT_OF_STOCK"` | `Literal["OUT_OF_STOCK"]` constant — this is the discriminator feature: documented as `const` in OpenAPI and rejected if a different value is passed. Any non-mutable default behaves this way |
+| `warehouse: ClassVar[str] = "eu-1"` | stays a plain class attribute: never a model field, never serialized, and **not** settable through constructor keywords (a `warehouse=...` kwarg is silently ignored) |
+| `lazy: ClassVar[str]` (no default) | ignored entirely |
 | `type`, `title`, `status`, `detail`, `model` | not treated as extra fields (they configure the generated model instead) |
 | names starting with `_` | ignored |
 
-Only annotated attributes are inspected — to attach a plain class attribute that must not become a model field, declare it as `ClassVar[list]` / `ClassVar[dict]` / `ClassVar[set]` with a matching default.
+The `ClassVar` rule is uniform across annotation types — `ClassVar[str] = "x"` and
+`ClassVar[list] = []` both stay class attributes. Both bare and string (PEP 563 /
+`from __future__ import annotations`) forms of `ClassVar` are detected. Unannotated class
+attributes are not inspected at all.
 
 Subclassing composes: the generated model uses the parent's model as its base, so a subclass inherits its parent's extra fields and may narrow constants further.
 
@@ -155,6 +180,8 @@ Subclassing composes: the generated model uses the parent's model as its base, s
 Note that request validation failures are reported as **400**, not 422 — `configure_app` also strips FastAPI's automatic `422` entries (and the `HTTPValidationError` schemas) from the OpenAPI document.
 
 `create_exception_handler(header_filter)` builds the unhandled-exception handler; the module-level `exception_handler` is the instance using the default filter.
+
+This handler is the **only** place a traceback is emitted: `RequestLoggingMiddleware` logs no `exc_info`, and it filters uvicorn's own `Exception in ASGI application` record to avoid a duplicate. Disabling `enable_error_handlers` therefore also removes the traceback — see [Observability](../usage/opentelemetry.md#structured-request-logging).
 
 ## Logging headers safely
 

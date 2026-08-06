@@ -19,7 +19,17 @@ Use these inside any `View` or `APIView` subclass to register additional endpoin
 
 Every decorator also accepts `response_headers=` (a `ResponseHeaders` subclass), which documents headers on the success response and is consumed by the view rather than forwarded to FastAPI.
 
-`@override` (alias for `@annotate`) sets route metadata on an existing CRUD action method (`list`, `retrieve`, `create`, …) — useful for overriding `status_code`, `path`, `summary`, `responses` or `dependencies` of a standard action. It *replaces* the metadata previously attached to that method, so apply it once per method and do not stack it with `@throws` or a route decorator.
+`@override` (alias for `@annotate`) sets route metadata on an existing CRUD action method (`list`, `retrieve`, `create`, …) — useful for overriding `status_code`, `path`, `summary`, `responses` or `dependencies` of a standard action.
+
+Route metadata **merges** across stacked decorators, so `@override`, `@throws` and a route decorator compose in either order. The outer (later-applied) decorator wins on scalar keys such as `status_code` or `summary`, while `responses` maps are unioned — a status declared on both sides is shallow-merged. Every merge builds a fresh dict, so a decorator object reused across several methods never leaks metadata between them:
+
+```python
+class ItemView(APIView):
+    @get("/{id}", responses=errors(Conflict))
+    @throws(NotFound)
+    async def get_item(self, id: int) -> ItemSchema:  # documents 404 and 409
+        ...
+```
 
 ## `@action`
 
@@ -43,11 +53,13 @@ class ArticleViewSet(AsyncAPIViewSet):
 
 `response_headers` is available on every route decorator (`@get`/`@post`/`@route`/`@action`), and `ViewRouter(response_headers=...)` applies them to every route it registers.
 
+Custom routes are documented exactly like the generated CRUD actions: the view's `get_response_headers()` headers (called with `action=None`), `ConditionalMixin`'s `ETag` / `Last-Modified` validators and — for safe methods — a `304 Not Modified` all land on the route's success response, resolved from the decorator's own `status_code` and `methods` (defaulting to `200` and `GET`).
+
 ## Error utilities
 
-`errors(*exceptions)` builds a FastAPI-compatible `responses` dict from `APIError` subclasses. Bodies are documented as `application/problem+json`, and several errors sharing a status code become an `anyOf` of their models.
+`errors(*exceptions)` builds a FastAPI-compatible `responses` dict from `APIError` subclasses. Bodies are documented as `application/problem+json`, and several *distinct* errors sharing a status code become an `anyOf` of their models.
 
-`throws(*exceptions)` is a shorthand that wraps `errors` into an `@override` call, so it applies to a **standard** action only — for a method that already has a route decorator, pass `responses=errors(...)` to that decorator instead.
+`throws(*exceptions)` is a shorthand that wraps `errors` into an `@override` call. It works on standard CRUD actions and on methods that already carry a route decorator or another `@override` — the responses compose rather than replace, so stacking order does not matter.
 
 ## Exception catching decorators
 

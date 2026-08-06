@@ -1,7 +1,6 @@
 import calendar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from functools import cached_property
 from json import JSONDecoder, JSONEncoder
 from typing import Any, Literal
 
@@ -88,14 +87,20 @@ class JWTAuth(ScopesAuth):
         scope_validator: ScopeValidator | None = None,
     ) -> None:
         self.config = config
+        self._jwks_cache: tuple[Any, jwk.KeySetSerialization] | None = None
         super().__init__(scheme, scope_validator, custom_class)
 
-    @cached_property
+    @property
     def jwks(self) -> jwk.KeySetSerialization:
         key = self.config.get_key()
+        if self._jwks_cache is not None and self._jwks_cache[0] is key:
+            return self._jwks_cache[1]
         if isinstance(key, jwk.KeySet):
-            return key.as_dict(private=False)
-        return {"keys": [key.as_dict(private=False)]}
+            serialized = key.as_dict(private=False)
+        else:
+            serialized = {"keys": [key.as_dict(private=False)]}
+        self._jwks_cache = (key, serialized)
+        return serialized
 
     async def fetch_jwks(self, url: str, **kwargs: Any) -> None:
         if AsyncClient is None:
@@ -119,8 +124,10 @@ class JWTAuth(ScopesAuth):
             claims = decoded.claims
             self.config.claims_registry.validate(claims)
             return claims  # noqa: TRY300
-        except JoseError as e:
-            raise Unauthorized(str(e)) from None
+        except JoseError:
+            raise Unauthorized(
+                "Invalid token", headers={"WWW-Authenticate": self.challenge}
+            ) from None
 
     def encode(self, payload: dict[str, Any], expires_in: int | None = None) -> str:
         claims = payload.copy()

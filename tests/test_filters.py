@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 
@@ -15,6 +17,7 @@ from fastapi_views.filters.models import (
     ModelFilter,
     OrderingFilter,
     PaginationFilter,
+    SearchFilter,
 )
 from fastapi_views.filters.operations import (
     FieldOperation,
@@ -22,6 +25,9 @@ from fastapi_views.filters.operations import (
     LogicalOperation,
 )
 from fastapi_views.filters.resolvers.objects import ObjectFilterResolver
+from fastapi_views.filters.types import (
+    QueryField,  # noqa: TC001  # resolved at runtime by pydantic
+)
 
 
 @dataclass
@@ -195,8 +201,175 @@ def test_base_filter_as_kwargs():
     assert f.as_kwargs() == {"name": "Alice"}
 
 
-def test_apply_fields_filter_removes_fields(users, resolver):
+def test_apply_fields_filter_keeps_only_requested_fields(users, resolver):
     filter_ = get_user_filter(fields={"age"})
     result = resolver.apply_filter(filter_, users)
+    assert result
     for obj in result:
-        assert "age" not in obj.__dict__
+        assert set(obj.__dict__) == {"age"}
+
+
+def test_apply_fields_filter_does_not_mutate_input(users, resolver):
+    filter_ = get_user_filter(fields={"age"})
+    resolver.apply_filter(filter_, users)
+    for obj in users:
+        assert set(obj.__dict__) == {"name", "age"}
+
+
+def test_apply_fields_filter_without_fields_returns_queryset(users, resolver):
+    filter_ = get_user_filter()
+    assert resolver.apply_fields_filter(users, filter_) is users
+
+
+def test_apply_fields_filter_supports_mappings():
+    resolver = ObjectFilterResolver(getter=operator.itemgetter)
+    rows = [{"name": "John", "age": 25}, {"name": "Jane", "age": 30}]
+    result = resolver.apply_fields_filter(rows, FieldsFilter(fields={"name"}))
+    assert result == [{"name": "John"}, {"name": "Jane"}]
+    assert rows == [{"name": "John", "age": 25}, {"name": "Jane", "age": 30}]
+
+
+def test_apply_fields_filter_ignores_objects_without_dict(resolver):
+    queryset = [("John", 25)]
+    assert resolver.apply_fields_filter(queryset, FieldsFilter(fields={"name"})) == [
+        ("John", 25)
+    ]
+
+
+def test_query_backed_defaults_are_none_outside_a_request():
+    assert OrderingFilter().sort is None
+    assert OrderingFilter().order_by == []
+    assert FieldsFilter().fields is None
+    assert FieldsFilter().get_fields() is None
+    assert SearchFilter().query is None
+    assert SearchFilter().get_filters() == []
+
+
+def test_filter_can_be_instantiated_without_arguments():
+    filter_ = UserFilter()
+    assert filter_.sort is None
+    assert filter_.query is None
+    assert filter_.fields is None
+    assert filter_.order_by == []
+    assert filter_.filters == []
+    assert filter_.as_kwargs() == {}
+
+
+def test_query_field_defaults_to_none():
+    class TagFilter(ModelFilter):
+        tags: QueryField[list[str]]
+        age__gt: QueryField[int]
+
+    filter_ = TagFilter()
+    assert filter_.tags is None
+    assert filter_.age__gt is None
+    assert filter_.filters == []
+
+
+def test_query_field_with_explicit_none_default_keeps_the_query_param():
+    class TagFilter(ModelFilter):
+        tags: QueryField[list[str]] = None
+
+    app = FastAPI()
+
+    @app.get("/items")
+    def list_items(filter: TagFilter = FilterDepends(TagFilter)):  # noqa: ARG001
+        return []
+
+    operation = app.openapi()["paths"]["/items"]["get"]
+    assert "requestBody" not in operation
+    params = {param["name"]: param for param in operation["parameters"]}
+    assert set(params) == {"tags"}
+    assert params["tags"]["required"] is False
+
+
+def test_multiple_query_fields_are_independent_parameters():
+    class LookupFilter(ModelFilter):
+        id__in: QueryField[list[int]]
+        tag__not_in: QueryField[list[str]]
+        active: QueryField[bool]
+
+    app = FastAPI()
+
+    @app.get("/items")
+    def list_items(filter: LookupFilter = FilterDepends(LookupFilter)):  # noqa: ARG001
+        return []
+
+    operation = app.openapi()["paths"]["/items"]["get"]
+    assert "requestBody" not in operation
+    params = {param["name"]: param["schema"] for param in operation["parameters"]}
+    assert set(params) == {"id__in", "tag__not_in", "active"}
+    assert params["id__in"]["anyOf"][0] == {
+        "items": {"type": "integer"},
+        "type": "array",
+    }
+    assert params["tag__not_in"]["anyOf"][0] == {
+        "items": {"type": "string"},
+        "type": "array",
+    }
+    assert params["active"]["anyOf"][0] == {"type": "boolean"}
+
+
+def test_fields_from_does_not_leak_into_the_base_filter():
+    class MyModel(BaseModel):
+        id: int
+        name: str
+
+    class NarrowedFilter(FieldsFilter):
+        fields_from = MyModel
+
+    assert NarrowedFilter.model_fields["fields"].annotation is not (
+        FieldsFilter.model_fields["fields"].annotation
+    )
+    assert FieldsFilter(fields={"anything"}).get_fields() == {"anything"}
+    with pytest.raises(ValidationError):
+        NarrowedFilter(fields={"anything"})
+
+
+def test_ordering_filter_description_is_not_shared_with_the_base_class():
+    class ByName(OrderingFilter):
+        ordering_fields: ClassVar[set[str]] = {"name"}
+
+    base_param, sub_param = (
+        cls.model_fields["sort"].metadata[0] for cls in (OrderingFilter, ByName)
+    )
+    assert "Available values" not in base_param.description
+    assert "Available values: name" in sub_param.description
+
+
+def test_query_parameters_of_a_full_filter():
+    app = FastAPI()
+
+    @app.get("/users")
+    def list_users(filter: UserFilter = FilterDepends(UserFilter)):  # noqa: ARG001
+        return []
+
+    operation = app.openapi()["paths"]["/users"]["get"]
+    assert "requestBody" not in operation
+    params = {param["name"]: param for param in operation["parameters"]}
+    assert set(params) == {"fields", "q", "sort", "page", "page_size", "name", "age"}
+    assert params["q"]["schema"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert params["fields"]["schema"]["anyOf"][0]["uniqueItems"] is True
+    assert "default" not in params["sort"]["schema"]
+
+
+def test_model_filter_multi_level_lookup():
+    class UserAgeFilter(ModelFilter):
+        user__name__gt: str | None = None
+
+    result = UserAgeFilter(user__name__gt="a").get_filters()
+    assert len(result) == 1
+    assert result[0].field == "user__name"
+    assert result[0].operator == "gt"
+
+
+def test_model_filter_multi_level_lookup_from_kwargs():
+    class EmptyFilter(ModelFilter):
+        pass
+
+    filter_ = EmptyFilter()
+    filter_.with_kwargs(company__owner__name__ilike="ab")
+    result = filter_.get_filters()
+    assert len(result) == 1
+    assert result[0].field == "company__owner__name"
+    assert result[0].operator == "ilike"

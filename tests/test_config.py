@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from httpx import ASGITransport, AsyncClient
 from opentelemetry.sdk.resources import Resource
+from starlette.routing import Route
 from starlette_exporter import PrometheusMiddleware
 
 from fastapi_views import configure_app
@@ -31,18 +33,50 @@ def test_configure_app_disables_request_logging_middleware(app):
     assert all(m.cls is not RequestLoggingMiddleware for m in app.user_middleware)
 
 
-def test_configure_app_rejects_middleware_and_exporter(app):
+def test_configure_app_rejects_explicit_middleware_and_exporter(app):
     with pytest.raises(ValueError, match="Only one prometheus exporter"):
-        configure_app(app, prometheus_exporter_resource=Resource.create())
+        configure_app(
+            app,
+            enable_prometheus_middleware=True,
+            prometheus_exporter_resource=Resource.create(),
+        )
 
 
-def test_configure_app_with_prometheus_exporter(app):
+def test_configure_app_exporter_resource_selects_exporter_mode(app):
+    configure_app(app, prometheus_exporter_resource=Resource.create())
+
+    assert all(m.cls is not PrometheusMiddleware for m in app.user_middleware)
+    route = next(r for r in app.routes if getattr(r, "path", None) == "/metrics")
+    assert isinstance(route, Route)
+
+
+def test_configure_app_with_prometheus_exporter_and_middleware_disabled(app):
     configure_app(
         app,
         enable_prometheus_middleware=False,
         prometheus_exporter_resource=Resource.create(),
     )
     assert any(getattr(route, "path", None) == "/metrics" for route in app.routes)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"prometheus_exporter_resource": Resource.create()},
+    ],
+    ids=["middleware", "exporter"],
+)
+@pytest.mark.anyio
+async def test_metrics_endpoint_is_served_without_redirect(app, options):
+    configure_app(app, **options)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
 
 
 def test_configure_app_with_translation_manager(app):

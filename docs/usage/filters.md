@@ -76,7 +76,7 @@ class StatusFilter(BaseFilter):
 
 ### `ModelFilter`
 
-Extends `BaseFilter` and builds the operations automatically from its own fields, so you rarely need to write `get_filters()` yourself. A field name may carry a lookup suffix after a double underscore (`field__operator`); without a suffix the operator is `eq`. `None` values are skipped, so every filter field is opt-in.
+Extends `BaseFilter` and builds the operations automatically from its own fields, so you rarely need to write `get_filters()` yourself. A field name may carry a lookup suffix after the **last** double underscore (`field__operator`); a name with no `__` at all gets the operator `eq`. `None` values are skipped, so every filter field is opt-in.
 
 ```python
 from fastapi_views.filters import ModelFilter
@@ -91,6 +91,16 @@ class ItemFilter(ModelFilter):
 ```
 
 `field_names` is the set of fields `ModelFilter` builds operations from (all model fields minus `special_fields`). Values added with `with_kwargs()` are appended as operations too.
+
+Everything before the last `__` is kept as the operation's `field`, which is how lookups reach a related table (see [Nested filters](#nested-filters) and [Filtering across joined tables](#filtering-across-joined-tables)):
+
+```python
+class ItemFilter(ModelFilter):
+    user__name__eq: str | None = None   # field="user__name", operator="eq"
+    user__name__gt: str | None = None   # field="user__name", operator="gt"
+```
+
+A nested **equality** lookup therefore has to spell the operator out: `user__name` alone parses as field `user` with operator `name`, which no resolver knows.
 
 ### `OrderingFilter`
 
@@ -147,7 +157,7 @@ class ItemSearchFilter(SearchFilter):
 
 ### `FieldsFilter`
 
-Adds a repeatable `?fields` query parameter for sparse fieldsets, exposed through `get_fields()` (returns `set[str] | None`). Set `fields_from` to a Pydantic model and the accepted values are narrowed to that model's field names, which also renders as an `enum` in the OpenAPI schema.
+Adds a repeatable `?fields` query parameter for sparse fieldsets, exposed through `get_fields()` (returns `set[str] | None`). Set `fields_from` to a Pydantic model and the accepted values are narrowed to that model's field names, which also renders as an `enum` in the OpenAPI schema. The narrowing applies to that subclass only — plain `FieldsFilter`s and other subclasses elsewhere in the app keep accepting any string.
 
 ```python
 from pydantic import BaseModel
@@ -215,7 +225,7 @@ Notes:
 
 ### List-valued fields
 
-A filter field whose type is a list (e.g. for `__in`) must be declared **without** an explicit default, using `QueryField` — otherwise FastAPI infers a request body instead of a query parameter:
+A filter field whose type is a list (e.g. for `__in`) has to be declared with `QueryField` — a bare `list[int] | None = None` makes FastAPI infer a request body instead of a query parameter:
 
 ```python
 from fastapi_views.filters import ModelFilter
@@ -224,13 +234,26 @@ from fastapi_views.filters.types import QueryField
 
 class ItemFilter(ModelFilter):
     id__in: QueryField[list[int]]        # ?id__in=1&id__in=2
-    tag__not_in: QueryField[list[str]]
+    tag__not_in: QueryField[list[str]]   # ?tag__not_in=a&tag__not_in=b
+    active: QueryField[bool] = None      # an explicit `= None` is harmless
 ```
 
-`QueryField[T]` is `Annotated[T | None, Field(Query(None))]`; the `Query(None)` *is* the default, so writing `= None` after it discards it.
+Each `QueryField` becomes its own, independent query parameter — declare as many as you like in one filter.
 
-!!! warning
-    Fields backed by a `Query(...)` default (`QueryField`, `sort`, `q`, `fields`) fall back to the raw `fastapi.Query` object when a filter is instantiated by hand instead of by FastAPI. When you construct a filter in code — in tests, for example — pass every such field explicitly (`UserFilter(query=None, sort=None, fields=None, page=1, page_size=10)`).
+`QueryField[T]` is `Annotated[T | None, Field(None), QueryParam(Query())]`. The pydantic default is a plain `None` and the `fastapi.Query` travels in the annotation metadata, wrapped in `QueryParam` so pydantic does not absorb it; `BaseFilter.__pydantic_init_subclass__` unwraps it once the field is built, which is what FastAPI then sees. Re-declaring the default (`= None`) is therefore harmless — it neither discards the query parameter nor changes the generated OpenAPI.
+
+Because the default is a real `None`, query-backed fields (`QueryField`, `sort`, `q`, `fields`) also behave sensibly when a filter is constructed by hand rather than by FastAPI — handy in tests, where a filter can be built with no arguments at all:
+
+```python
+>>> ItemFilter().id__in is None
+True
+>>> ItemFilter().filters
+[]
+>>> OrderingFilter().sort is None, OrderingFilter().order_by
+(True, [])
+>>> FieldsFilter().get_fields() is None, SearchFilter().query is None
+(True, True)
+```
 
 ---
 
@@ -321,7 +344,7 @@ In [generic views](generics.md), set the `filter` class attribute and `FilterDep
 `as_kwargs()` is the escape hatch for repositories that take plain keyword arguments rather than a queryset, and it is what generic views use when a filter has no pagination base. `with_kwargs()` is how a view injects values the client must not control — a tenant id, the current user — and those values are honoured by both `as_kwargs()` and `ModelFilter.get_filters()`:
 
 ```python
->>> f = UserFilter(query=None, sort=None, fields=None, page=1, page_size=10, name="Alice")
+>>> f = UserFilter(name="Alice")
 >>> f.as_kwargs()
 {'name': 'Alice'}
 >>> f.with_kwargs(tenant_id=1)
@@ -395,7 +418,7 @@ result = dict_resolver.apply_filter(my_filter, [{"name": "John", "age": 25}])
 
 - Ordering is applied with `sorted()`, one pass per `SortOperation`.
 - `PaginationFilter` and `OffsetLimitFilter` are applied by slicing the list; `CursorPaginationFilter` raises `NotImplementedError`.
-- `apply_fields_filter` operates on the objects' `__dict__` and **removes** the attributes named in `?fields` (mutating the objects in place); dicts are not supported. Sparse fieldsets are normally handled at the serialization layer instead — see [generic views](generics.md).
+- `apply_fields_filter` projects each object down to **only** the attributes named in `?fields`, returning a new list of shallow copies — the input objects are left untouched. Mappings are projected into new dicts, and objects without a `__dict__` (tuples, `__slots__` classes) are passed through unchanged. With no `?fields` the queryset is returned as-is. Sparse fieldsets are normally handled at the serialization layer instead — see [generic views](generics.md).
 
 ### `SQLAlchemyFilterResolver`
 
@@ -437,10 +460,12 @@ Helper methods are available if you need the raw clauses instead of a modified q
 
 #### Filtering across joined tables
 
-A `prefix__field` operation — produced by `NestedFilter` — is resolved in one of two ways:
+A `prefix__field` operation — produced by `NestedFilter`, or by a field name such as `post__title__eq` — is resolved in one of two ways:
 
 1. `context[prefix]["table"]`, if you pass it;
-2. otherwise a lookup in the model registry by `__tablename__ == prefix` (cached on the class).
+2. otherwise a lookup in the model registry by `__tablename__ == prefix`, cached per registry **and** per resolver class in a `WeakKeyDictionary` keyed by the registry (so two declarative bases that happen to share a `__tablename__` never collide, and the cache never keeps a registry alive).
+
+`resolve_model_field` splits off exactly one prefix, at the *first* `__`: `post__title` is column `title` on `post`. Deeper paths (`company__owner__name`) are kept whole by the filter models but not understood by the default implementation — override `resolve_model_field` to walk them.
 
 Because `context` is passed as keyword arguments, the prefix becomes the keyword:
 
@@ -464,7 +489,15 @@ queryset = resolver.apply_filter(filter, select(PostModel), table=PostModel)
 
 #### Cursor pagination
 
-`apply_cursor_pagination` raises `NotImplementedError` — SQLAlchemy has no built-in keyset pagination. Override it (for example on top of [sqlakeyset](https://github.com/djrobstep/sqlakeyset)), or use a repository that implements it, such as `CursorPaginatedRepository` from the [sqlargon integration](sqlargon.md).
+`apply_cursor_pagination(queryset, page, page_size, **context)` raises `NotImplementedError` — SQLAlchemy has no built-in keyset pagination. Override it (for example on top of [sqlakeyset](https://github.com/djrobstep/sqlakeyset)), or use a repository that implements it, such as `CursorPaginatedRepository` from the [sqlargon integration](sqlargon.md). Accept `**context` in your override: `apply_pagination_filter` forwards the resolver context to it.
+
+```python
+class UserFilterResolver(SQLAlchemyFilterResolver):
+    filter_model = UserModel
+
+    def apply_cursor_pagination(self, queryset, page, page_size, **context):
+        return my_keyset_paginate(queryset, page, page_size)
+```
 
 #### Skipping stages with `exclude`
 

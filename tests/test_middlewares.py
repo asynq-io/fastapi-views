@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 import pytest
 import structlog
 from asgi_lifespan import LifespanManager
+from fastapi.middleware.gzip import GZipMiddleware
 from httpx import ASGITransport, AsyncClient
+from starlette_exporter import PrometheusMiddleware
 from structlog.testing import capture_logs
 
+from fastapi_views import configure_app
+from fastapi_views.i18n import LocaleMiddleware, NoTranslations
+from fastapi_views.i18n import translations as translations_module
 from fastapi_views.middlewares.limits import RequestLimitMiddleware
 from fastapi_views.middlewares.structlog import (
     RequestLoggingMiddleware,
@@ -176,7 +182,7 @@ async def test_request_logging_middleware_merges_extra_context(app):
 
 
 @pytest.mark.anyio
-async def test_request_logging_middleware_logs_and_reraises_unhandled_exception():
+async def test_request_logging_middleware_logs_500_response_and_reraises():
     async def failing_app(scope, receive, send):
         assert scope["type"] == "http"
         assert receive is not None
@@ -201,15 +207,89 @@ async def test_request_logging_middleware_logs_and_reraises_unhandled_exception(
     assert context["client"] == "unknown"
     structlog.contextvars.clear_contextvars()
 
-    request_log, exception_log = logs
+    request_log, response_log = logs
     assert request_log["event"] == "request"
-    assert exception_log["event"] == "unhandled_exception"
-    assert exception_log["log_level"] == "error"
-    assert exception_log["exc_info"] is True
-    assert exception_log["url"] == "http://testserver/fail?x=1"
-    assert exception_log["query_params"] == {"x": "1"}
-    assert exception_log["duration_ms"] >= 0
+    assert response_log["event"] == "response"
+    assert response_log["log_level"] == "error"
+    assert response_log["status_code"] == 500
+    assert response_log["duration_ms"] >= 0
+    assert response_log["headers"] == {}
     assert sent == []
+
+
+@pytest.mark.anyio
+async def test_request_logging_middleware_skips_excluded_path_on_exception():
+    async def failing_app(*_args):
+        raise ValueError("boom")
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    async def send(*args):
+        pass
+
+    middleware = RequestLoggingMiddleware(failing_app)
+
+    with (
+        capture_logs() as logs,
+        pytest.raises(ValueError, match="boom"),
+    ):
+        await middleware(make_http_scope(path="/healthcheck"), receive, send)
+
+    structlog.contextvars.clear_contextvars()
+    assert logs == []
+
+
+@pytest.mark.anyio
+async def test_request_logging_middleware_keeps_status_sent_before_exception():
+    async def failing_app(scope, receive, send):  # noqa: ARG001
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        raise ValueError("boom")
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    async def send(*args):
+        pass
+
+    middleware = RequestLoggingMiddleware(failing_app)
+
+    with capture_logs() as logs, pytest.raises(ValueError, match="boom"):
+        await middleware(make_http_scope(path="/fail"), receive, send)
+
+    structlog.contextvars.clear_contextvars()
+    _, response_log = logs
+    assert response_log["event"] == "response"
+    assert response_log["status_code"] == 200
+
+
+@pytest.mark.anyio
+async def test_unhandled_exception_logs_one_request_response_pair_once(app, caplog):
+    configure_app(app, enable_request_logging_middleware=True)
+
+    @app.get("/boom")
+    async def boom() -> dict[str, Any]:
+        msg = "boom"
+        raise ValueError(msg)
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with capture_logs() as logs, caplog.at_level(logging.ERROR):
+            response = await client.get("/boom")
+
+    assert response.status_code == 500
+
+    request_log, response_log = logs
+    assert request_log["event"] == "request"
+    assert response_log["event"] == "response"
+    assert response_log["status_code"] == 500
+    assert response_log["log_level"] == "error"
+
+    exception_records = [
+        record for record in caplog.records if record.message == "unhandled_exception"
+    ]
+    assert len(exception_records) == 1
+    assert exception_records[0].name == "exceptions.handler"
 
 
 @pytest.mark.anyio
@@ -248,3 +328,41 @@ async def test_request_limit_middleware_handles_http_request(app):
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+
+
+@pytest.mark.parametrize("limit", [1, math.inf])
+def test_request_limit_middleware_accepts_float_limit(limit):
+    async def asgi_app(scope, receive, send):
+        pass
+
+    middleware = RequestLimitMiddleware(asgi_app, limit=limit)
+
+    assert middleware._limiter.total_tokens == limit
+
+
+def test_configure_app_middleware_order(app):
+    manager = NoTranslations(default="en", supported_locales=["en"])
+    original = translations_module._manager
+    try:
+        configure_app(
+            app,
+            translation_manager=manager,
+            enable_request_logging_middleware=True,
+        )
+    finally:
+        translations_module._manager = original
+
+    assert [middleware.cls for middleware in app.user_middleware] == [
+        RequestLoggingMiddleware,
+        RequestLimitMiddleware,
+        PrometheusMiddleware,
+        GZipMiddleware,
+        LocaleMiddleware,
+    ]
+
+
+def test_configure_app_forwards_float_limits(app):
+    configure_app(app, limits=math.inf)
+
+    middleware = next(m for m in app.user_middleware if m.cls is RequestLimitMiddleware)
+    assert middleware.args == (math.inf,)

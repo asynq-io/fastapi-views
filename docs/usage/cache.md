@@ -95,7 +95,7 @@ class ItemView(CachedAPIView, AsyncListAPIView):
 
 `@use_cache(ttl=None, *, cache_control=None)` — `ttl` is the backend expiry in seconds (`None` means "until the backend evicts it"); `cache_control` overrides the header (a raw string or a `CacheControl`, see below).
 
-Nothing is stored unless the response is worth storing: a view returning `None` (a `404`, or an empty body) is skipped, and the middleware only writes bodies whose status code is below `300` — so errors never poison the cache.
+Nothing is stored unless the response is worth storing: a view returning `None` (a `404`, or an empty body) is skipped, and the middleware only writes bodies whose status code is below `300` — so errors never poison the cache. (The single exception is the conditional `304` [described below](#a-revalidating-client-warms-the-cache), where the *successful* body built before the downgrade is what gets written.)
 
 ### Cache key
 
@@ -189,12 +189,13 @@ Use a callable for anything a leading placeholder can't express, such as a prefi
 async def load_for(tenant: str) -> list[ItemSchema]: ...
 ```
 
-The stored value is serialized with a `pydantic.TypeAdapter` built from the function's **return annotation**, so keep that type JSON-serializable. An annotation that cannot be resolved (a forward reference to a name that doesn't exist) degrades to `Any`.
+### Serialization of the cached value
 
-!!! warning
-    Always annotate the return type. A **missing** annotation resolves to `None`,
-    and the resulting adapter accepts nothing but `null` — the value is written on
-    the miss but fails validation on the next hit.
+The stored value is serialized with a `pydantic.TypeAdapter` built from the function's **return annotation**, so keep that type JSON-serializable. An annotation that cannot be resolved — a forward reference to a missing name, or no annotation at all — degrades to `Any`, which round-trips any JSON-compatible value safely.
+
+Annotating is still worth it, because the annotation is what **reconstructs** the object on a hit: with `-> ItemSchema` a hit returns an `ItemSchema`, while under the `Any` fallback the same function returns the plain `dict` the JSON decoded to. An explicit `-> None` is honoured literally as `NoneType`, so `@cache` on a function that really returns something else is a genuine mis-annotation (the value is written on the miss and fails validation on the next hit), not a trap you fall into by omission.
+
+Adapters are memoised in a bounded 512-entry cache keyed by the annotation, so repeated decoration of the same type is cheap; an unhashable annotation (e.g. `Annotated[int, {"exotic": True}]`) simply gets a fresh, uncached adapter.
 
 ---
 
@@ -240,6 +241,26 @@ class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
         return await repo.get(id)
 ```
 
+`last_modified = True` is the same opt-in for the date validator, but it has nothing to send until you supply the timestamp:
+
+```python
+class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
+    last_modified = True
+
+    def get_last_modified(self) -> datetime | None:
+        return repo.last_change()
+
+    async def retrieve(self, id: UUID) -> ItemSchema:
+        return await repo.get(id)
+```
+
+!!! warning
+    The `get_last_modified()` override is **mandatory** with `last_modified = True`.
+    The default returns `None`, so the flag documents the header in OpenAPI but the
+    response carries no `Last-Modified` and never downgrades to `304` — silently,
+    with no error. `get_last_modified()` is called once per response, after the body
+    is built, and may consult `self.request` / the view's state.
+
 ### Manual (cheap)
 
 Hashing the body still requires serializing it. If you already have a cheap validator — a `version` column or `updated_at` — compare it **before** building the body and short-circuit. This skips serialization entirely when the client is current.
@@ -250,7 +271,6 @@ class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
 
     async def retrieve(self, id: UUID) -> ItemSchema | Response:
         item = await repo.get(id)
-        # Last-Modified
         return self.check_last_modified(item.updated_at) or item
 ```
 
@@ -263,6 +283,28 @@ async def retrieve(self, id: UUID) -> ItemSchema | Response:
 ```
 
 A raw value like `str(item.version)` is automatically quoted to a valid entity-tag (`"7"`); pass `W/"..."` for a weak validator.
+
+### Matching rules
+
+How a request's validators are compared, for both opt-ins:
+
+- **`If-None-Match` wins over `If-Modified-Since`** ([RFC 7232](https://datatracker.ietf.org/doc/html/rfc7232#section-3.3)). When a request carries both, the date is ignored entirely: a non-matching ETag yields `200` even if the client's date is newer, and a matching ETag yields `304` even if the client's date is older.
+- `*` in `If-None-Match` always matches; comma-separated lists are supported; `W/"x"` and `"x"` compare equal (the weak prefix is stripped before comparing).
+- An unparseable `If-Modified-Since` is treated as absent, so the client gets the full `200`.
+- **Naive datetimes are accepted** by `check_last_modified()`, `not_modified()` and `set_last_modified()`: they are assumed to be UTC and truncated to whole seconds, matching the one-second resolution of an HTTP date.
+
+### Safe vs unsafe methods
+
+Validators are stamped on **any** successful (`2xx`) response, but only `GET` and `HEAD` are ever downgraded to `304`:
+
+```python
+class ItemView(ConditionalMixin, AsyncCreateAPIView):
+    etag = True  # -> ETag on the 201, never a 304
+```
+
+A `POST` / `PUT` / `PATCH` view with `etag = True` therefore sends the `ETag` on its `201` (useful — the client can revalidate on the next `GET`) and keeps returning the body even when the client echoes a matching `If-None-Match`. The `304` is likewise omitted from the OpenAPI schema for those methods.
+
+When a downgrade does happen, the `304` carries over the headers a revalidation response is allowed to repeat: `ETag`, `Last-Modified`, `Cache-Control`, `Expires`, `Vary` and `X-Cache`. Everything else (including the body and `Content-Length`) is dropped.
 
 ### Lower-level helpers
 
@@ -310,17 +352,50 @@ class ItemView(ConditionalCachedAPIView, AsyncReadOnlyAPIViewSet):
 
 The automatic (`etag` / `last_modified`) opt-ins are what make a hit downgradeable, since the validator is derived from the cached body. The manual `check_*` helpers run *inside* the endpoint, which a cache hit skips entirely — so on a cached action, use the automatic form.
 
+### A revalidating client warms the cache
+
+The two mechanisms also cooperate on a **miss**. When the view runs, the body is serialized and only *then* compared against the client's validator, so a request that ends as a `304` has produced a full representation that would otherwise be thrown away. `ConditionalCachedAPIView` hands that pre-downgrade body to the cache, so the entry is written even though the client receives no body:
+
+| Request | Response | Cache after |
+|---------|----------|-------------|
+| `GET` (cold) | `200`, `X-Cache: MISS` | populated |
+| `GET` + matching `If-None-Match` (cold) | `304`, `X-Cache: MISS` | **populated** |
+| `GET` (warm) | `200`, `X-Cache: HIT` | unchanged |
+| `GET` + matching `If-None-Match` (warm) | `304`, `X-Cache: HIT` | unchanged |
+
+So a fleet of revalidating clients warms the cache for everyone instead of re-running the view on every request. Two details follow from this:
+
+- What is stored is always the **full representation**, never the empty `304`, so a later non-conditional request is served a proper `200` `HIT` without re-running the view.
+- The `304` itself still carries the cache headers of the request that produced it — `X-Cache: MISS`, plus `Cache-Control` and `Vary` — because the entry was written by *this* request. The write happens exactly once per miss; `CacheMiddleware` remains the single writer.
+
+!!! warning
+    This only works on `ConditionalCachedAPIView`. Hand-rolling
+    `class ItemView(ConditionalMixin, CachedAPIView, ...)` does **not** get it:
+    `ConditionalMixin.finalize_response()` does not call `super()`, so the body is
+    never recorded, the `304` reaching the middleware has no body to persist, and
+    the cache stays permanently cold — every revalidation re-runs the view. Prefer
+    `ConditionalCachedAPIView`, which overrides `finalize_response()` to record the
+    body before delegating to the mixin.
+
 ---
 
 ## OpenAPI documentation
 
 Validator headers and the `304` response are added to the schema **only when the view actually emits them**, so docs stay honest:
 
-- `etag = True` documents `ETag` on the success response and a `304` for safe methods.
-- `last_modified = True` does the same for `Last-Modified`.
-- For the manual pattern (where validators are produced imperatively and can't be introspected), set `conditional_requests = True` to document both validator headers and the `304`.
+| Flag | Documented on the success status | `304 Not Modified` |
+|------|----------------------------------|--------------------|
+| `etag = True` | `ETag` | safe methods only |
+| `last_modified = True` | `Last-Modified` | safe methods only |
+| `conditional_requests = True` | `ETag` **and** `Last-Modified` | safe methods only |
+| none of them | nothing | never |
 
-`CachedAPIView` documents its `X-Cache` (always present), `Cache-Control` and `Vary` headers on `list` / `retrieve` responses automatically, via the exported `CacheHeaders` model. Override `get_response_headers(action)` to document them on other actions or to swap in your own model.
+- `conditional_requests = True` exists for the manual pattern: validators produced imperatively can't be introspected, so it documents both of them (and the `304`) without changing runtime behaviour. Combine it with `etag` / `last_modified` freely — the header sets are unioned.
+- The `304` entry is described as `Not Modified` and repeats the same header map as the success response. It is added only for `GET` / `HEAD`, so a `POST` view with `etag = True` documents `ETag` on its `201` and no `304` — matching what it actually returns.
+- `ETag` is documented as `type: string`; `Last-Modified` as `type: string, format: http-date`.
+- The flags are **class-level**, not per-action, so on a viewset they apply to every registered action. `supports_conditional_requests()` reports whether any of them is set.
+
+`CachedAPIView` documents its `X-Cache` (always present), `Cache-Control` and `Vary` headers on `list` / `retrieve` responses automatically, via the exported `CacheHeaders` model. Override `get_response_headers(action)` to document them on other actions, to swap in your own model, or to return `None` for an action that isn't actually cached (as the example below does). When both apply to the same status code, the cache headers and the validators are merged into one header map.
 
 ---
 

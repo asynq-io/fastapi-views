@@ -13,6 +13,10 @@ Bulk views follow the same repository pattern as [generic views](generics.md): s
 
 Every operation is all-or-nothing (one transaction).
 
+`repository_options` / `get_repository_options(action)` are defined once on `BaseGenericBulkAPIView` and reach **all four** calls. The filtered actions (`PATCH`, `DELETE`) build their keyword arguments from the resolved filter and then add the options through `merge_repository_options(kwargs, action)`, which raises `TypeError` when an option key collides with a resolved filter key; override it to pick a precedence. All four protocol methods declare `**kwargs` so they can receive the options, and each one's leading parameter is positional-only — an implementation must declare it positional-only too in order to type-check as conforming.
+
+The hooks that receive objects — `after_bulk_create(objs)` and `after_update_many(objs)` — use the same parameter name on the sync and async views.
+
 For a complete walkthrough see [Bulk actions](../usage/bulk.md).
 
 ---

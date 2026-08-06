@@ -171,6 +171,16 @@ async def test_sync_partial_update_not_found(client):
 
 @pytest.mark.usefixtures("sync_items_generic")
 @pytest.mark.anyio
+async def test_sync_partial_update_documents_not_found_and_bad_request(client):
+    response = await client.get("/openapi.json")
+    assert response.status_code == HTTP_200_OK
+    responses = response.json()["paths"]["/sync-items/{id}"]["patch"]["responses"]
+    assert "application/problem+json" in responses["404"]["content"]
+    assert "application/problem+json" in responses["400"]["content"]
+
+
+@pytest.mark.usefixtures("sync_items_generic")
+@pytest.mark.anyio
 async def test_sync_destroy_generic(client):
     response = await client.delete(f"/sync-items/{uuid4()}")
     assert response.status_code == HTTP_204_NO_CONTENT

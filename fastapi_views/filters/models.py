@@ -13,7 +13,7 @@ from pydantic import (
 from fastapi_views.pagination import Cursor, PageNumber, PageSize
 
 from .operations import FilterOperation, LogicalOperation, SortOperation
-from .types import AnyFields, SearchQuery, Sort
+from .types import AnyFields, SearchQuery, Sort, set_query_param, unwrap_query_params
 
 
 class BaseFilter(BaseModel):
@@ -31,6 +31,12 @@ class BaseFilter(BaseModel):
 
         # rebind instead of |= to avoid mutating the set inherited from a parent
         cls.special_fields = cls.special_fields | parent_special_fields
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        for field in cls.model_fields.values():
+            unwrap_query_params(field)
 
     @property
     def filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
@@ -62,7 +68,7 @@ class ModelFilter(BaseFilter):
                 operation.set_prefix(field_name)
             return model_filters
         if "__" in field_name:
-            field_name, _, op = field_name.partition("__")
+            field_name, _, op = field_name.rpartition("__")
         else:
             op = "eq"
         return [FilterOperation(field=field_name, operator=op, values=value)]
@@ -122,14 +128,18 @@ class OrderingFilter(BaseFilter):
 
     sort: Sort
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if "sort" in cls.model_fields and cls.ordering_fields:
-            cls.model_fields["sort"].default = Query(
-                None,
-                description=f"List of fields to sort by. \
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        field = cls.model_fields.get("sort")
+        if field is not None and cls.ordering_fields:
+            set_query_param(
+                field,
+                Query(
+                    description=f"List of fields to sort by. \
                 Prefix with '-' to sort in descending order. \
                 Available values: {', '.join(cls.ordering_fields)}",
+                ),
             )
 
     @field_validator("sort", mode="after")
@@ -193,11 +203,13 @@ class FieldsFilter(BaseFilter):
 
     fields: AnyFields
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
         if cls.fields_from:
             fields = tuple(cls.fields_from.model_fields)
             cls.model_fields["fields"].annotation = set[Literal[fields]]  # type: ignore[valid-type]
-        super().__init_subclass__(**kwargs)
+            cls.model_rebuild(force=True, _parent_namespace_depth=0)
 
     def get_fields(self) -> set[str] | None:
         return self.fields

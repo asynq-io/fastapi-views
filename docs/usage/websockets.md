@@ -72,10 +72,15 @@ The generics are for typing only — runtime validation comes from `get_message_
 | `disconnect_timeout` | `30` | Seconds allowed for the (shielded) disconnect cleanup block |
 | `logger` | `logging.getLogger(f"{module}:{name}")` | Set automatically in `__init_subclass__` |
 | `_connections` | `[]` | Per-subclass list of active `WebSocket` objects |
+| `_serializers` | `{}` | Per-subclass `TypeAdapter` cache, keyed by schema |
 
 Per-connection instance attributes set in `__init__`: `self.websocket`,
 `self.serializer_options` (a mutable copy of the defaults) and `self.validation_context`
 (passed to pydantic as the validation context when receiving; `None` by default).
+
+`__init_subclass__` creates `_connections`, `_serializers` and `logger` for each subclass and
+calls `super().__init_subclass__(**kwargs)`, so cooperative mixins that also define
+`__init_subclass__` keep working.
 
 ---
 
@@ -108,8 +113,17 @@ async def handler(self) -> None:
 Incoming **binary** frames are read with `websocket.receive_bytes()` and validated as JSON
 with the schema returned by `get_message_schema("receive")`, using `self.validation_context`
 as the pydantic validation context. Validated messages are handed to `handler` over an
-`anyio` memory object stream. A `ValidationError` or `WebSocketDisconnect` is logged as a
-warning and cancels the task group, which tears down the connection.
+`anyio` memory object stream.
+
+The receive loop ends cleanly on any of three conditions, each logged as a warning before the
+task group is cancelled and the connection torn down:
+
+* a `ValidationError` — the frame was not valid JSON for the receive schema;
+* a `WebSocketDisconnect` — the client went away;
+* a `KeyError` — the client sent a **text** frame, which `receive_bytes()` cannot read.
+
+The protocol is binary-only by design: a text frame is not decoded as a fallback, it simply
+closes the connection.
 
 ---
 
@@ -139,7 +153,9 @@ class ChatView(WebSocketAPIView[ChatMessage, ChatReply]):
         return ChatReply if action == "send" else ChatMessage
 ```
 
-Adapters are cached in the shared `_serializers` class dict, keyed by schema.
+Adapters are cached in `_serializers`, a dict created fresh for each subclass in
+`__init_subclass__` (exactly like `_connections`) and keyed by schema — sibling views never
+share adapters.
 
 ---
 
@@ -167,15 +183,20 @@ class RoomView(WebSocketAPIView[ChatMessage]):
 the connection is removed from `_connections` and the socket is closed. The whole cleanup
 block is shielded from cancellation and bounded by `disconnect_timeout`.
 
+Cleanup is idempotent: deregistration is skipped for a connection that was never registered,
+so if `accept()` itself fails the original error propagates instead of being masked by the
+cleanup. `close()` and `on_disconnect` still run in that case.
+
 `self.logger` is a `logging.Logger` created per subclass as `f"{module}:{name}"`.
 
 ---
 
-## Per-class connection tracking
+## Per-class state
 
 `_connections` is a class-level list of all active `WebSocket` objects, created fresh for each
-subclass in `__init_subclass__` — so sibling views never share connections. Use it to inspect
-or act on connected clients:
+subclass in `__init_subclass__` — so sibling views never share connections. `_serializers` is
+created the same way, so two views declaring the same `message_schema` still get their own
+`TypeAdapter` cache. Use `_connections` to inspect or act on connected clients:
 
 ```python
 class StatsView(WebSocketAPIView[Ping, StatusMessage]):
@@ -281,9 +302,9 @@ class SlowCleanupView(WebSocketAPIView[ChatMessage]):
 
 ## Connecting from a browser
 
-Messages are sent and received as **binary frames** of UTF-8 encoded JSON. A text frame is
-not accepted by the receive loop, so encode outgoing payloads and read incoming ones as
-`ArrayBuffer`:
+Messages are sent and received as **binary frames** of UTF-8 encoded JSON. A text frame is not
+accepted by the receive loop — sending one logs a warning and closes the connection rather
+than raising — so encode outgoing payloads and read incoming ones as `ArrayBuffer`:
 
 ```javascript
 const ws = new WebSocket("ws://localhost:8000/ws/chat");

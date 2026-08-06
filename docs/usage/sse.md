@@ -89,8 +89,8 @@ from fastapi_views.models.streaming import (
 )
 
 yield ResponseStarted.new()
-yield ResponseResult[Item](
-    data=ResultData[Item](items=[Item(id=1, name="first")], index=1, total_results=2),
+yield ResponseResult[Item].new(
+    items=[Item(id=1, name="first")], index=1, total_results=2
 )
 yield ResponseFinished.new(duration_s=3)
 ```
@@ -99,10 +99,13 @@ yield ResponseFinished.new(duration_s=3)
 `NonNegativeInt`, and every event gets a fresh `uuid4` `id`.
 
 !!! note
-    `ResponseResult.new(items=...)` validates `items` against the *unparameterized*
-    `ResultData` payload, i.e. `list[dict[str, Any]]` — so pass plain dicts to it.
-    To pass model instances, build the payload explicitly as `ResultData[Item](...)`
-    as shown above.
+    `new()` honours the type parameter: `ResponseResult[Item].new(items=...)` validates
+    `items` against `list[Item]`, so it accepts `Item` instances, coerces plain dicts to
+    `Item`, and raises a `ValidationError` against `Item` for anything else.
+    Unparameterized `ResponseResult.new(items=...)` keeps the default payload type,
+    `list[dict[str, Any]]`. Building the payload explicitly —
+    `ResponseResult[Item](data=ResultData[Item](items=[...], index=1))` — still works,
+    but is no longer required.
 
 ---
 
@@ -165,10 +168,18 @@ class ServerSentEventsAPIView(APIView):
 
 Override it on your subclass to add or replace headers (for example to drop `X-Accel-Buffering` when you are not behind nginx).
 
+### Serialization options
+
+Each event's `data` is dumped with the view's `serializer_options`, exactly like every other
+`APIView` response. `self.serializer_options` is a per-instance mutable copy of
+`default_serializer_options`, which defaults to `{"by_alias": True}` — so aliased payload
+fields are emitted under their aliases. Set `default_serializer_options` on the subclass to
+change it for every request, or mutate `self.serializer_options` to adjust a single response.
+
 !!! note
-    Unlike regular `APIView` responses, event `data` is dumped without the view's
-    `serializer_options` (so `by_alias` is **not** applied). Use `@sse_route`'s
-    `serializer_options` argument when you need alias or exclusion behaviour.
+    `@sse_route` does not read `default_serializer_options`. It applies only the
+    `serializer_options` passed to the decorator, which default to no options at all — pass
+    `serializer_options={"by_alias": True}` explicitly if you want alias behaviour there.
 
 ### Event IDs and retry interval
 
@@ -193,7 +204,6 @@ from fastapi_views.models.streaming import (
     ResponseEvent,
     ResponseFinished,
     ResponseResult,
-    ResultData,
 )
 
 
@@ -201,9 +211,7 @@ class ItemStreamView(ServerSentEventsAPIView):
     response_schema = ResponseEvent[Item]
 
     async def events(self) -> AsyncIterator[ResponseEvent[Item]]:
-        yield ResponseResult[Item](
-            data=ResultData[Item](items=[Item(id=1, name="first")], index=1),
-        )
+        yield ResponseResult[Item].new(items=[Item(id=1, name="first")], index=1)
         yield ResponseFinished.new()
 ```
 
@@ -258,10 +266,15 @@ and returns a `StreamingResponse` with media type `text/event-stream`.
 Both async and sync generators are supported; sync generators are iterated in a
 threadpool via `starlette.concurrency.iterate_in_threadpool`.
 
+`status_code` (default `200`) sets both the returned `StreamingResponse` status and the
+status key the event schema is documented under, so `@sse_route(status_code=202)` really
+answers `202`.
+
 !!! note
-    `status_code` only affects which status key the event schema is documented under —
-    the returned `StreamingResponse` is always `200`. For a non-`200` SSE response, use
-    `ServerSentEventsAPIView` with `@override(status_code=...)` on `events` instead.
+    Pass `status_code` to `sse_route` itself. `sse_route` captures it at decoration time, so
+    stacking `@override(status_code=...)` on top of `@sse_route()` only rewrites the route
+    metadata — the response still carries `sse_route`'s status code, and the event schema
+    stays documented under it.
 
 ```python
 @sse_route(

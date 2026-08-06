@@ -54,21 +54,45 @@ Two more model modules are **not** re-exported and must be imported from their s
 | `status` | `int` | required |
 | `detail` | `str` | required |
 | `instance` | `str \| None` | `None` |
-| `correlation_id` | `str \| None` | only present when OpenTelemetry is installed; defaults to the active trace's correlation id |
+| `correlation_id` | `str \| None` | declared only when `opentelemetry-instrumentation-fastapi` is importable; `default_factory=get_correlation_id`, i.e. the active trace id at construction time |
 | `errors` | `list[Any]` | `[]` |
 
 `ErrorDetails.new(detail, **kwargs)` is a convenience constructor that takes `detail` positionally. `ErrorDetailsType` is the alias `type[ErrorDetails]`.
 
+### `correlation_id` is omitted, not `null`
+
+When the field exists but no OpenTelemetry span is active, `get_correlation_id()` returns
+`None` and the key is dropped from the serialized payload rather than rendered as
+`"correlation_id": null`. `ErrorDetails` overrides `model_dump` and `model_dump_json` to
+add `"correlation_id"` to `exclude` in that case, merging with whatever `exclude` the
+caller passed (set, dict or `None` all work). The field is still advertised in the OpenAPI
+schema, so clients can rely on it being documented while treating it as optional.
+
+```python
+>>> details = ErrorDetails(title="Test", status=400, detail="detail")
+>>> details.correlation_id is None
+True
+>>> "correlation_id" in details.model_dump()
+False
+>>> details.model_dump(exclude={"instance"}).keys()          # user exclude preserved
+dict_keys(['type', 'title', 'status', 'detail', 'errors'])
+```
+
+Without the OpenTelemetry extra installed the field does not exist at all, and neither the
+body nor the schema mentions it.
+
 Two helpers build error models dynamically — they are what [`APIError`](exceptions.md) subclassing uses internally:
 
 - `const_type(value, description=None, **kwargs)` returns a `(Literal[value], Field(value, ...))` tuple, i.e. a constant field definition for `create_model`.
-- `create_error_model(status, type="about:blank", name=None, title=None, detail=None, **kwargs)` builds an `ErrorDetails` subclass whose `title`, `status` and `type` are constants. `title` defaults to the `HTTPStatus` phrase, `name` to that phrase without spaces, and `detail` to the `HTTPStatus` description. Extra keyword arguments are passed to `create_model` as field definitions; `__base__` selects a different `ErrorDetails` subclass to inherit from.
+- `create_error_model(status, type="about:blank", name=None, title=None, detail=None, **kwargs)` builds an `ErrorDetails` subclass whose `title`, `status` and `type` are constants. `title` defaults to the `HTTPStatus` phrase, `name` to that phrase without spaces, and `detail` to the `HTTPStatus` description — or to the phrase when that description is empty, so the default `detail` is never an empty string. Extra keyword arguments are passed to `create_model` as field definitions; `__base__` selects a different `ErrorDetails` subclass to inherit from.
 
 ```python
 from fastapi_views.models import create_error_model
 
 NotFoundModel = create_error_model(404)                     # name "NotFound", title "Not Found"
 Custom = create_error_model(400, name="QuotaExceeded", title="Quota Exceeded")
+
+create_error_model(422)().detail                            # "Unprocessable Entity", not ""
 ```
 
 ## Response headers

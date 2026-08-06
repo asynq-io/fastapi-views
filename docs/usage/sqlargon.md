@@ -11,17 +11,18 @@ The integration adds two things on top of `sqlargon.SQLAlchemyRepository`:
 
 ## Installation
 
-`sqlargon` is not pulled in by any extra, so install it alongside FastAPI Views:
+Install the `sqlargon` extra:
 
 ```shell
-pip install fastapi-views sqlargon
+pip install 'fastapi-views[sqlargon]'
+# or
+uv add "fastapi-views[sqlargon]"
 ```
 
-Cursor pagination additionally needs `sqlakeyset`:
+The extra resolves to `sqlargon[pagination]>=1.0.3b1,<2` (it is part of the `all` extra too). The `pagination` sub-extra pulls in [sqlakeyset](https://github.com/djrobstep/sqlakeyset), which `CursorPaginatedRepository` needs — without it that class is simply not importable, while `PaginatedRepository` and `OffsetPaginatedRepository` keep working.
 
-```shell
-pip install "sqlargon[pagination]"
-```
+!!! note
+    The `1.0.3b1` floor is an intentional prerelease. Both pip and uv allow prereleases for a requirement whose specifier names one, so no flag is normally needed; if your resolver is configured for stable releases only, allow them explicitly (`pip install --pre ...`, `uv add --prerelease=allow ...`).
 
 ---
 
@@ -135,7 +136,7 @@ router.register_view(FruitViewSet)
 
 ## Bulk views
 
-`sqlargon.SQLAlchemyRepository` also implements `create_many`, `bulk_update`, `update_many` and `delete_many` — exactly the `AsyncBulkRepository` protocol — so the same repository can back [bulk views](bulk.md):
+`sqlargon.SQLAlchemyRepository` also implements all four bulk methods — `create_many`, `bulk_update`, `update_many` and `delete_many` — so the same repository can back [bulk views](bulk.md):
 
 ```python
 class FruitBulkViewSet(AsyncBulkAPIViewSet):
@@ -146,6 +147,15 @@ class FruitBulkViewSet(AsyncBulkAPIViewSet):
     filter = FruitBulkFilter
     repository = FruitRepository()
 ```
+
+!!! warning
+    `sqlargon.SQLAlchemyRepository` is not a *strictly* conforming `AsyncBulkRepository`:
+    its `bulk_update(values, *args, on_=None)` declares no `**kwargs`, so **any**
+    `repository_options` key other than `on_` raises `TypeError` on `PUT /bulk`. Its
+    `create_many` takes `items` as positional-or-keyword, which also fails a static
+    conformance check (harmless at runtime).
+
+Be careful with `repository_options` here: bulk views forward it to all four calls, and sqlargon's `update_many` / `delete_many` turn their keyword arguments into `WHERE` criteria, so only column criteria belong there for those actions. `create_many` accepts `ignore_conflicts` (and tolerates extra keywords), while `bulk_update` accepts only `on_`. Override `get_repository_options(action)` to return per-action options rather than one shared dict — that is the way to keep the two filtered actions' criteria separate from `on_`.
 
 ---
 

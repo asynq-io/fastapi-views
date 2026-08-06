@@ -226,6 +226,8 @@ The filter class also selects the **response container** for the list action:
 | an `OffsetLimitFilter` subclass | `OffsetPage[response_schema]` |
 | a `CursorPaginationFilter` subclass | `CursorPage[response_schema]` |
 
+This is the only input: generic list views derive the container **solely** from `filter`, and unlike the plain [`ListAPIView`](basic.md) they have no `response_schema_as_list` switch to opt out of it. To return an envelope of your own, pair the view with a pagination filter and a repository whose `get_filtered_page` builds that container, or override `get_response_schema`.
+
 ```python
 from fastapi_views.filters.models import PaginationFilter
 

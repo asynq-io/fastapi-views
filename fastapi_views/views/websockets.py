@@ -45,8 +45,10 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
     _serializers: ClassVar[TypeAdapterMap] = {}
     _connections: ClassVar[list[WebSocket]]
 
-    def __init_subclass__(cls) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
         cls._connections = []
+        cls._serializers = {}
         cls.logger = getLogger(f"{cls.__module__}:{cls.get_name()}")
 
     def __init__(self, websocket: WebSocket) -> None:
@@ -92,7 +94,7 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
                         data, context=self.validation_context
                     )
                     await self._snd.send(message)
-        except (ValidationError, WebSocketDisconnect) as e:
+        except (ValidationError, WebSocketDisconnect, KeyError) as e:
             self.logger.warning(
                 "Exception while receiving data from websocket", exc_info=e
             )
@@ -121,7 +123,8 @@ class WebSocketAPIView(DependencyMixin, ABC, Generic[RecvT, SendT]):
                     tg.start_soon(self._handler, fn, tg.cancel_scope)
             finally:
                 with fail_after(self.disconnect_timeout, shield=True):
-                    self._connections.remove(self.websocket)
+                    if self.websocket in self._connections:
+                        self._connections.remove(self.websocket)
                     await self.websocket.close()
                     await self.on_disconnect()
 

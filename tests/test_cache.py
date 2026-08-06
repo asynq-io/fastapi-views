@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import time
+import warnings
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import urlencode
 
@@ -11,13 +12,14 @@ import pytest
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI, Request, Response
 from httpx import ASGITransport, AsyncClient
+from pydantic._internal._model_construction import ModelMetaclass
 from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from fastapi_views import ViewRouter
 from fastapi_views.cache.backends import CacheBackend
 from fastapi_views.cache.backends.memory import ExpiringItem, InMemoryCache
 from fastapi_views.cache.backends.redis import RedisCache
-from fastapi_views.cache.cache import Cache, _resolve_return_type
+from fastapi_views.cache.cache import Cache, _get_type_adapter, _resolve_return_type
 from fastapi_views.cache.middleware import CacheMiddleware
 from fastapi_views.cache.view import CacheControl, CachedAPIView, use_cache
 from fastapi_views.handlers import add_error_handlers
@@ -43,6 +45,16 @@ def _mock_request(
 
 
 class Item(BaseSchema):
+    name: str
+
+
+class _UnhashableMeta(ModelMetaclass):
+    __hash__ = None  # type: ignore[assignment]
+
+
+class ExoticItem(BaseSchema, metaclass=_UnhashableMeta):
+    """A model whose *class* is unhashable, so it cannot be a cache key."""
+
     name: str
 
 
@@ -505,6 +517,95 @@ async def test_cache_decorator_callable_key() -> None:
     await get_item(7)
 
     assert await backend.get("item:7") is not None
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_missing_return_annotation_round_trips() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_payload(name: str):
+        nonlocal call_count
+        call_count += 1
+        return {"name": name, "count": [1, 2]}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        first = await get_payload(name="widget")
+        second = await get_payload(name="widget")
+
+    assert call_count == 1
+    assert first == second == {"name": "widget", "count": [1, 2]}
+
+
+def test_resolve_return_type_missing_annotation_is_any() -> None:
+    async def fn(value: int):
+        return value
+
+    assert _resolve_return_type(fn) is Any
+
+
+def test_resolve_return_type_none_annotation_is_none_type() -> None:
+    async def fn() -> None:
+        return None
+
+    assert _resolve_return_type(fn) is type(None)
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_annotated_model_is_rebuilt_as_model() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+
+    @cache_("{name}")
+    async def get_item(name: str) -> Item:
+        return Item(name=name)
+
+    await get_item(name="widget")
+    cached = await get_item(name="widget")
+
+    assert isinstance(cached, Item)
+    assert cached == Item(name="widget")
+
+
+def test_get_type_adapter_caches_hashable_types() -> None:
+    assert _get_type_adapter(Item) is _get_type_adapter(Item)
+
+
+def test_get_type_adapter_handles_unhashable_annotation() -> None:
+    unhashable = Annotated[int, {"exotic": True}]
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(unhashable)
+
+    adapter = _get_type_adapter(unhashable)
+
+    assert adapter.dump_json(5) == b"5"
+    assert adapter.validate_json(b"5") == 5
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_unhashable_return_annotation_round_trips() -> None:
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(ExoticItem)
+
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_exotic(name: str) -> ExoticItem:
+        nonlocal call_count
+        call_count += 1
+        return ExoticItem(name=name)  # type: ignore[call-arg]
+
+    first = await get_exotic(name="widget")
+    second = await get_exotic(name="widget")
+
+    assert call_count == 1
+    assert isinstance(second, ExoticItem)
+    assert first == second
 
 
 def test_resolve_return_type_falls_back_to_any() -> None:

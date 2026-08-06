@@ -6,7 +6,7 @@ from typing import Any
 import typer
 from fastapi import FastAPI
 
-cli = typer.Typer()
+cli = typer.Typer(no_args_is_help=True)
 
 
 if "." not in sys.path:
@@ -21,6 +21,10 @@ def import_from_string(path: str) -> Any:
     except AttributeError:
         msg = f"{module_name} has no object {obj}"
         raise ImportError(msg) from None
+
+
+@cli.callback(help="FastAPI Views command line interface")
+def main() -> None: ...
 
 
 @cli.command(help="Generate OpenAPI documentation from app object")
@@ -39,7 +43,14 @@ def docs(
     openapi = app_obj.openapi()
 
     if format == "yaml":
-        from yaml import safe_dump
+        try:
+            from yaml import safe_dump
+        except ImportError:
+            msg = (
+                "PyYAML is required for '--format yaml'. "
+                "Install it with 'pip install pyyaml' (or 'uv add pyyaml')."
+            )
+            raise typer.BadParameter(msg, param_hint="'--format'") from None
 
         data = safe_dump(openapi)
     elif format == "json":

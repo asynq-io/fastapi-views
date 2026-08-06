@@ -129,7 +129,6 @@ class _NoFilter(BaseFilter):
 
 
 class BaseGenericListAPIView(GenericView):
-    response_schema_as_list: bool = False
     filter: type[BaseModel] | None
 
     @classmethod

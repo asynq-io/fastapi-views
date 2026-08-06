@@ -1,4 +1,4 @@
-from typing import Annotated, Any, ClassVar
+from typing import Annotated, ClassVar
 from uuid import UUID
 
 from auth0_api_python import ApiClient, ApiClientOptions
@@ -6,9 +6,17 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
-from fastapi_views.auth import AutoScopesAuthView
+from fastapi_views.auth import AutoScopesAuthView, Delete, Edit, Read
 from fastapi_views.integrations.auth0 import Auth0
 from fastapi_views.views.viewsets import AsyncAPIViewSet, AsyncReadOnlyAPIViewSet
+
+
+class Principal(BaseModel):
+    """Typed view over the claims Auth0 verified for the current request."""
+
+    sub: str
+    scope: str = ""
+
 
 ## Auth setup
 
@@ -19,8 +27,9 @@ api_client = ApiClient(
     )
 )
 # scheme defaults to HTTP Bearer; use permission_key="permissions"
-# when Auth0 RBAC puts permissions in the `permissions` claim
-auth = Auth0(api_client)
+# when Auth0 RBAC puts permissions in the `permissions` claim.
+# custom_class is applied to the verified claims, after scope validation.
+auth = Auth0(api_client, custom_class=Principal.model_validate)
 
 
 ## Protecting a single route
@@ -30,8 +39,8 @@ app = FastAPI(title="My API")
 
 
 @app.get("/me")
-async def me(token: Annotated[dict[str, Any], auth.authenticated()]):
-    return {"sub": token["sub"]}
+async def me(principal: Annotated[Principal, auth.authenticated()]):
+    return {"sub": principal.sub}
 
 
 ## Per-action scopes on a viewset
@@ -49,11 +58,11 @@ class ItemViewSet(AsyncAPIViewSet):
     items: ClassVar[dict[UUID, ItemSchema]] = {}
 
     action_dependencies: ClassVar = {
-        "list": [auth.requires("read:items")],
-        "retrieve": [auth.requires("read:items")],
-        "create": [auth.requires("edit:items")],
-        "update": [auth.requires("edit:items")],
-        "destroy": [auth.requires("edit:items")],
+        "list": [auth.requires(f"{Read}:items")],
+        "retrieve": [auth.requires(f"{Read}:items")],
+        "create": [auth.requires(f"{Edit}:items")],
+        "update": [auth.requires(f"{Edit}:items")],
+        "destroy": [auth.requires(f"{Delete}:items")],
     }
 
     async def list(self) -> list[ItemSchema]:

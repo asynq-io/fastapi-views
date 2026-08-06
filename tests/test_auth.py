@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,7 +13,14 @@ from starlette.status import (
     HTTP_403_FORBIDDEN,
 )
 
-from fastapi_views.auth import AutoScopesAuthView
+from fastapi_views.auth import (
+    AuthBase,
+    AutoScopesAuthView,
+    Delete,
+    ScopesAuth,
+    TokenAuth,
+)
+from fastapi_views.auth import abc as auth_abc
 from fastapi_views.auth.api_key import APIKeyAuth
 from fastapi_views.auth.jwt import (
     BearerAccessToken,
@@ -23,11 +30,16 @@ from fastapi_views.auth.jwt import (
 )
 from fastapi_views.auth.scopes import (
     HierarchicalScopeValidator,
+    Scope,
+    ScopeValidator,
     SimpleScopeValidator,
 )
 from fastapi_views.exceptions import APIError, Unauthorized
 from fastapi_views.handlers import add_error_handlers
 from fastapi_views.integrations.auth0 import Auth0
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def make_config(**kwargs: Any) -> JWTConfig:
@@ -531,3 +543,213 @@ def test_auto_scopes_auth_view_merges_action_dependencies(jwt_auth):
     scope_dependency, extra = ItemsView.get_dependencies("retrieve")
     assert list(scope_dependency.scopes) == ["read:items"]
     assert extra is marker
+
+
+class _PrefixScopeValidator(ScopeValidator):
+    """Deliberately permissive validator: a granted prefix covers a scope."""
+
+    def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
+        return any(scope.startswith(granted) for granted in granted_scopes)
+
+
+def test_token_auth_applies_custom_class():
+    auth = TokenAuth(custom_class=lambda raw: {"opaque": raw})
+    assert auth.wrap_token("abc") == {"opaque": "abc"}
+
+
+@pytest.mark.anyio
+async def test_token_auth_endpoint_applies_custom_class(app, client):
+    auth = TokenAuth(custom_class=lambda raw: {"opaque": raw})
+
+    @app.get("/me")
+    async def me(principal=auth.authenticated()):
+        return principal
+
+    response = await client.get("/me", headers={"Authorization": "Bearer opaque-value"})
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {"opaque": "opaque-value"}
+
+
+@pytest.mark.anyio
+async def test_token_auth_without_custom_class_returns_raw_credential(app, client):
+    auth = TokenAuth()
+
+    @app.get("/me")
+    async def me(principal=auth.authenticated()):
+        return {"raw": principal}
+
+    response = await client.get("/me", headers={"Authorization": "Bearer raw-value"})
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {"raw": "raw-value"}
+
+
+@pytest.mark.anyio
+async def test_scopes_auth_still_applies_custom_class(config, app, client):
+    auth = JWTAuth(config, custom_class=lambda token: {"user": token["sub"]})
+
+    @app.get("/items")
+    async def items(principal=auth.requires("read:items")):
+        return principal
+
+    bearer = auth.create_access_token({"sub": "user-1", "scope": "read:items"})
+    response = await client.get(
+        "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
+    )
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {"user": "user-1"}
+
+
+@pytest.mark.anyio
+async def test_custom_class_not_applied_to_test_user(app, client):
+    auth = TokenAuth(custom_class=lambda raw: {"opaque": raw})
+
+    @app.get("/me")
+    async def me(principal=auth.authenticated()):
+        return principal
+
+    with auth.with_test_user({"sub": "tester"}):
+        response = await client.get("/me")
+
+    assert response.json() == {"sub": "tester"}
+
+
+def test_jwks_is_cached_while_the_key_is_unchanged(jwt_auth):
+    assert jwt_auth.jwks is jwt_auth.jwks
+
+
+def test_jwks_reflects_rotated_key():
+    auth = JWTAuth(make_config(), None)
+    before = auth.jwks
+    rotated = jwk.OctKey.generate_key(256)
+    auth.config.import_key(rotated.as_dict(private=True))
+
+    after = auth.jwks
+    assert after is not before
+    assert after == {"keys": [rotated.as_dict(private=False)]}
+
+
+def test_jwks_reflects_rotation_to_a_key_set():
+    auth = JWTAuth(make_config(), None)
+    assert len(auth.jwks["keys"]) == 1
+    auth.config.import_key(
+        {
+            "keys": [
+                jwk.OctKey.generate_key(256).as_dict(private=True),
+                jwk.OctKey.generate_key(256).as_dict(private=True),
+            ]
+        }
+    )
+    assert len(auth.jwks["keys"]) == 2
+
+
+@pytest.mark.anyio
+async def test_jwks_endpoint_serves_rotated_key(app, client):
+    auth = JWTAuth(make_config(), None)
+
+    @app.get("/.well-known/jwks.json")
+    async def jwks():
+        return auth.jwks
+
+    first = (await client.get("/.well-known/jwks.json")).json()
+    auth.config.import_key(jwk.OctKey.generate_key(256).as_dict(private=True))
+    second = (await client.get("/.well-known/jwks.json")).json()
+    assert first != second
+
+
+def test_token_auth_and_scopes_auth_are_exported_from_auth_package():
+    assert TokenAuth is auth_abc.TokenAuth
+    assert ScopesAuth is auth_abc.ScopesAuth
+    assert {"TokenAuth", "ScopesAuth"} <= set(auth_abc.__all__)
+
+
+def test_delete_action_is_exported_alongside_the_other_actions():
+    assert Delete == "delete"
+    assert Delete in HierarchicalScopeValidator.scope_hierarchy
+    assert {"All", "Delete", "Edit", "Read"} <= set(auth_abc.__all__)
+    assert auth_abc.Delete == Delete
+
+
+def test_get_granted_scopes_without_claim_is_empty(jwt_auth):
+    assert jwt_auth.get_granted_scopes({"sub": "user-1"}) == []
+    assert jwt_auth.get_granted_scopes({"sub": "user-1", "scope": ""}) == []
+
+
+def test_get_granted_scopes_handles_irregular_whitespace(jwt_auth):
+    granted = jwt_auth.get_granted_scopes({"scope": "  read:items \t edit:items\n"})
+    assert granted == ["read:items", "edit:items"]
+
+
+def test_scopeless_token_grants_nothing_under_a_permissive_validator(config):
+    auth = JWTAuth(config, scope_validator=_PrefixScopeValidator())
+    granted = auth.get_granted_scopes({"sub": "user-1"})
+    assert auth.has_scope("read:items", granted) is False
+
+
+@pytest.mark.anyio
+async def test_endpoint_forbids_scopeless_token_under_permissive_validator(
+    config, app, client
+):
+    auth = JWTAuth(config, scope_validator=_PrefixScopeValidator())
+
+    @app.get("/items")
+    async def items(token=auth.requires("read:items")):
+        return {"sub": token["sub"]}
+
+    bearer = auth.create_access_token({"sub": "user-1"})
+    response = await client.get(
+        "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
+    )
+    assert response.status_code == HTTP_403_FORBIDDEN
+
+
+def test_auth_base_unauthorized_has_meaningful_detail():
+    auth = AuthBase(lambda: None)
+    with pytest.raises(Unauthorized) as exc_info:
+        auth.unauthorized()
+
+    detail = exc_info.value.as_model().detail
+    assert detail == "Missing or invalid credentials"
+    assert "No permission" not in detail
+
+
+@pytest.mark.anyio
+async def test_missing_bearer_token_401_advertises_bearer_challenge(
+    jwt_auth, app, client
+):
+    @app.get("/me")
+    async def me(token=jwt_auth.authenticated()):
+        return token
+
+    response = await client.get("/me")
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    detail = response.json()["detail"]
+    assert detail == "Missing or invalid bearer token"
+    assert "No permission" not in detail
+
+
+@pytest.mark.anyio
+async def test_invalid_bearer_token_401_advertises_bearer_challenge(
+    jwt_auth, app, client
+):
+    @app.get("/me")
+    async def me(token=jwt_auth.authenticated()):
+        return token
+
+    response = await client.get(
+        "/me", headers={"Authorization": "Bearer garbage.token.value"}
+    )
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert "No permission" not in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_scoped_endpoint_401_advertises_bearer_challenge(jwt_auth, app, client):
+    @app.get("/items")
+    async def items(token=jwt_auth.requires("read:items")):
+        return token
+
+    response = await client.get("/items")
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.headers["WWW-Authenticate"] == "Bearer"

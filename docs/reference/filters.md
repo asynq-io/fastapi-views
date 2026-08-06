@@ -18,7 +18,7 @@ For a complete walkthrough including resolver usage see [Filters](../usage/filte
 Three modules are **not** re-exported and must be imported from their submodule:
 
 - `fastapi_views.filters.operations` — `FieldOperation`, `FilterOperation`, `SortOperation`, `LogicalOperation`, `Operation`
-- `fastapi_views.filters.types` — `QueryField`, `SearchQuery`, `Sort`, `Fields`, `AnyFields`
+- `fastapi_views.filters.types` — `QueryField`, `SearchQuery`, `Sort`, `Fields`, `AnyFields`, plus the `QueryParam` wrapper and its `unwrap_query_params` / `set_query_param` helpers
 - `fastapi_views.filters.resolvers.*` — `FilterResolver` (`.abc`), `ObjectFilterResolver` (`.objects`), `SQLAlchemyFilterResolver` (`.sqlalchemy`). The `resolvers` package itself is empty, so that importing filters never imports SQLAlchemy.
 
 ## Filter models
@@ -39,6 +39,8 @@ Three modules are **not** re-exported and must be imported from their submodule:
 | `Filter` | all of the above | `page`, `page_size`, `sort`, `q`, `fields` + own fields | — |
 
 `Filter` inherits from `PaginationFilter`, `OrderingFilter`, `SearchFilter`, `FieldsFilter` and `ModelFilter`, in that order.
+
+`ModelFilter` derives an operation's operator from the segment after the **last** `__` in the field name (`user__name__gt` → field `user__name`, operator `gt`) and uses `eq` only for names without any `__`, so a nested equality lookup must be written `user__name__eq`. `BaseFilter.__pydantic_init_subclass__` unwraps the `QueryParam` metadata of every field, which is what makes query-backed fields ordinary `None`-defaulted pydantic fields. `FieldsFilter.fields_from` narrows the annotation on the declaring subclass only.
 
 `page`/`page_size` use the `PageNumber` / `PageSize` aliases and `cursor` uses `Cursor` from [`fastapi_views.pagination`](pagination.md), which also documents the page container each pagination filter pairs with.
 
@@ -77,15 +79,17 @@ Three modules are **not** re-exported and must be imported from their submodule:
 
 ## Query parameter types
 
-Annotated aliases that make a Pydantic field behave as a FastAPI query parameter. The `Query(...)` is the field default, so re-declaring a default (`= None`) discards it — and a list-typed field without it is inferred as a request body.
+Annotated aliases that make a Pydantic field behave as a FastAPI query parameter. Each carries `Field(None)` as the pydantic default plus a `fastapi.Query` wrapped in `QueryParam`, so pydantic does not absorb the parameter definition; `BaseFilter.__pydantic_init_subclass__` calls `unwrap_query_params` to put the real `Query` back into the built field's metadata, where FastAPI finds it. Consequences: the runtime default is a plain `None`, re-declaring `= None` is harmless, and several such fields in one filter stay independent parameters. A list-typed field declared *without* one of these aliases is inferred as a request body.
 
 | Alias | Type |
 |-------|------|
-| `QueryField[T]` | `Annotated[T \| None, Field(Query(None))]` |
+| `QueryField[T]` | `Annotated[T \| None, Field(None), QueryParam(Query())]` |
 | `SearchQuery` | `str \| None`, aliased to `q` |
 | `Sort` | `list[str] \| None` |
 | `Fields[T]` | `set[T] \| None` |
 | `AnyFields` | `Fields[str]` |
+
+`set_query_param` replaces an existing `QueryParam` / `Query` in a field's metadata — `OrderingFilter` uses it to give each subclass its own `sort` description without touching the base class.
 
 ::: fastapi_views.filters.types
     handler: python
@@ -137,7 +141,7 @@ Operator support per resolver:
 
 ### `ObjectFilterResolver`
 
-Filters a `list` in memory. `getter` is the accessor factory (`operator.attrgetter` by default; pass `operator.itemgetter` for dicts). Pagination slices the list and supports `OffsetLimitFilter` and `PaginationFilter` only — `CursorPaginationFilter` raises `NotImplementedError`. `apply_fields_filter` mutates the objects' `__dict__`, removing the attributes named in `?fields`.
+Filters a `list` in memory. `getter` is the accessor factory (`operator.attrgetter` by default; pass `operator.itemgetter` for dicts). Pagination slices the list and supports `OffsetLimitFilter` and `PaginationFilter` only — `CursorPaginationFilter` raises `NotImplementedError`. `apply_fields_filter` returns a **new** list in which every element is projected down to only the attributes named in `?fields`: objects become shallow copies with the other entries removed from their `__dict__`, mappings become new dicts, and values with no `__dict__` (tuples, `__slots__` classes) pass through unchanged. The input list and its objects are never mutated, and an empty `?fields` returns the queryset itself.
 
 ::: fastapi_views.filters.resolvers.objects
     handler: python
@@ -156,11 +160,12 @@ Subclass it and set `filter_model` to the mapped class the filter's unprefixed f
 | `filter_model` | mapped class used for unprefixed fields |
 | `operators` | operator name → callable mapping |
 | `resolve(operation, **context)` | one operation → SQLAlchemy expression |
-| `resolve_model_field(field, **context)` | `field` or `prefix__field` → column; `context["table"]` overrides the base model, `context[prefix]["table"]` resolves a prefix, otherwise the prefix is looked up in the mapper registry by `__tablename__` (cached in the class-level `_cache`) |
+| `resolve_model_field(field, **context)` | `field` or `prefix__field` (split at the first `__`) → column; `context["table"]` overrides the base model, `context[prefix]["table"]` resolves a prefix, otherwise the prefix is looked up in the mapper registry by `__tablename__` |
+| `_cache` / `_get_model_cache(registry)` | registry → `{tablename: model}` memo, a `WeakKeyDictionary` created lazily per resolver subclass, so lookups are cached per registry and per class and cannot leak across two bases sharing a `__tablename__` |
 | `get_filters(filter, **context)` | list of `WHERE` expressions |
 | `get_order_by(filter, extra=None, **context)` | list of `ORDER BY` expressions, `extra` appended |
 | `apply_fields_filter` | `load_only()` for top-level fields, chained `defaultload(...).load_only(...)` for `relation__field` paths |
-| `apply_cursor_pagination` | raises `NotImplementedError`; override for keyset pagination |
+| `apply_cursor_pagination(queryset, page, page_size, **context)` | raises `NotImplementedError`; override for keyset pagination, keeping `**context` — `apply_pagination_filter` forwards the resolver context |
 
 `Column` and `_Queryset` are typing protocols. `Column` documents the SQLAlchemy column methods the resolver calls — its unbound methods are used as the `in`, `not_in`, `is_null`, `like` and `ilike` implementations, with the real column passed as `self`. `_Queryset` is the minimal queryset surface: `filter()`, `options()`, `order_by()`, `offset()`, `limit()`.
 

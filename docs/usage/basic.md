@@ -53,6 +53,8 @@ class ItemView(AsyncCreateAPIView):
         ...
 ```
 
+Route metadata merges across stacked decorators, so `@override` composes with `@throws` and with a route decorator in either order: the outer (later-applied) decorator wins on scalar options such as `status_code`, and `responses` maps are unioned.
+
 ### Accessing the request and response
 
 Every view instance receives `request` and `response` objects injected by FastAPI's dependency system:
@@ -221,7 +223,7 @@ Both decorators work on sync and async methods, and go *below* the route decorat
 
 ### Documenting errors in OpenAPI
 
-`errors` is a class attribute listing `APIError` subclasses documented on **every** route of the view. On top of it, `APIView.default_errors` (`BadRequest`) is always documented, and the CRUD actions add the errors they can raise themselves (`NotFound` for retrieve/update, `Conflict` for create).
+`errors` is a class attribute listing `APIError` subclasses documented on **every** route of the view. On top of it, `APIView.default_errors` (`BadRequest`) is always documented, and the CRUD actions add the errors they can raise themselves (`NotFound` for retrieve/update/partial_update, `Conflict` for create).
 
 ```python
 from fastapi_views.exceptions import Conflict, Forbidden
@@ -236,12 +238,12 @@ class ItemView(AsyncRetrieveAPIView):
         ...
 ```
 
-`@throws(*exceptions)` documents extra errors for a single **standard** action. For methods that already carry a route decorator, pass the responses to that decorator instead — `errors(*exceptions)` builds the mapping:
+`@throws(*exceptions)` documents extra errors for a single action. It also stacks with a route decorator — in either order — and `errors(*exceptions)` builds the same mapping if you prefer to pass it as `responses=`:
 
 ```python
-from fastapi_views.exceptions import NotFound
+from fastapi_views.exceptions import Conflict, NotFound
 from fastapi_views.views import APIView, get
-from fastapi_views.views.functools import errors
+from fastapi_views.views.functools import errors, throws
 
 class ItemAPIView(APIView):
     response_schema = ItemSchema
@@ -249,9 +251,30 @@ class ItemAPIView(APIView):
     @get("/{id}", responses=errors(NotFound))
     async def get_item(self, id: int) -> ItemSchema:
         ...
+
+    @get("/{id}/related", responses=errors(Conflict))
+    @throws(NotFound)          # both 404 and 409 are documented
+    async def get_related(self, id: int) -> ItemSchema:
+        ...
 ```
 
-Error bodies are documented as `application/problem+json`, and several errors sharing a status code are documented as an `anyOf`. A `responses` mapping given on a method (directly or via `@throws`) *replaces* the entries the action generates by itself (the default `400`, and `404`/`409` for detail/create actions), so list every error you want documented there. The class-level `errors` tuple is always merged in.
+Error bodies are documented as `application/problem+json`, and several distinct errors sharing a status code are documented as an `anyOf`.
+
+A `responses` mapping given on a method (directly or via `@throws`) is **merged** with what the action generates by itself (the default `400`, `404`/`409` for detail/create actions, response headers, a `304`) rather than replacing it, so `@throws(Conflict)` on `retrieve` still documents the automatic `404`. Within a status code the explicit entry wins key by key, and if it declares a body (`model` or `content`) that body replaces the generated one instead of being documented alongside it:
+
+```python
+class ItemView(AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+
+    # 404 keeps this description and only this body; 400 is still documented
+    @override(
+        responses={404: {"description": "Item is gone", "model": GoneSchema}},
+    )
+    async def retrieve(self, id: int) -> ItemSchema | None:
+        ...
+```
+
+`headers` maps are combined, so a method-level `responses={200: ...}` never drops the headers contributed by `get_response_headers` or `ConditionalMixin`. The class-level `errors` tuple is always merged in.
 
 ---
 
@@ -307,7 +330,25 @@ Headers can also be declared per route with `response_headers=` on any route dec
 
 ## Conditional requests
 
-`ConditionalMixin` adds `ETag` / `Last-Modified` validators and `304 Not Modified` handling to any view, with no cache backend involved. The cheapest form compares a validator you already have (a version column, `updated_at`) and short-circuits before the body is built:
+`ConditionalMixin` adds `ETag` / `Last-Modified` validators and `304 Not Modified` handling to any view, with no cache backend involved. Mix it in **before** the action classes so its hooks win in the MRO.
+
+The automatic form needs a single attribute — the mixin hashes the serialized body into a strong `ETag` and downgrades to a `304` when the client's copy is current:
+
+```python
+from fastapi_views.views import AsyncRetrieveAPIView
+from fastapi_views.views.mixins import ConditionalMixin
+
+class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+    etag = True
+
+    async def retrieve(self, id: int) -> ItemSchema | None:
+        return db.get(id)
+```
+
+Opting in also documents the validator headers on the success response and, for safe methods, a `304` — on custom routes as well as on the generated CRUD actions.
+
+The cheapest form instead compares a validator you already have (a version column, `updated_at`) and short-circuits before the body is built:
 
 ```python
 from fastapi import Response
@@ -316,6 +357,7 @@ from fastapi_views.views.mixins import ConditionalMixin
 
 class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
     response_schema = ItemSchema
+    conditional_requests = True  # so the validators and the 304 are documented
 
     async def retrieve(self, id: int) -> ItemSchema | Response | None:
         item = db.get(id)
@@ -325,7 +367,7 @@ class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
         return self.check_last_modified(item.updated_at) or item
 ```
 
-`check_etag(etag)` is the `ETag` counterpart, and `not_modified(...)`, `etag_matches(...)`, `not_modified_since(...)` are available for hand-rolled logic. See [Caching](cache.md#conditional-requests-with-conditionalmixin) for the automatic (body-hashing) variant and OpenAPI documentation.
+`check_etag(etag)` is the `ETag` counterpart, and `not_modified(...)`, `etag_matches(...)`, `not_modified_since(...)` are available for hand-rolled logic. See [Caching](cache.md#conditional-requests-with-conditionalmixin) for `last_modified`, combining conditional requests with a cache backend, and the full OpenAPI details.
 
 ---
 
@@ -384,7 +426,7 @@ Each mixin has a synchronous counterpart without the `Async` prefix (e.g., `List
 
 A few extra hooks come with these mixins:
 
-- `AsyncListAPIView.response_schema_as_list` (default `True`) wraps the schema in `list[...]` for the `list` action — set it to `False` when `list` returns an envelope such as a paginated page.
+- `AsyncListAPIView.response_schema_as_list` (default `True`) wraps the schema in `list[...]` for the `list` action — set it to `False` when `list` returns an envelope such as a paginated page. It applies to `ListAPIView` / `AsyncListAPIView` only: the [generic list views](generics.md#filters-and-pagination) derive the container from their `filter` instead (no filter → `list[...]`, `PaginationFilter` → `NumberedPage`, `OffsetLimitFilter` → `OffsetPage`, `CursorPaginationFilter` → `CursorPage`), and ignore the flag.
 - `AsyncCreateAPIView.get_location(obj)` returns a URL to send as the `Location` header of a `201`; `return_on_create = False` responds with an empty body instead of the created object.
 - `return_on_update = False` does the same for `update` / `partial_update`.
 

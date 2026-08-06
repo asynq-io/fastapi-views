@@ -15,10 +15,12 @@ and Russian have three (and disagree: 21 is "few" in Polish but "one" in Russian
     curl 'localhost:8000/cart?lang=pl&count=2'    # 2 produkty
     curl 'localhost:8000/cart?lang=pl&count=5'    # 5 produktów
     curl 'localhost:8000/cart?lang=ru&count=21'   # 21 товар
+    curl 'localhost:8000/cart/translations?count=5'
 
 The message *text* comes from the per-locale translation tables, while Babel
 formats the embedded numbers, currencies and dates — and selects the correct
-plural form — for the active locale.
+plural form — for the active locale. Passing `locale=` explicitly (see
+`/cart/translations`) governs both: the table it reads and the formatting.
 """
 
 from __future__ import annotations
@@ -82,4 +84,19 @@ async def cart(count: int = 1, currency: Literal["USD", "PLN"] = "USD"):
             "cart.summary", count=count, total=count * 19.99, user_currency=currency
         ),
         "updated": _("cart.updated", updated_at=date(2026, 6, 9)),
+    }
+
+
+@app.get("/cart/translations")
+async def cart_translations(count: int = 1, currency: Literal["USD", "PLN"] = "USD"):
+    """Render the same summary in every supported locale, ignoring the request's."""
+    return {
+        locale: _(
+            "cart.summary",
+            locale=locale,
+            count=count,
+            total=count * 19.99,
+            user_currency=currency,
+        )
+        for locale in translations.supported_locales
     }

@@ -26,7 +26,7 @@ class Auth0(ScopesAuth):
         if not scope:
             return []
         if isinstance(scope, str):
-            return scope.split(" ")
+            return scope.split()
         return scope
 
     async def verify(self, raw: str) -> dict[str, Any]:

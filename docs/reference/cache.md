@@ -22,9 +22,20 @@ For a walkthrough see [Caching & Conditional Requests](../usage/cache.md).
 
 ## Conditional requests
 
-`ConditionalMixin` provides the ETag / `Last-Modified` validators and `304` handling reused by `ConditionalCachedAPIView`. It can be combined with any view independently of caching.
+`ConditionalMixin` provides the ETag / `Last-Modified` validators and `304` handling reused by `ConditionalCachedAPIView`. It can be combined with any view independently of caching and needs no middleware or backend — it works purely from request and response headers.
+
+When you *do* want caching as well, subclass `ConditionalCachedAPIView` rather than mixing `ConditionalMixin` into `CachedAPIView` by hand: `finalize_response` below does not call `super()`, so a hand-rolled combination loses the cache write on a `304`-downgraded miss.
 
 ::: fastapi_views.views.mixins.ConditionalMixin
+    handler: python
+    options:
+        show_root_heading: true
+        members_order: source
+        show_signature_annotations: true
+
+The validator headers documented in OpenAPI come from this model; `ConditionalMixin` contributes only the ones the view can actually emit.
+
+::: fastapi_views.views.mixins.ConditionalHeaders
     handler: python
     options:
         show_root_heading: true

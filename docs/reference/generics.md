@@ -17,7 +17,7 @@ Each action calls exactly one repository method:
 
 `get_filtered_page` is used whenever `filter` derives from `BasePaginationFilter`; it must return an object satisfying the `Page` protocol (anything exposing `items`).
 
-The list action's response schema is chosen from `filter`: `NumberedPage` for a `PaginationFilter`, `OffsetPage` for an `OffsetLimitFilter`, `CursorPage` for a `CursorPaginationFilter`, and a plain `list` otherwise.
+The list action's response schema is chosen from `filter`, and from nothing else: `NumberedPage` for a `PaginationFilter`, `OffsetPage` for an `OffsetLimitFilter`, `CursorPage` for a `CursorPaginationFilter`, and a plain `list` otherwise. `BaseGenericListAPIView` defines no `response_schema_as_list` attribute — that switch belongs to the plain `ListAPIView` / `AsyncListAPIView` and is not consulted here. Override `get_response_schema(action)` if you need a different container.
 
 Override points:
 

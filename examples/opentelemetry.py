@@ -38,7 +38,6 @@ app = FastAPI(title="My API")
 
 configure_app(
     app,
-    enable_prometheus_middleware=False,
     prometheus_exporter_resource=resource,
     enable_request_logging_middleware=True,
     request_header_filter=HeaderFilter({*DEFAULT_REQUEST_HEADERS, "x-tenant-id"}),

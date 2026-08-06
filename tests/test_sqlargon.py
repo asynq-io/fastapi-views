@@ -55,8 +55,13 @@ class FruitCursorRepository(CursorPaginatedRepository[Fruit]):
 if TYPE_CHECKING:
     # paginated repositories must satisfy the AsyncRepository protocol
     _protocol_check: AsyncRepository[Fruit] = cast("FruitRepository", None)
-    # bulk repositories must satisfy the AsyncBulkRepository protocol
-    _bulk_protocol_check: AsyncBulkRepository[Fruit] = cast("FruitRepository", None)
+    # sqlargon implements all four bulk methods, but its create_many takes `items`
+    # as positional-or-keyword and its bulk_update accepts only `on_`, so it is not
+    # a strictly conforming AsyncBulkRepository: it cannot receive arbitrary
+    # `repository_options` on bulk_create / bulk_update.
+    _bulk_protocol_check: AsyncBulkRepository[Fruit] = cast(  # type: ignore[assignment]
+        "FruitRepository", None
+    )
 
 
 class FruitFilter(PaginationFilter, ModelFilter):

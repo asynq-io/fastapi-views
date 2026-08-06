@@ -84,6 +84,8 @@ Setting it explicitly is recommended so that generated clients get predictable m
 
 The Pydantic model used to serialize and validate every response body. The `list` action automatically wraps this in `list[response_schema]` (set `response_schema_as_list = False` to opt out, e.g. when `list` returns an envelope).
 
+`response_schema_as_list` applies to the plain list views (`ListAPIView` / `AsyncListAPIView` and the viewsets built on them). The [generic list views](generics.md#filters-and-pagination) ignore it and derive the container from their `filter` instead — no filter gives `list[response_schema]`, a `PaginationFilter` gives `NumberedPage`, an `OffsetLimitFilter` gives `OffsetPage`, and a `CursorPaginationFilter` gives `CursorPage`.
+
 Override the `get_response_schema(action)` classmethod when a single action needs a different schema.
 
 ---
@@ -265,7 +267,24 @@ class ItemViewSet(AsyncAPIViewSet):
         ...
 ```
 
-`@override` replaces the metadata of the method it decorates, so use a single call per method rather than stacking it with `@throws` or a route decorator.
+Route metadata **merges** across stacked decorators, so `@override` composes with `@throws` and with a route decorator in either order. The outer (later-applied) decorator wins on scalar options such as `status_code` or `summary`, while `responses` maps are unioned:
+
+```python
+from fastapi_views.exceptions import Forbidden
+from fastapi_views.views.functools import override, throws
+
+class ItemViewSet(AsyncAPIViewSet):
+    api_component_name = "Item"
+    response_schema = ItemSchema
+
+    @throws(Forbidden)
+    @override(summary="Upsert an item")
+    async def create(self, item: ItemSchema) -> ItemSchema:
+        # summary, plus 403 on top of the automatic 400 / 409
+        ...
+```
+
+Because each merge builds a new mapping, a decorator kept in a variable can be reused across methods without leaking metadata between them.
 
 ---
 
@@ -286,7 +305,20 @@ class ItemViewSet(AsyncAPIViewSet):
         return items.get(id)
 ```
 
-On top of `errors`, every route documents `default_errors` (`BadRequest`), and each action adds what it can raise on its own: `NotFound` for `retrieve` / `update`, `Conflict` for `create`. Use `@throws(...)` on a single action to document extra errors for that route only — see [Basic usage](basic.md#documenting-errors-in-openapi).
+On top of `errors`, every route documents `default_errors` (`BadRequest`), and each action adds what it can raise on its own:
+
+| Action | HTTP | Documented errors |
+|--------|------|-------------------|
+| `list` | GET | `400` |
+| `create` | POST | `400`, `409` (`Conflict`) |
+| `retrieve` | GET | `400`, `404` (`NotFound`) |
+| `update` | PUT | `400`, `404` (`NotFound`) |
+| `partial_update` | PATCH | `400`, `404` (`NotFound`) |
+| `destroy` | DELETE | `400` |
+
+(The `400` comes from `default_errors` and is documented on every route, including custom ones.)
+
+Use `@throws(...)` on a single action to document extra errors for that route only; they are merged with the entries above rather than replacing them — see [Basic usage](basic.md#documenting-errors-in-openapi).
 
 ---
 
@@ -335,6 +367,8 @@ class ItemViewSet(AsyncAPIViewSet):
 ```
 
 `ViewRouter(prefix="/items", response_headers=...)` applies a header model to every route it registers.
+
+Custom routes are documented the same way as the generated CRUD actions: the headers returned by `get_response_headers` (called with `action=None` for a custom route), plus `ConditionalMixin`'s `ETag` / `Last-Modified` and a `304 Not Modified` for safe methods, are resolved from the decorator's own `status_code` and `methods` and attached to the route's success response.
 
 ---
 

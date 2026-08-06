@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from .backends import CacheBackend, EncodableT, KeyT
 
 _KEY_PATTERN = re.compile(r"\{(\w+)\}")
+_ADAPTER_CACHE_SIZE = 512
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -25,16 +26,30 @@ class AsyncDecorator(Protocol):
 
 
 def _resolve_return_type(func: Callable[..., Any]) -> Any:
-    """Best-effort resolution of an async function's awaited return type."""
+    """Best-effort resolution of an async function's awaited return type.
+
+    An unannotated or unresolvable return type degrades to ``Any``.
+    """
     try:
-        return get_type_hints(func).get("return")
+        return get_type_hints(func).get("return", Any)
     except Exception:  # noqa: BLE001
         return Any
 
 
-@functools.cache
-def _get_type_adapter(type_: T) -> TypeAdapter[T]:
+@functools.lru_cache(maxsize=_ADAPTER_CACHE_SIZE)
+def _build_type_adapter(type_: Any) -> TypeAdapter[Any]:
     return TypeAdapter(type_)
+
+
+def _get_type_adapter(type_: Any) -> TypeAdapter[Any]:
+    """Return a (usually cached) ``TypeAdapter`` for ``type_``.
+
+    Falls back to an uncached adapter for unhashable annotations.
+    """
+    try:
+        return _build_type_adapter(type_)
+    except TypeError:
+        return TypeAdapter(type_)
 
 
 class Cache:

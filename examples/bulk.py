@@ -52,7 +52,7 @@ class ItemRepository:
         self._data: dict[UUID, Item] = {}
 
     async def create_many(
-        self, items: Sequence[Mapping[str, Any]], **_options: Any
+        self, items: Sequence[Mapping[str, Any]], /, **_options: Any
     ) -> list[Item]:
         created = [Item(id=uuid4(), **item) for item in items]
         for item in created:
@@ -71,7 +71,7 @@ class ItemRepository:
         return updated
 
     async def bulk_update(
-        self, items: Sequence[Mapping[str, Any]], **_options: Any
+        self, items: Sequence[Mapping[str, Any]], /, **_options: Any
     ) -> None:
         for item in items:
             updated = Item(**item)

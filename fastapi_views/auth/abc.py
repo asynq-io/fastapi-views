@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, ClassVar, TypeVar
 
 from fastapi import Depends, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
@@ -11,6 +11,7 @@ from fastapi_views.exceptions import Forbidden, Unauthorized
 
 from .scopes import (
     All,
+    Delete,
     Edit,
     HierarchicalScopeValidator,
     Read,
@@ -22,6 +23,7 @@ __all__ = [
     "All",
     "AuthBase",
     "AuthorizationScheme",
+    "Delete",
     "Edit",
     "Read",
     "Scope",
@@ -32,7 +34,7 @@ __all__ = [
 T = TypeVar("T")
 
 AuthorizationScheme = Callable[..., str | Awaitable[str | None] | None]
-TokenWrapper = Callable[[dict[str, Any]], Any]
+TokenWrapper = Callable[[Any], Any]
 
 
 def http_bearer() -> AuthorizationScheme:
@@ -56,7 +58,11 @@ class AuthBase:
         return Security(self.dependency)
 
     def unauthorized(self) -> Never:
-        raise Unauthorized("")
+        raise Unauthorized("Missing or invalid credentials")
+
+    def wrap_token(self, token: Any) -> Any:
+        """Turn a verified credential into the principal handed to the endpoint."""
+        return token
 
     def get_dependency(self) -> Any:
         async def _dependency(
@@ -66,7 +72,7 @@ class AuthBase:
                 return self._test_user
             if raw is None:
                 self.unauthorized()
-            return raw
+            return self.wrap_token(raw)
 
         return _dependency
 
@@ -80,6 +86,8 @@ class AuthBase:
 
 
 class TokenAuth(AuthBase):
+    challenge: ClassVar[str] = "Bearer"
+
     def __init__(
         self,
         scheme: AuthorizationScheme | None = None,
@@ -87,8 +95,20 @@ class TokenAuth(AuthBase):
     ) -> None:
         if scheme is None:
             scheme = http_bearer()
-        super().__init__(scheme)
         self.custom_class = custom_class
+        super().__init__(scheme)
+
+    def unauthorized(self) -> Never:
+        raise Unauthorized(
+            "Missing or invalid bearer token",
+            headers={"WWW-Authenticate": self.challenge},
+        )
+
+    def wrap_token(self, token: Any) -> Any:
+        """Apply ``custom_class`` to a verified token, when one is configured."""
+        if self.custom_class is None:
+            return token
+        return self.custom_class(token)
 
 
 class ScopesAuth(TokenAuth):
@@ -106,7 +126,10 @@ class ScopesAuth(TokenAuth):
 
     def get_granted_scopes(self, token: dict[str, Any]) -> Sequence[Scope]:
         """Scopes carried by ``token``, from the space delimited ``scope`` claim."""
-        return token.get("scope", "").split(" ")
+        scope = token.get("scope", "")
+        if not scope:
+            return []
+        return scope.split()
 
     def validate_scopes(self, token: dict[str, Any], scopes: SecurityScopes) -> None:
         granted = self.get_granted_scopes(token)
@@ -130,9 +153,7 @@ class ScopesAuth(TokenAuth):
                 self.unauthorized()
             token = await self.verify(raw)
             self.validate_scopes(token, scopes)
-            if self.custom_class:
-                token = self.custom_class(token)
-            return token
+            return self.wrap_token(token)
 
         return dependency
 

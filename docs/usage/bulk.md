@@ -12,11 +12,21 @@ Bulk views talk to your data layer through `AsyncBulkRepository` (or the sync `B
 
 ```python
 class AsyncBulkRepository(Protocol[M_co]):
-    async def create_many(self, items: Sequence[Mapping[str, Any]], /) -> Sequence[M_co]: ...
+    async def create_many(self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any) -> Sequence[M_co]: ...
     async def update_many(self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
-    async def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
+    async def bulk_update(self, items: Sequence[Mapping[str, Any]], /, **kwargs: Any) -> None: ...
     async def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 ```
+
+All four methods declare `**kwargs`, because all four receive the view's
+[`repository_options`](#repository-options) as keyword arguments.
+
+!!! important
+    The leading parameter (`items` / `values`) is **positional-only**. An implementation
+    must declare it positional-only too — `async def create_many(self, items, /, **kwargs)` —
+    to type-check as conforming: since the protocol's `**kwargs` allows a keyword literally
+    named `items`, a positional-*or*-keyword parameter is rejected even though it works at
+    runtime.
 
 All bulk actions live on a **single route** — `/bulk` — and are told apart by the HTTP method:
 
@@ -35,10 +45,8 @@ There are two update strategies, mapping to two different repository methods:
 How each action builds its repository call:
 
 - **`create_many` / `bulk_update`** receive a list of plain dicts — each validated item dumped with `model_dump()` and merged with `get_kwargs(action)` — followed by the view's [`repository_options`](#repository-options) as keyword arguments.
-- **`update_many`** receives the values dumped with `model_dump(exclude_unset=True)`, so only fields the client actually sent are applied, followed by the resolved filter criteria.
-- **`delete_many`** receives only the resolved filter criteria.
-
-Filtered actions (`PATCH` / `DELETE`) do **not** forward `repository_options`.
+- **`update_many`** receives the values dumped with `model_dump(exclude_unset=True)`, so only fields the client actually sent are applied, followed by the resolved filter criteria merged with `repository_options`.
+- **`delete_many`** receives the resolved filter criteria merged with `repository_options`.
 
 ---
 
@@ -57,7 +65,7 @@ Filtered actions (`PATCH` / `DELETE`) do **not** forward `repository_options`.
 | `repository` | Repository instance implementing the bulk contract |
 | `bulk_route` | Path all four actions share (default `"/bulk"`) |
 | `return_on_create` / `return_on_update` | Whether `POST` / `PATCH` respond with a body (default `True`) |
-| `repository_options` | Extra keyword arguments forwarded to `create_many` / `bulk_update` |
+| `repository_options` | Extra keyword arguments forwarded to every bulk repository call |
 
 ```python
 class ItemViewSet(AsyncBulkAPIViewSet):
@@ -129,16 +137,17 @@ class TenantBulkDeleteView(AsyncGenericBulkDestroyAPIView):
         return {"tenant_id": current_tenant()}   # DELETE /items/bulk -> delete_many(tenant_id=...)
 ```
 
-Two overridable methods control how a filter becomes a repository call:
+Three overridable methods control how a filter becomes a repository call:
 
 - `resolve_filter(filter)` returns the `(args, kwargs)` passed to the repository — by default `(), filter.as_kwargs()`. Override it to translate the filter into positional criteria (e.g. SQLAlchemy expressions).
 - `get_filter_args(filter, action=None)` merges `get_kwargs(action)` into the filter via `filter.with_kwargs(...)` and then delegates to `resolve_filter`. When `filter = None`, it short-circuits and returns `get_kwargs(action)` alone.
+- `merge_repository_options(kwargs, action=None)` adds `get_repository_options(action)` to the keyword arguments `get_filter_args` produced, and is what the filtered actions actually pass to the repository. See [Repository options](#repository-options) for the collision rule.
 
 ---
 
 ## Repository options
 
-`repository_options` is a class-level dict of extra keyword arguments forwarded to `create_many` and `bulk_update` — use it for driver-level knobs your repository accepts:
+`repository_options` is a class-level dict of extra keyword arguments forwarded to **all four** bulk repository calls — use it for driver-level knobs your repository accepts:
 
 ```python
 class ItemViewSet(AsyncBulkAPIViewSet):
@@ -147,9 +156,27 @@ class ItemViewSet(AsyncBulkAPIViewSet):
 
 # repository.create_many(data, batch_size=500)
 # repository.bulk_update(data, batch_size=500)
+# repository.update_many(values, name="widget", batch_size=500)     # PATCH /bulk?name=widget
+# repository.delete_many(name="widget", batch_size=500)             # DELETE /bulk?name=widget
 ```
 
-Override `get_repository_options(action)` to vary them per action.
+`create_many` and `bulk_update` receive the options as their only keyword arguments. The filtered actions build their keyword arguments from the resolved filter first, so their options share one keyword space with the filter criteria — `merge_repository_options(kwargs, action)` combines the two and raises `TypeError` when a key appears in both, rather than silently dropping a criterion and widening the set of rows a `PATCH` or `DELETE` touches:
+
+```python
+class BrokenView(AsyncGenericBulkDestroyAPIView):
+    filter = ItemFilter                                          # has a `name` field
+    repository_options: ClassVar[dict[str, Any]] = {"name": "x"}  # collides
+```
+
+The check is per request: because filter fields are usually optional, an option shadowing a field the client did not send is inert (`DELETE /items/bulk` above resolves to `delete_many(name="x")`), and the same view fails only once a request carries `?name=`. Override `merge_repository_options` to pick a precedence instead:
+
+```python
+class OptionsWinView(AsyncGenericBulkDestroyAPIView):
+    def merge_repository_options(self, kwargs, action=None):
+        return kwargs | self.get_repository_options(action)
+```
+
+Override `get_repository_options(action)` to vary the options per action — it receives the action name (`"bulk_create"`, `"bulk_update"`, `"update_many"`, `"bulk_delete"`).
 
 ---
 
@@ -176,7 +203,7 @@ Each bulk action has `before_*` / `after_*` hooks:
 class ItemViewSet(AsyncBulkAPIViewSet):
     ...
     async def before_bulk_create(self, data: list[dict]) -> None: ...
-    async def after_bulk_create(self, objects) -> None: ...
+    async def after_bulk_create(self, objs) -> None: ...
     async def before_bulk_update(self, data: list[dict]) -> None: ...
     async def after_bulk_update(self) -> None: ...
     async def before_update_many(self, values: dict) -> None: ...
@@ -185,7 +212,7 @@ class ItemViewSet(AsyncBulkAPIViewSet):
     async def after_bulk_delete(self) -> None: ...
 ```
 
-The `before_*` hooks see the data that is about to be sent to the repository and run before the call; the `after_*` hooks run after it and before the response is built. `after_bulk_update` and both delete hooks take no payload, because their repository calls do not return rows. On the synchronous views the same hooks are plain `def` methods.
+The `before_*` hooks see the data that is about to be sent to the repository and run before the call; the `after_*` hooks run after it and before the response is built. `after_bulk_update` and both delete hooks take no payload, because their repository calls do not return rows. The two hooks that do receive objects — `after_bulk_create` and `after_update_many` — name that parameter `objs`, on both the sync and the async views, so overrides keep the same signature everywhere. On the synchronous views the same hooks are plain `def` methods.
 
 ---
 

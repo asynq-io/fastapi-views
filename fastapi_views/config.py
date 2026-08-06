@@ -88,17 +88,32 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
     return self.openapi_schema
 
 
+def _setup_prometheus(
+    app: FastAPI,
+    *,
+    enable_middleware: bool | None,
+    exporter_resource: Resource | None,
+) -> bool:
+    """Resolve the prometheus backend, returning whether to add the middleware."""
+    if exporter_resource is None:
+        return True if enable_middleware is None else enable_middleware
+    if enable_middleware:
+        raise ValueError("Only one prometheus exporter can be configured")
+    add_prometheus_exporter(app, resource=exporter_resource)
+    return False
+
+
 def configure_app(  # noqa: PLR0913
     app: FastAPI,
     *,
     enable_error_handlers: bool = True,
-    enable_prometheus_middleware: bool = True,
+    enable_prometheus_middleware: bool | None = None,
     enable_request_logging_middleware: bool = False,
     prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
     translation_manager: TranslationManager | None = None,
-    limits: int | None = 1000,
+    limits: float | None = 1000,
     request_header_filter: HeaderFilter = DEFAULT_REQUEST_HEADER_FILTER,
     **tracing_options: Any,
 ) -> None:
@@ -106,19 +121,16 @@ def configure_app(  # noqa: PLR0913
     if enable_error_handlers:
         add_error_handlers(app, request_header_filter)
         app.__setattr__("openapi", functools.partial(custom_openapi, app))
-    if enable_prometheus_middleware and prometheus_exporter_resource:
-        raise ValueError("Only one prometheus exporter can be configured")
-    if prometheus_exporter_resource:
-        add_prometheus_exporter(app, resource=prometheus_exporter_resource)
+    enable_prometheus_middleware = _setup_prometheus(
+        app,
+        enable_middleware=enable_prometheus_middleware,
+        exporter_resource=prometheus_exporter_resource,
+    )
     if simplify_openapi_ids:
         simplify_operation_ids(app)
 
     # Middlewares are registered innermost-first: `add_middleware` prepends to
     # the stack, so the last one added is the first to see a request.
-    if limits:
-        from .middlewares.limits import RequestLimitMiddleware
-
-        app.add_middleware(RequestLimitMiddleware, limits)
     if translation_manager:
         from .i18n import LocaleMiddleware, configure_translations
 
@@ -128,6 +140,10 @@ def configure_app(  # noqa: PLR0913
         app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
+    if limits:
+        from .middlewares.limits import RequestLimitMiddleware
+
+        app.add_middleware(RequestLimitMiddleware, limits)
     if enable_request_logging_middleware:
         from .middlewares.structlog import RequestLoggingMiddleware
 

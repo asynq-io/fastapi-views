@@ -5,12 +5,14 @@ FastAPI Views ships a small, composable authentication layer built on top of Fas
 
 - a **scheme** (`AuthorizationScheme`) extracts the raw credential from the request — the
   `Authorization: Bearer <token>` header, an API-key header, a cookie, …
-- an **auth object** turns that raw credential into a **principal** by implementing `verify()`
+- an **auth object** turns that raw credential into a **principal** — by verifying it (`verify()`)
+  and/or wrapping it (`wrap_token()`)
 
 Concrete primitives compose those two:
 
 - **`AuthBase`** — the base primitive: a scheme plus a presence check, returning the raw credential
-- **`TokenAuth` / `ScopesAuth`** — bearer-token bases; `ScopesAuth` adds scope enforcement
+- **`TokenAuth` / `ScopesAuth`** — bearer-token bases; `TokenAuth` adds the `Bearer` challenge and
+  `custom_class` wrapping, `ScopesAuth` adds `verify()` plus scope enforcement
 - **`JWTAuth`** — verifies and issues JWTs (via `joserfc`), with scope support
 - **`Auth0`** — verifies tokens with the `auth0-api-python` SDK
 - **`APIKeyAuth` / `ConstAPIKeyAuth`** — header-based API-key schemes
@@ -20,24 +22,40 @@ Concrete primitives compose those two:
 
 ```python
 from fastapi_views.auth import (
+    All,
     APIKeyAuth,
     AuthBase,
     AuthorizationScheme,
     AutoScopesAuthView,
     ConstAPIKeyAuth,
+    Delete,
+    Edit,
     HierarchicalScopeValidator,
+    Read,
     Scope,
     ScopeValidator,
+    ScopesAuth,
     SimpleScopeValidator,
+    TokenAuth,
 )
 ```
 
-`TokenAuth` and `ScopesAuth` live in `fastapi_views.auth.abc`, `JWTAuth` in
-`fastapi_views.auth.jwt` and `Auth0` in `fastapi_views.integrations.auth0`.
+`TokenAuth` and `ScopesAuth` are defined in `fastapi_views.auth.abc` and the scope pieces
+(`Scope`, the validators, and the `All` / `Delete` / `Edit` / `Read` action constants) in
+`fastapi_views.auth.scopes`; both modules remain importable directly, so existing
+`from fastapi_views.auth.abc import ScopesAuth` imports keep working.
+
+`JWTAuth` (`fastapi_views.auth.jwt`) and `Auth0` (`fastapi_views.integrations.auth0`) are
+deliberately **not** re-exported: they import `joserfc` and `auth0-api-python` at module level,
+so re-exporting them would make a plain `import fastapi_views.auth` fail for anyone who has not
+installed the optional `jose` / `auth0` extras.
 
 A protected dependency resolves to the **decoded claims as a `dict[str, Any]`** — there is no
-token model. Access claims by key (`token["sub"]`). Scope enforcement lives only on the
-token-based auths, so an API key — which carries no scopes — never exposes a `requires` method.
+token model. Access claims by key (`token["sub"]`). Pass a `custom_class` (or override
+`wrap_token`) to get something else — see
+[Wrapping the principal in your own type](#wrapping-the-principal-in-your-own-type). Scope
+enforcement lives only on the token-based auths, so an API key — which carries no scopes — never
+exposes a `requires` method.
 
 The JWT pieces require the `jose` extra (`joserfc`), the Auth0 integration the `auth0` extra
 (`auth0-api-python`):
@@ -217,9 +235,9 @@ app = FastAPI(lifespan=lifespan)
 
 ## Publishing a JWKS endpoint
 
-`JWTAuth.jwks` is a cached property returning the **public** key set (private material
-stripped), ready to serve at `/.well-known/jwks.json`. A single key is wrapped in a
-`{"keys": [...]}` document; a `KeySet` is serialized as-is:
+`JWTAuth.jwks` returns the **public** key set (private material stripped), ready to serve at
+`/.well-known/jwks.json`. A single key is wrapped in a `{"keys": [...]}` document; a `KeySet` is
+serialized as-is:
 
 ```python
 @app.get("/.well-known/jwks.json")
@@ -227,7 +245,10 @@ async def jwks():
     return auth.jwks
 ```
 
-Because it is cached, read it only after the key is loaded (e.g. after `fetch_jwks`).
+The serialization is memoized against the identity of the key currently on the config, so
+repeated reads are cheap, while a **key rotation** — `await auth.fetch_jwks(...)` or
+`config.import_key(...)` — is picked up on the next read with no cache invalidation on your side.
+Reading `auth.jwks` before any key has been loaded raises `ValueError("Key not initialized")`.
 
 ---
 
@@ -240,8 +261,10 @@ space-delimited `scope` claim when issuing the token:
 auth.encode({"sub": "user-1", "scope": "read:items edit:items"})
 ```
 
-`ScopesAuth.get_granted_scopes(token)` reads that claim; override it if your tokens carry
-scopes elsewhere (this is exactly what the Auth0 integration does).
+`ScopesAuth.get_granted_scopes(token)` reads that claim, splitting it on arbitrary whitespace; a
+missing or empty `scope` claim yields an **empty** list, so a scopeless token satisfies nothing.
+Override the method if your tokens carry scopes elsewhere (this is exactly what the Auth0
+integration does).
 
 ### `requires(*scopes)`
 
@@ -279,7 +302,7 @@ shape of Auth0 permissions. `Scope` is an annotated `str` (stripped, 1–2048 ch
 default action names are available as constants:
 
 ```python
-from fastapi_views.auth.scopes import All, Delete, Edit, Read
+from fastapi_views.auth import All, Delete, Edit, Read
 
 # Read == "read", Edit == "edit", Delete == "delete", All == "*"
 ```
@@ -345,6 +368,11 @@ class PrefixScopeValidator(ScopeValidator):
     def has_scope(self, scope: Scope, granted_scopes: Sequence[Scope]) -> bool:
         return any(scope.startswith(granted) for granted in granted_scopes)
 ```
+
+!!! note
+    `granted_scopes` is an empty sequence for a token without a `scope` claim — never `[""]`.
+    A deliberately permissive validator like the one above therefore cannot be tricked into
+    matching every scope by a scopeless token.
 
 ---
 
@@ -439,6 +467,50 @@ async def ping(key: Annotated[str, api_auth.authenticated()]):
 
 ---
 
+## Unauthorized responses
+
+A missing or rejected credential is raised as an `Unauthorized` `APIError`, so it renders as a
+problem-details body. Every primitive supplies a meaningful `detail` and, where a challenge
+applies, the matching `WWW-Authenticate` header:
+
+| Raised by | `detail` | `WWW-Authenticate` |
+| --- | --- | --- |
+| `AuthBase.unauthorized()` | `Missing or invalid credentials` | — |
+| `TokenAuth.unauthorized()` (inherited by `ScopesAuth`, `JWTAuth`, `Auth0`) | `Missing or invalid bearer token` | `Bearer` |
+| `APIKeyAuth.unauthorized()` (and `ConstAPIKeyAuth`) | `Invalid API Key` | `APIKey` |
+| `JWTAuth.verify()` on an invalid token | the underlying `joserfc` error message | `Bearer` |
+| `Auth0.verify()` on an invalid token | the SDK's error description | forwarded from the SDK |
+
+A request to a bearer-protected route with no `Authorization` header therefore gets:
+
+```json
+{
+  "type": "https://datatracker.ietf.org/doc/html/rfc7235#section-3.1",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Missing or invalid bearer token"
+}
+```
+
+The challenge value comes from the `TokenAuth.challenge` class variable, `"Bearer"` by default as
+[RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3) requires. Override it in a
+subclass that authenticates with something other than a bearer token — a session cookie, say — so
+the `401` advertises the right scheme:
+
+```python
+from typing import ClassVar
+
+from fastapi_views.auth import TokenAuth
+
+
+class SessionAuth(TokenAuth):
+    challenge: ClassVar[str] = 'Cookie realm="app"'
+```
+
+Override `unauthorized()` itself when you need a different detail, status, or extra headers.
+
+---
+
 ## Custom authentication
 
 Subclass `ScopesAuth` and implement `verify()` to integrate any backend while keeping scope
@@ -448,7 +520,7 @@ enforcement. Return a claims dict (with a `scope` claim if you want scopes), or 
 ```python
 from typing import Any
 
-from fastapi_views.auth.abc import ScopesAuth
+from fastapi_views.auth import ScopesAuth
 from fastapi_views.exceptions import Unauthorized
 
 
@@ -474,16 +546,24 @@ def cookie_scheme(session: str | None = Cookie(default=None)) -> str | None:
 auth = JWTAuth(config, scheme=cookie_scheme)
 ```
 
-If you don't need scopes at all, subclass `AuthBase` directly — it has no `requires` method.
-Override `unauthorized()` to control the `401` raised when the credential is absent (this is
-how `APIKeyAuth` adds its `WWW-Authenticate: APIKey` header), and `get_dependency()` to change
-how the raw credential is turned into a principal.
+If you don't need scopes at all, subclass `AuthBase` (for an opaque credential of any kind) or
+`TokenAuth` (for a bearer-shaped one) — neither exposes a `requires` method. Two hooks cover
+almost every customisation:
 
-### Wrapping claims in your own type
+- **`unauthorized()`** — the `401` raised when the credential is absent or rejected (this is how
+  `APIKeyAuth` adds its `WWW-Authenticate: APIKey` header)
+- **`wrap_token(token)`** — turns the credential into the principal handed to the endpoint;
+  it is the identity function on `AuthBase`, and on `TokenAuth` it applies `custom_class`
 
-`ScopesAuth` (and therefore `JWTAuth` and `Auth0`) accepts a `custom_class` callable, applied to
-the verified claims dict *after* scope validation. The dependency then resolves to whatever it
-returns:
+Prefer overriding `wrap_token` to overriding `get_dependency()`: the dependency is built once in
+`__init__` and already handles the `with_test_user` short-circuit and, on `ScopesAuth`, scope
+validation.
+
+### Wrapping the principal in your own type
+
+`TokenAuth` and its subclasses (`ScopesAuth`, `JWTAuth`, `Auth0`) accept a `custom_class`
+callable, which `wrap_token` applies to the credential that survived verification. The dependency
+then resolves to whatever it returns:
 
 ```python
 from pydantic import BaseModel
@@ -502,6 +582,28 @@ async def me(principal: Annotated[Principal, auth.authenticated()]):
     return {"sub": principal.sub}
 ```
 
+What the callable receives depends on the class it is configured on:
+
+- on `ScopesAuth`, `JWTAuth` and `Auth0` — the **verified claims dict**, *after* scope validation
+- on a plain `TokenAuth` — the **raw credential string**, since there is no `verify()` step to
+  turn it into claims
+
+`custom_class` is typed `Callable[[Any], Any]`, so any one-argument callable works: a Pydantic
+`model_validate`, a dataclass, a lambda, a lookup function. When you need more than that, override
+`wrap_token` instead:
+
+```python
+from typing import Any
+
+
+class TenantAuth(JWTAuth):
+    def wrap_token(self, token: Any) -> Principal:
+        return Principal(sub=token["sub"], scope=token.get("scope", ""))
+```
+
+A `with_test_user` value is returned exactly as given and never goes through `wrap_token`, so a
+test principal doesn't have to satisfy your wrapper.
+
 ---
 
 ## Testing protected routes
@@ -518,7 +620,8 @@ async def test_me(client, auth):
 ```
 
 The override applies before scope validation too, so a test user is never rejected by
-`requires(...)`. Any falsy-but-not-`None` value (e.g. `{}`) still counts as a test user.
+`requires(...)`, and the value is handed to the endpoint verbatim — `wrap_token` / `custom_class`
+are skipped. Any falsy-but-not-`None` value (e.g. `{}`) still counts as a test user.
 
 ---
 

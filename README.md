@@ -29,7 +29,7 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 - **Conditional requests** — `ConditionalMixin` emits `ETag` / `Last-Modified` validators and answers `304 Not Modified` from a cheap version column, without serialising a body
 - **Documented response headers** — declare a `ResponseHeaders` model on a view, action, or router and the headers show up in the OpenAPI spec
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
-- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
+- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects and failed handshakes are cleaned up without masking the original error
 - **Authentication & authorization** — bearer-token auth built on FastAPI's `Security` system: `JWTAuth` (JWKS import, claims validation, token minting), hierarchical OAuth2 scope enforcement via `requires(*scopes)`, header API-key auth (`APIKeyAuth`, `ConstAPIKeyAuth`), and an Auth0 integration (optional extras)
 - **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`), pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translated[str]` model fields; built-in error messages are translatable out of the box (optional extra)
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
@@ -54,7 +54,7 @@ pip install fastapi-views
 ```
 
 ## Optional dependencies
-Available extensions: `uvloop`, `uvicorn`, `prometheus`, `opentelemetry`, `cli`, `structlog`, `websockets`, `jose` (JWT auth), `auth0` (Auth0 auth), `i18n`, `cache` (Redis), `jsonpatch`, and `standard` (a curated bundle).
+Available extensions: `uvloop`, `uvicorn`, `prometheus`, `opentelemetry`, `cli`, `structlog`, `websockets`, `jose` (JWT auth), `auth0` (Auth0 auth), `i18n`, `cache` (Redis), `jsonpatch`, `sqlargon` (SQLAlchemy repositories), and `standard` (a curated bundle).
 
 ```shell
 pip install 'fastapi-views[all]'

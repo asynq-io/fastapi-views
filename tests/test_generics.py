@@ -203,6 +203,48 @@ def test_generic_list_view_response_schema_cursor_filter():
     assert schema == CursorPage[MySchema]
 
 
+def test_generic_list_view_response_schema_without_filter():
+    class MySchema(BaseModel):
+        name: str
+
+    class PlainView(BaseGenericListAPIView):
+        response_schema = MySchema
+        filter = None
+
+        def list(self, _filter):
+            return []
+
+    assert PlainView.get_response_schema("list") == list[MySchema]
+
+
+def test_generic_list_view_has_no_response_schema_as_list_attribute():
+    assert "response_schema_as_list" not in vars(BaseGenericListAPIView)
+    assert "response_schema_as_list" not in BaseGenericListAPIView.__annotations__
+
+
+@pytest.mark.anyio
+async def test_async_generic_list_without_filter_openapi_schema_is_array():
+    class MockRepo:
+        async def list(self, **_kwargs) -> list:
+            return []
+
+    class PlainListView(AsyncGenericListAPIView):
+        api_component_name = "Plain"
+        response_schema = Item
+        filter = None
+        repository = MockRepo()
+
+    async with view_client(PlainListView) as c:
+        response = await c.get("/test")
+        assert response.status_code == HTTP_200_OK
+        assert response.json() == []
+        openapi = (await c.get("/openapi.json")).json()
+        list_schema = openapi["paths"]["/test"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        assert list_schema["type"] == "array"
+
+
 def test_generic_list_view_response_schema_non_list_action():
     class MySchema(BaseModel):
         name: str

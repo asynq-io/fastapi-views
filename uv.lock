@@ -720,6 +720,7 @@ all = [
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "prometheus-client" },
     { name = "redis" },
+    { name = "sqlargon", extra = ["pagination"] },
     { name = "starlette-exporter" },
     { name = "structlog" },
     { name = "typer" },
@@ -755,6 +756,9 @@ opentelemetry = [
 ]
 prometheus = [
     { name = "starlette-exporter" },
+]
+sqlargon = [
+    { name = "sqlargon", extra = ["pagination"] },
 ]
 standard = [
     { name = "opentelemetry-instrumentation-fastapi" },
@@ -858,6 +862,8 @@ requires-dist = [
     { name = "pydantic", specifier = ">2.0,<3" },
     { name = "redis", marker = "extra == 'all'" },
     { name = "redis", marker = "extra == 'cache'" },
+    { name = "sqlargon", extras = ["pagination"], marker = "extra == 'all'", specifier = ">=1.0.3b1,<2" },
+    { name = "sqlargon", extras = ["pagination"], marker = "extra == 'sqlargon'", specifier = ">=1.0.3b1,<2" },
     { name = "starlette-exporter", marker = "extra == 'all'" },
     { name = "starlette-exporter", marker = "extra == 'prometheus'" },
     { name = "starlette-exporter", marker = "extra == 'standard'" },
@@ -875,7 +881,7 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'all'" },
     { name = "websockets", marker = "extra == 'websockets'" },
 ]
-provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "structlog", "websockets", "jose", "auth0", "i18n", "cache", "jsonpatch", "all"]
+provides-extras = ["uvloop", "uvicorn", "cli", "prometheus", "opentelemetry", "standard", "structlog", "websockets", "jose", "auth0", "i18n", "cache", "jsonpatch", "sqlargon", "all"]
 
 [package.metadata.requires-dev]
 dev = [
