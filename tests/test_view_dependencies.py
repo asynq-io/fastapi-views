@@ -149,11 +149,11 @@ async def test_bulk_action_dependencies_run_only_for_their_action():
         }
 
     async with view_client(ItemBulkViewSet) as client:
-        response = await client.post("/test/bulk-create", json=[{"name": "a"}])
+        response = await client.post("/test/bulk", json=[{"name": "a"}])
         assert response.status_code == HTTP_201_CREATED
         assert calls == ["bulk_create"]
         calls.clear()
-        response = await client.delete("/test/bulk-delete")
+        response = await client.delete("/test/bulk")
         assert response.status_code == HTTP_204_NO_CONTENT
         assert calls == []
 

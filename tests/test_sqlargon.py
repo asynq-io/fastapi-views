@@ -317,14 +317,14 @@ async def test_bulk_viewset_end_to_end():
 
     async with view_client(FruitBulkViewSet) as client:
         created = await client.post(
-            "/test/bulk-create", json=[{"name": "apple"}, {"name": "banana"}]
+            "/test/bulk", json=[{"name": "apple"}, {"name": "banana"}]
         )
         assert created.status_code == HTTP_201_CREATED
         assert [item["name"] for item in created.json()] == ["apple", "banana"]
 
         item_id = created.json()[0]["id"]
         updated = await client.put(
-            "/test/bulk-update", json=[{"id": item_id, "name": "apricot"}]
+            "/test/bulk", json=[{"id": item_id, "name": "apricot"}]
         )
         assert updated.status_code == HTTP_204_NO_CONTENT
         renamed = await FruitRepository().get(id=item_id)
@@ -332,11 +332,11 @@ async def test_bulk_viewset_end_to_end():
         assert renamed.name == "apricot"
 
         patched = await client.patch(
-            "/test/bulk-update", params={"name": "banana"}, json={"name": "blueberry"}
+            "/test/bulk", params={"name": "banana"}, json={"name": "blueberry"}
         )
         assert patched.status_code == HTTP_200_OK
         assert [item["name"] for item in patched.json()] == ["blueberry"]
 
-        deleted = await client.delete("/test/bulk-delete", params={"name": "apricot"})
+        deleted = await client.delete("/test/bulk", params={"name": "apricot"})
         assert deleted.status_code == HTTP_204_NO_CONTENT
         assert await FruitRepository().count() == 1

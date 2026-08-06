@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import pytest
 import structlog
@@ -98,7 +99,7 @@ async def test_request_logging_middleware_logs_request_and_response(app):
     app.add_middleware(RequestLoggingMiddleware)
 
     @app.get("/items")
-    async def get_items() -> dict:
+    async def get_items() -> dict[str, Any]:
         return structlog.contextvars.get_contextvars()
 
     async with LifespanManager(app) as manager:
@@ -138,7 +139,7 @@ async def test_request_logging_middleware_skips_excluded_path(app):
     app.add_middleware(RequestLoggingMiddleware)
 
     @app.get("/healthcheck")
-    async def healthcheck() -> dict:
+    async def healthcheck() -> dict[str, Any]:
         return {"status": "ok"}
 
     async with LifespanManager(app) as manager:
@@ -153,13 +154,13 @@ async def test_request_logging_middleware_skips_excluded_path(app):
 
 @pytest.mark.anyio
 async def test_request_logging_middleware_merges_extra_context(app):
-    async def extra_context(request) -> dict:
+    async def extra_context(request) -> dict[str, Any]:
         return {"tenant": request.headers.get("X-Tenant")}
 
     app.add_middleware(RequestLoggingMiddleware, extra_context=extra_context)
 
     @app.get("/items")
-    async def get_items() -> dict:
+    async def get_items() -> dict[str, Any]:
         return {}
 
     async with LifespanManager(app) as manager:
@@ -237,7 +238,7 @@ async def test_request_limit_middleware_handles_http_request(app):
     app.add_middleware(RequestLimitMiddleware, limit=2)
 
     @app.get("/items")
-    async def get_items() -> dict:
+    async def get_items() -> dict[str, Any]:
         return {"ok": True}
 
     async with LifespanManager(app) as manager:

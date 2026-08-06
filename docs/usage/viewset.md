@@ -10,11 +10,13 @@ A ViewSet bundles multiple related CRUD actions into a single class. Instead of 
 
 | Method | Action | HTTP | Path | Status |
 |--------|--------|------|------|--------|
-| `list` | List all resources | GET | `/` | 200 |
-| `create` | Create a new resource | POST | `/` | 201 |
-| `retrieve` | Fetch a single resource | GET | `/{id}` | 200 |
-| `update` | Replace a resource | PUT | `/{id}` | 200 |
-| `destroy` | Delete a resource | DELETE | `/{id}` | 204 |
+| `list` | List all resources | GET | `/items` | 200 |
+| `create` | Create a new resource | POST | `/items` | 201 |
+| `retrieve` | Fetch a single resource | GET | `/items/{id}` | 200 |
+| `update` | Replace a resource | PUT | `/items/{id}` | 200 |
+| `destroy` | Delete a resource | DELETE | `/items/{id}` | 204 |
+
+(Paths shown for a router registered with `prefix="/items"`; the detail suffix comes from `detail_route`, `"/{id}"` by default.)
 
 ```python
 from typing import ClassVar, Optional
@@ -80,7 +82,9 @@ Setting it explicitly is recommended so that generated clients get predictable m
 
 ### `response_schema`
 
-The Pydantic model used to serialize and validate every response body. The `list` action automatically wraps this in `list[response_schema]`.
+The Pydantic model used to serialize and validate every response body. The `list` action automatically wraps this in `list[response_schema]` (set `response_schema_as_list = False` to opt out, e.g. when `list` returns an envelope).
+
+Override the `get_response_schema(action)` classmethod when a single action needs a different schema.
 
 ---
 
@@ -154,6 +158,7 @@ class MyViewSet(
 Use the `@get`, `@post`, `@put`, `@patch`, or `@delete` decorators inside any ViewSet to add non-standard endpoints. These work alongside the standard CRUD actions:
 
 ```python
+from collections.abc import Sequence
 from uuid import uuid4
 from fastapi_views.views.functools import get, post
 
@@ -167,11 +172,11 @@ class ItemViewSet(AsyncAPIViewSet):
 
     # ... other standard actions ...
 
-    @get("/search", response_model=list[ItemSchema])
-    async def search(self, name: str) -> list[ItemSchema]:
+    @get("/search")
+    async def search(self, name: str) -> Sequence[ItemSchema]:
         return [i for i in self.items.values() if name.lower() in i.name.lower()]
 
-    @post("/{id}/duplicate", status_code=201)
+    @post("/{id}/duplicate")
     async def duplicate(self, id: UUID) -> ItemSchema:
         original = self.items[id]
         new_item = ItemSchema(
@@ -183,6 +188,13 @@ class ItemViewSet(AsyncAPIViewSet):
         return new_item
 ```
 
+The return annotation is what gets documented and serialized, so an explicit `response_model=` is only needed when the two differ.
+
+!!! note
+    A `list` action shadows the `list` builtin inside the class body, so annotations
+    on *later* methods cannot use `list[...]` — use `Sequence[...]` (or a module-level
+    alias) as above.
+
 ---
 
 ## Custom actions with `@action`
@@ -190,8 +202,10 @@ class ItemViewSet(AsyncAPIViewSet):
 `@action` is a higher-level alternative to the raw HTTP decorators, modelled on Django REST Framework. It adds a few conveniences on top of `@route`:
 
 - **Default path** — the path defaults to the hyphenated method name, so `@action(methods=["GET"])` on `stats` becomes `GET /stats`.
-- **Detail routes** — `detail=True` nests the route under the view's detail route, e.g. `POST /{id}/publish`.
+- **Detail routes** — `detail=True` nests the route under the view's detail route, e.g. `POST /{id}/publish` (a custom `detail_route = "/{uuid}"` is honoured).
 - **Response headers** — `response_headers=` (a `ResponseHeaders` subclass) documents headers on the success response.
+
+The response model is taken from an explicit `response_model=` if given, otherwise from the method's return annotation, and finally from the view's `response_schema`. A `Response` subclass appearing in the annotation is ignored, so `-> Item | Response` still documents `Item`.
 
 Static routes are always registered before parameterized ones, so a collection action like `/stats` is never shadowed by `retrieve`'s `/{id}`.
 
@@ -211,8 +225,8 @@ class ItemViewSet(AsyncAPIViewSet):
 
     # ... standard CRUD actions ...
 
-    # GET /items/stats — response_model documents the schema (otherwise it
-    # falls back to the view's response_schema).
+    # GET /items/stats — documented with ItemStats (the return annotation would
+    # be used anyway; an explicit response_model wins).
     @action(methods=["GET"], response_model=ItemStats)
     async def stats(self) -> ItemStats:
         ...
@@ -233,9 +247,9 @@ A full runnable example lives in [`examples/actions.py`](https://github.com/asyn
 
 ---
 
-## Overriding default status codes
+## Overriding route options of standard actions
 
-Override the default status code for any action using the `@override` decorator:
+Standard CRUD actions have no decorator of their own, so route options are set with `@override` (an alias of `@annotate`). It accepts any FastAPI route argument — `status_code`, `path`, `summary`, `responses`, `dependencies`, `response_headers`, …:
 
 ```python
 from fastapi_views.views.functools import override
@@ -245,30 +259,82 @@ class ItemViewSet(AsyncAPIViewSet):
     api_component_name = "Item"
     response_schema = ItemSchema
 
-    @override(status_code=HTTP_200_OK)
+    @override(status_code=HTTP_200_OK, summary="Upsert an item")
     async def create(self, item: ItemSchema) -> ItemSchema:
         # Returns 200 instead of the default 201
         ...
 ```
 
+`@override` replaces the metadata of the method it decorates, so use a single call per method rather than stacking it with `@throws` or a route decorator.
+
 ---
 
 ## Documenting error responses
 
-Declare which errors an action may return by setting `errors` on the class. They are automatically included in the OpenAPI spec for all routes on that ViewSet:
+Declare which errors a ViewSet may return by setting `errors` on the class. They are automatically included in the OpenAPI spec for all routes on that ViewSet:
 
 ```python
-from fastapi_views.exceptions import NotFound, Conflict
+from fastapi_views.exceptions import Conflict, Forbidden
 from fastapi_views.views.viewsets import AsyncAPIViewSet
 
 class ItemViewSet(AsyncAPIViewSet):
     api_component_name = "Item"
     response_schema = ItemSchema
-    errors = (NotFound, Conflict)
+    errors = (Forbidden, Conflict)
 
     async def retrieve(self, id: UUID) -> Optional[ItemSchema]:
         return items.get(id)
 ```
+
+On top of `errors`, every route documents `default_errors` (`BadRequest`), and each action adds what it can raise on its own: `NotFound` for `retrieve` / `update`, `Conflict` for `create`. Use `@throws(...)` on a single action to document extra errors for that route only — see [Basic usage](basic.md#documenting-errors-in-openapi).
+
+---
+
+## Per-action dependencies
+
+`action_dependencies` maps action names to route-level dependencies, so each generated route gets only the dependencies that belong to it:
+
+```python
+from typing import ClassVar
+
+from fastapi import Depends
+
+class ItemViewSet(AsyncAPIViewSet):
+    api_component_name = "Item"
+    response_schema = ItemSchema
+    action_dependencies: ClassVar = {
+        "list": [Depends(require_reader)],
+        "create": [Depends(require_editor)],
+        "destroy": [Depends(require_admin)],
+    }
+```
+
+Dependencies passed to `register_view(..., dependencies=[...])` are merged with these (router-level first), and `get_dependencies(action)` can be overridden for dynamic behaviour. See [Authentication](auth.md#per-action-dependencies) for scope enforcement.
+
+---
+
+## Documenting response headers
+
+Besides `response_headers=` on a single `@action`, a ViewSet can declare headers per action by overriding `get_response_headers`:
+
+```python
+from fastapi_views.models import ResponseHeaders
+
+
+class PaginationHeaders(ResponseHeaders):
+    x_total_count: int
+
+
+class ItemViewSet(AsyncAPIViewSet):
+    api_component_name = "Item"
+    response_schema = ItemSchema
+
+    @classmethod
+    def get_response_headers(cls, action=None):
+        return PaginationHeaders if action == "list" else None
+```
+
+`ViewRouter(prefix="/items", response_headers=...)` applies a header model to every route it registers.
 
 ---
 

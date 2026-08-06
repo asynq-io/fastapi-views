@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from asgi_lifespan import LifespanManager
@@ -26,7 +26,7 @@ async def test_lifespan_middleware_provides_app_scoped_dependency(app):
     app.add_middleware(StatefulLifespanMiddleware, db=lambda: fake_db(events))
 
     @app.get("/db")
-    async def get_db(db: Annotated[dict, FromScope("db")]) -> dict:
+    async def get_db(db: Annotated[dict, FromScope("db")]) -> dict[str, Any]:
         return db
 
     async with LifespanManager(app) as manager:
@@ -46,7 +46,7 @@ async def test_lifespan_middleware_accepts_context_manager_instance(app):
     app.add_middleware(StatefulLifespanMiddleware, db=fake_db(events))
 
     @app.get("/db")
-    async def get_db(request: Request) -> dict:
+    async def get_db(request: Request) -> dict[str, Any]:
         return request.state.db
 
     async with LifespanManager(app) as manager:

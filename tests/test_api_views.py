@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -70,7 +71,7 @@ async def test_async_retrieve_custom_status_code():
         response_schema = dict
 
         @override(status_code=203)
-        async def retrieve(self) -> dict:
+        async def retrieve(self) -> dict[str, Any]:
             return {"x": "item"}
 
     async with view_client(CustomStatusRetrieveView) as c:
@@ -145,7 +146,7 @@ async def test_async_create_with_location():
         def get_location(self, obj):
             return f"/items/{obj['id']}"
 
-        async def create(self) -> dict:
+        async def create(self) -> dict[str, Any]:
             return {"id": 1, "name": "test"}
 
     async with view_client(LocationCreateView) as c:
@@ -160,7 +161,7 @@ async def test_async_create_no_return():
     class NoReturnCreateView(AsyncCreateAPIView):
         return_on_create = False
 
-        async def create(self) -> dict:
+        async def create(self) -> dict[str, Any]:
             return {"id": 1}
 
     async with view_client(NoReturnCreateView) as c:
@@ -176,7 +177,7 @@ async def test_async_update_no_return():
         detail_route = ""
         return_on_update = False
 
-        async def update(self) -> dict:
+        async def update(self) -> dict[str, Any]:
             return {"updated": True}
 
     async with view_client(NoReturnUpdateView) as c:
@@ -236,7 +237,7 @@ async def test_async_partial_update_no_return():
         detail_route = ""
         return_on_update = False
 
-        async def partial_update(self) -> dict:
+        async def partial_update(self) -> dict[str, Any]:
             return {"updated": True}
 
     async with view_client(NoReturnPartialView) as c:
@@ -267,7 +268,7 @@ async def test_async_partial_update_custom_status_code():
         response_schema = dict
 
         @override(status_code=202)
-        async def partial_update(self) -> dict:
+        async def partial_update(self) -> dict[str, Any]:
             return {"updated": True}
 
     async with view_client(CustomStatusPartialView) as c:

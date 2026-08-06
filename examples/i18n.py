@@ -58,7 +58,7 @@ translations = InMemoryTranslations(
                 "summary": "{{ count | number }}"
                 " {{ count | pluralize({'one': 'товар', 'few': 'товара', 'many': 'товаров'}) }}"
                 " на сумму {{ total | currency(user_currency) }}.",
-                "updated": "Последнее обновление: {{ updated_at | date }}.",
+                "updated": "Последнее обновление: {{ updated_at | date }}",
             },
         },
     },

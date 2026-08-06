@@ -38,26 +38,9 @@ M = TypeVar("M")
 M_co = TypeVar("M_co", covariant=True)
 
 
-# --------------------------------------------------------------------------- #
-# Repository protocols                                                         #
-# --------------------------------------------------------------------------- #
 class AsyncBulkRepository(Protocol[M_co]):
-    """Repository contract required by the async bulk views.
-
-    Only the methods the bulk views call are required: ``create_many`` and
-    ``bulk_update`` receive one mapping per item; ``update_many`` applies a
-    single values mapping to every row matching the criteria; ``delete_many``
-    removes the matching rows. Implementations are expected to perform each
-    operation atomically (one transaction) so the all-or-nothing guarantee
-    holds.
-
-    Any ``repository_options`` configured on the view are forwarded to
-    ``create_many`` and ``bulk_update`` as extra keyword arguments, so
-    implementations used with options must accept them.
-    """
-
     async def create_many(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
+        self, items: Sequence[Mapping[str, Any]], /
     ) -> Sequence[M_co]: ...
 
     async def update_many(
@@ -70,11 +53,7 @@ class AsyncBulkRepository(Protocol[M_co]):
 
 
 class BulkRepository(Protocol[M_co]):
-    """Synchronous counterpart of :class:`AsyncBulkRepository`."""
-
-    def create_many(
-        self, items: Sequence[Mapping[str, Any]], **options: Any
-    ) -> Sequence[M_co]: ...
+    def create_many(self, items: Sequence[Mapping[str, Any]], /) -> Sequence[M_co]: ...
 
     def update_many(
         self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any
@@ -93,11 +72,18 @@ class WithBulkRepositoryMixin(Generic[M]):
     repository: BulkRepository[M]
 
 
-# --------------------------------------------------------------------------- #
-# Abstract views — routing, OpenAPI, endpoint generation                      #
-# --------------------------------------------------------------------------- #
-class BaseBulkCreateAPIView(APIView):
-    bulk_create_route: str = "/bulk-create"
+class BaseBulkAPIView(APIView):
+    """Common base for bulk views: every bulk action lives on one route.
+
+    All four actions are registered under :attr:`bulk_route` and told apart by
+    the HTTP method — ``POST`` creates, ``PUT`` updates per item, ``PATCH``
+    updates the rows a filter selects, ``DELETE`` removes them.
+    """
+
+    bulk_route: str = "/bulk"
+
+
+class BaseBulkCreateAPIView(BaseBulkAPIView):
     return_on_create: bool = True
 
     @classmethod
@@ -111,7 +97,7 @@ class BaseBulkCreateAPIView(APIView):
         status_code = cls.get_status_code("bulk_create", HTTP_201_CREATED)
         yield cls.get_api_action(
             prefix=prefix,
-            path=cls.bulk_create_route,
+            path=cls.bulk_route,
             endpoint=cls.get_bulk_create_endpoint(status_code),
             methods=["POST"],
             status_code=status_code,
@@ -172,21 +158,19 @@ class AsyncBulkCreateAPIView(BaseBulkCreateAPIView, Generic[P]):
         raise NotImplementedError
 
 
-class BaseBulkUpdateAPIView(APIView):
+class BaseBulkUpdateAPIView(BaseBulkAPIView):
     """Per-item bulk update: many rows, each with its own values.
 
     Backed by an ``executemany``-style repository call which cannot return
     rows, so the route responds with ``204 No Content``.
     """
 
-    bulk_update_route: str = "/bulk-update"
-
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("bulk_update", HTTP_204_NO_CONTENT)
         yield cls.get_api_action(
             prefix=prefix,
-            path=cls.bulk_update_route,
+            path=cls.bulk_route,
             endpoint=cls.get_bulk_update_endpoint(status_code),
             methods=["PUT"],
             status_code=status_code,
@@ -240,14 +224,13 @@ class AsyncBulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
         raise NotImplementedError
 
 
-class BaseUpdateManyAPIView(APIView):
+class BaseUpdateManyAPIView(BaseBulkAPIView):
     """Filtered update: apply one set of values to every row a filter selects.
 
     The repository call can use ``RETURNING``, so the route responds with the
     updated objects by default.
     """
 
-    update_many_route: str = "/bulk-update"
     return_on_update: bool = True
 
     @classmethod
@@ -261,7 +244,7 @@ class BaseUpdateManyAPIView(APIView):
         status_code = cls.get_status_code("update_many", HTTP_200_OK)
         yield cls.get_api_action(
             prefix=prefix,
-            path=cls.update_many_route,
+            path=cls.bulk_route,
             endpoint=cls.get_update_many_endpoint(status_code),
             methods=["PATCH"],
             status_code=status_code,
@@ -322,15 +305,13 @@ class AsyncUpdateManyAPIView(BaseUpdateManyAPIView, Generic[P]):
         raise NotImplementedError
 
 
-class BaseBulkDestroyAPIView(APIView):
-    bulk_delete_route: str = "/bulk-delete"
-
+class BaseBulkDestroyAPIView(BaseBulkAPIView):
     @classmethod
     def get_api_actions(cls, prefix: str = "") -> Generator[dict[str, Any], None, None]:
         status_code = cls.get_status_code("bulk_delete", HTTP_204_NO_CONTENT)
         yield cls.get_api_action(
             prefix=prefix,
-            path=cls.bulk_delete_route,
+            path=cls.bulk_route,
             endpoint=cls.get_bulk_delete_endpoint(status_code),
             methods=["DELETE"],
             status_code=status_code,
@@ -382,11 +363,6 @@ class AsyncBulkDestroyAPIView(BaseBulkDestroyAPIView, Generic[P]):
     @abstractmethod
     async def bulk_delete(self, *args: P.args, **kwargs: P.kwargs) -> Any:
         raise NotImplementedError
-
-
-# --------------------------------------------------------------------------- #
-# Generic, repository-backed views                                            #
-# --------------------------------------------------------------------------- #
 
 
 class BaseGenericBulkAPIView(GenericView):
@@ -646,9 +622,6 @@ class GenericBulkDestroyAPIView(
         """Hook invoked after rows were deleted."""
 
 
-# --------------------------------------------------------------------------- #
-# Opt-in viewsets                                                             #
-# --------------------------------------------------------------------------- #
 class AsyncBulkAPIViewSet(
     AsyncGenericBulkCreateAPIView,
     AsyncGenericBulkUpdateAPIView,

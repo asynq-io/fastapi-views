@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 from unittest.mock import AsyncMock
 
 import pytest
+from auth0_api_python.api_client import BaseAuthError
 from fastapi import Depends, FastAPI
 from joserfc import jwk, jwt
 from starlette.status import (
@@ -26,10 +27,7 @@ from fastapi_views.auth.scopes import (
 )
 from fastapi_views.exceptions import APIError, Unauthorized
 from fastapi_views.handlers import add_error_handlers
-
-# --------------------------------------------------------------------------- #
-# Helpers / fixtures
-# --------------------------------------------------------------------------- #
+from fastapi_views.integrations.auth0 import Auth0
 
 
 def make_config(**kwargs: Any) -> JWTConfig:
@@ -55,11 +53,6 @@ def config() -> JWTConfig:
 @pytest.fixture
 def jwt_auth(config) -> JWTAuth:
     return JWTAuth(config, None)
-
-
-# --------------------------------------------------------------------------- #
-# JWTConfig
-# --------------------------------------------------------------------------- #
 
 
 def test_jwt_config_get_key_raises_when_uninitialized():
@@ -124,11 +117,6 @@ def test_jwt_config_import_key_imports_key_set():
     assert isinstance(config.get_key(), jwk.KeySet)
 
 
-# --------------------------------------------------------------------------- #
-# JWTAuth.create_access_token / encode
-# --------------------------------------------------------------------------- #
-
-
 def test_utc_timestamp_returns_int():
     assert isinstance(utc_timestamp(), int)
 
@@ -189,11 +177,6 @@ def test_encode_explicit_iss_is_not_overridden():
     assert claims["iss"] == "https://other"
 
 
-# --------------------------------------------------------------------------- #
-# JWTAuth.verify
-# --------------------------------------------------------------------------- #
-
-
 @pytest.mark.anyio
 async def test_verify_accepts_valid_token(jwt_auth):
     bearer = jwt_auth.create_access_token({"sub": "user-1"})
@@ -228,11 +211,6 @@ async def test_verify_enforces_issuer_claim():
     )
     with pytest.raises(Unauthorized):
         await auth.verify(forged)
-
-
-# --------------------------------------------------------------------------- #
-# Scopes
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -302,11 +280,6 @@ async def test_endpoint_forbids_with_simple_validator(config, app, client):
         "/items", headers={"Authorization": f"Bearer {bearer.access_token}"}
     )
     assert response.status_code == HTTP_403_FORBIDDEN
-
-
-# --------------------------------------------------------------------------- #
-# JWTAuth endpoints
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.anyio
@@ -381,11 +354,6 @@ async def test_endpoint_forbids_insufficient_scope(jwt_auth, app, client):
     assert "edit:user" in response.json()["detail"]
 
 
-# --------------------------------------------------------------------------- #
-# API key
-# --------------------------------------------------------------------------- #
-
-
 @pytest.mark.anyio
 async def test_api_key_accepts_present_key(app, client):
     auth = APIKeyAuth()
@@ -426,39 +394,17 @@ async def test_api_key_honors_custom_header_name(app, client):
     assert response.status_code == HTTP_200_OK
 
 
-# --------------------------------------------------------------------------- #
-# Auth0
-# --------------------------------------------------------------------------- #
+class _FakeAuthError(BaseAuthError):
+    def get_error_code(self) -> str:
+        return "invalid_token"
+
+    def get_status_code(self) -> int:
+        return HTTP_401_UNAUTHORIZED
+
+    def get_headers(self) -> dict[str, str]:
+        return {"WWW-Authenticate": "Bearer"}
 
 
-try:
-    from auth0_api_python.api_client import BaseAuthError
-
-    from fastapi_views.integrations.auth0 import Auth0
-
-    HAS_AUTH0 = True
-except ImportError:
-    HAS_AUTH0 = False
-
-auth0_required = pytest.mark.skipif(
-    not HAS_AUTH0, reason="auth0-api-python is not installed"
-)
-
-
-if HAS_AUTH0:
-
-    class _FakeAuthError(BaseAuthError):
-        def get_error_code(self) -> str:
-            return "invalid_token"
-
-        def get_status_code(self) -> int:
-            return HTTP_401_UNAUTHORIZED
-
-        def get_headers(self) -> dict[str, str]:
-            return {"WWW-Authenticate": "Bearer"}
-
-
-@auth0_required
 @pytest.mark.anyio
 async def test_auth0_verify_returns_verified_claims():
     api_client = AsyncMock()
@@ -471,7 +417,6 @@ async def test_auth0_verify_returns_verified_claims():
     api_client.verify_access_token.assert_awaited_once_with("any-token")
 
 
-@auth0_required
 @pytest.mark.anyio
 async def test_auth0_verify_maps_auth_error_to_api_error():
     api_client = AsyncMock()
@@ -486,23 +431,16 @@ async def test_auth0_verify_maps_auth_error_to_api_error():
     assert error.as_model().detail == "token expired"
 
 
-@auth0_required
 def test_auth0_reads_scope_claim_by_default():
     auth = Auth0(AsyncMock())
     granted = auth.get_granted_scopes({"scope": "read:items edit:items"})
     assert granted == ["read:items", "edit:items"]
 
 
-@auth0_required
 def test_auth0_reads_permissions_claim_when_configured():
     auth = Auth0(AsyncMock(), permission_key="permissions")
     granted = auth.get_granted_scopes({"permissions": ["read:items"]})
     assert granted == ["read:items"]
-
-
-# --------------------------------------------------------------------------- #
-# Test user override
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.anyio
@@ -541,11 +479,6 @@ def test_with_test_user_is_reset_when_body_raises(jwt_auth):
         raise RuntimeError("boom")
 
     assert jwt_auth._test_user is None
-
-
-# --------------------------------------------------------------------------- #
-# AutoScopesAuthView
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(

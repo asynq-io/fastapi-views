@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import importlib.util
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -63,7 +62,7 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
         self.openapi_schema = get_openapi(
             title=self.title,
             version=self.version,
-            openapi_version="3.2.0",
+            openapi_version=self.openapi_version,
             description=self.description,
             terms_of_service=self.terms_of_service,
             contact=self.contact,
@@ -89,12 +88,12 @@ def custom_openapi(self: FastAPI) -> dict[str, Any]:
     return self.openapi_schema
 
 
-def configure_app(  # noqa: C901, PLR0913
+def configure_app(  # noqa: PLR0913
     app: FastAPI,
     *,
     enable_error_handlers: bool = True,
     enable_prometheus_middleware: bool = True,
-    enable_request_logging_middleware: bool | None = None,
+    enable_request_logging_middleware: bool = False,
     prometheus_exporter_resource: Resource | None = None,
     simplify_openapi_ids: bool = True,
     gzip_middleware_min_size: int | None = 500,
@@ -129,10 +128,6 @@ def configure_app(  # noqa: C901, PLR0913
         app.add_middleware(GZipMiddleware, minimum_size=gzip_middleware_min_size)
     if enable_prometheus_middleware:
         add_prometheus_middleware(app)
-    if enable_request_logging_middleware is None:
-        enable_request_logging_middleware = (
-            importlib.util.find_spec("structlog") is not None
-        )
     if enable_request_logging_middleware:
         from .middlewares.structlog import RequestLoggingMiddleware
 

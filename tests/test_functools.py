@@ -330,15 +330,15 @@ async def test_http_method_decorators():
             return [1, 2, 3]
 
         @post(path="/items")
-        async def create_item(self) -> dict:
+        async def create_item(self) -> dict[str, Any]:
             return {"created": True}
 
         @put(path="/items/{item_id}")
-        async def update_item(self, item_id: int) -> dict:
+        async def update_item(self, item_id: int) -> dict[str, Any]:
             return {"updated": item_id}
 
         @patch(path="/items/{item_id}")
-        async def partial_update_item(self, item_id: int) -> dict:
+        async def partial_update_item(self, item_id: int) -> dict[str, Any]:
             return {"patched": item_id}
 
         @delete(path="/items/{item_id}")

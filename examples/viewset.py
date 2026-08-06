@@ -48,4 +48,4 @@ router.register_view(MyViewSet)
 app = FastAPI(title="My API")
 app.include_router(router)
 
-configure_app(app, log_config={"log_format": "console"})
+configure_app(app, enable_request_logging_middleware=True)

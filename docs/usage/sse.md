@@ -8,26 +8,101 @@ FastAPI Views makes streaming Server-Sent Events (SSE) straightforward. It provi
 
 Server-Sent Events are a standard web API for receiving a unidirectional stream of events from a server over a persistent HTTP connection. The client connects once and the server pushes messages whenever it has data. Unlike WebSockets, SSE uses plain HTTP and works well through proxies, firewalls, and load balancers.
 
-Each message in the stream has the format:
+Each message in the stream is framed as:
 
 ```
 id: <event-id>
 event: <event-name>
 data: <json-payload>
+retry: <milliseconds>
 
 ```
 
-FastAPI Views generates this format automatically from your yielded events.
+`data` is always a single line of JSON, `retry` is emitted only when the event sets it, and the blank line terminates the message. FastAPI Views generates this framing automatically from your yielded events.
 
 ---
 
 ## Event models
 
-Every yielded event is a Pydantic model with `id`, `event`, `data`, and an optional `retry` field. The library ships with:
+An event is any object exposing `id`, `event`, `data` and `retry` — formally the
+`fastapi_views.types.ServerSentEventType` protocol. In practice you yield one of the
+Pydantic models shipped in `fastapi_views.models`:
 
-* `fastapi_views.models.AnyServerSentEvent` — a generic event with `id: str` (auto-generated UUID by default), `event: str`, and untyped `data`. Use it for ad-hoc streams.
-* `fastapi_views.models.BaseServerSentEvent` / `IdBaseServerSentEvent` — bases for defining your own typed event models (fix `event` with a `Literal`, type `data` with your payload schema).
-* `fastapi_views.models.streaming` — ready-made response lifecycle events loosely modeled on the OpenAI responses API: `ResponseStarted`, `ResponseResult[T]`, `ResponseError`, `ResponseFinished`, `ResponseCancelled`, and the discriminated union alias `ResponseEvent[T]`.
+| Model | Fields | Use for |
+|---|---|---|
+| `BaseServerSentEvent` | `retry: int \| None = None` | base for fully custom events (declare your own `id`, `event`, `data`) |
+| `IdBaseServerSentEvent` | `BaseServerSentEvent` + `id: UUID` (auto `uuid4`) | base for typed events that want an auto-generated UUID id |
+| `AnyServerSentEvent` | `id: str` (auto UUID string), `event: str`, `data: Any`, `retry` | ad-hoc, untyped streams |
+
+All three declare `__content_type__ = "text/event-stream"`, which is the media type they are
+documented under in OpenAPI.
+
+A custom typed event narrows `event` to a `Literal` and types `data` with a payload schema:
+
+```python
+from typing import Literal
+
+from pydantic import BaseModel
+
+from fastapi_views.models import IdBaseServerSentEvent
+
+
+class Price(BaseModel):
+    symbol: str
+    price: float
+
+
+class PriceEvent(IdBaseServerSentEvent):
+    event: Literal["price"] = "price"
+    data: Price
+```
+
+---
+
+## Streaming (response lifecycle) events
+
+`fastapi_views.models.streaming` ships a ready-made set of lifecycle events, loosely
+inspired by the OpenAI responses API. Each is an `IdBaseServerSentEvent` with a fixed
+`event` name and a typed `data` payload, plus a `new(...)` classmethod that builds the
+payload for you:
+
+| Event | `event` name | `data` payload |
+|---|---|---|
+| `ResponseStarted` | `response.started` | `StartedData` — `type`, `timestamp` |
+| `ResponseResult[T]` | `response.result` | `ResultData[T]` — `type`, `items: list[T]`, `index`, `total_results` |
+| `ResponseError` | `response.error` | `ErrorData` — `type`, `error: str` |
+| `ResponseFinished` | `response.finished` | `FinishedData` — `type`, `timestamp`, `duration_s` |
+| `ResponseCancelled` | `response.cancelled` | `CancelledData` — `type`, `timestamp` |
+
+`ResponseEvent[T]` is a `TypeAliasType` union of all five, discriminated on `event` — use it as
+the `response_schema` / `response_model` so OpenAPI documents every event the stream may emit.
+
+```python
+from fastapi_views.models.streaming import (
+    ResponseCancelled,
+    ResponseError,
+    ResponseEvent,
+    ResponseFinished,
+    ResponseResult,
+    ResponseStarted,
+    ResultData,
+)
+
+yield ResponseStarted.new()
+yield ResponseResult[Item](
+    data=ResultData[Item](items=[Item(id=1, name="first")], index=1, total_results=2),
+)
+yield ResponseFinished.new(duration_s=3)
+```
+
+`timestamp` fields default to the current UTC time as whole seconds, `duration_s` is a
+`NonNegativeInt`, and every event gets a fresh `uuid4` `id`.
+
+!!! note
+    `ResponseResult.new(items=...)` validates `items` against the *unparameterized*
+    `ResultData` payload, i.e. `list[dict[str, Any]]` — so pass plain dicts to it.
+    To pass model instances, build the payload explicitly as `ResultData[Item](...)`
+    as shown above.
 
 ---
 
@@ -69,7 +144,31 @@ app.include_router(router)
 configure_app(app)
 ```
 
-The `response_schema` is the **full event model**: its JSON schema becomes the documented `text/event-stream` content, and its `data` field annotation is used to validate and serialize each event's `data`. When it is not set, `AnyServerSentEvent` is assumed. The endpoint is registered as `GET /stocks` and returns `text/event-stream`.
+The `response_schema` is the **full event model**: its JSON schema becomes the documented `text/event-stream` content, and its `data` field annotation drives the serializer used for each event's `data`. When it is not set, `AnyServerSentEvent` is assumed. The endpoint is registered as `GET /stocks` with a `StreamingResponse` of media type `text/event-stream`.
+
+The status code defaults to `200`; override it by annotating `events` with
+`@override(status_code=...)` (importable from `fastapi_views.views`), which sets both the
+documented and the returned status.
+
+### Response headers
+
+`sse_headers` is a class attribute holding the headers sent with the stream. It defaults to:
+
+```python
+class ServerSentEventsAPIView(APIView):
+    sse_headers = {
+        "Cache-Control": "no-store",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+```
+
+Override it on your subclass to add or replace headers (for example to drop `X-Accel-Buffering` when you are not behind nginx).
+
+!!! note
+    Unlike regular `APIView` responses, event `data` is dumped without the view's
+    `serializer_options` (so `by_alias` is **not** applied). Use `@sse_route`'s
+    `serializer_options` argument when you need alias or exclusion behaviour.
 
 ### Event IDs and retry interval
 
@@ -90,14 +189,21 @@ class MySSEView(ServerSentEventsAPIView):
 For result streams, reuse the prebuilt events from `fastapi_views.models.streaming`:
 
 ```python
-from fastapi_views.models.streaming import ResponseEvent, ResponseFinished, ResponseResult
+from fastapi_views.models.streaming import (
+    ResponseEvent,
+    ResponseFinished,
+    ResponseResult,
+    ResultData,
+)
 
 
 class ItemStreamView(ServerSentEventsAPIView):
     response_schema = ResponseEvent[Item]
 
     async def events(self) -> AsyncIterator[ResponseEvent[Item]]:
-        yield ResponseResult.new(items=[Item(id=1, name="first")], index=1)
+        yield ResponseResult[Item](
+            data=ResultData[Item](items=[Item(id=1, name="first")], index=1),
+        )
         yield ResponseFinished.new()
 ```
 
@@ -125,7 +231,48 @@ class EventView(ServerSentEventsAPIView):
         yield AnyServerSentEvent(event="data", data={"id": 10, "name": "custom"})
 ```
 
-`@sse_route` accepts the same keyword arguments as `@get`, plus `response_model` (the full event model, like `response_schema` above) and an optional `serializer_options` dict for Pydantic serialization settings. Sync generators are supported as well and are iterated in a threadpool.
+### Signature
+
+```python
+@sse_route(
+    path: str = "",
+    serializer_options: SerializerOptions | None = None,
+    headers: dict[str, str] | None = None,
+    **kwargs,  # any RouteOptions accepted by @route
+)
+```
+
+| Argument | Description |
+|---|---|
+| `path` | Route path appended to the view's prefix (default `""`) |
+| `serializer_options` | Pydantic `dump_json` options applied to each event's `data` (`by_alias`, `exclude_none`, `include`, `exclude`, `exclude_unset`, `exclude_defaults`, `round_trip`). Defaults to no options |
+| `headers` | Response headers. When omitted, defaults to `Cache-Control: no-store`, `Connection: keep-alive`, `X-Accel-Buffering: no`. Passing a dict **replaces** the defaults, so re-include the ones you still want |
+| `response_model` | The full event model, as with `response_schema`. Defaults to `AnyServerSentEvent` |
+| `**kwargs` | Any other route option (`tags`, `dependencies`, `summary`, `responses`, `status_code`, …) |
+
+The decorator forces `methods=["GET"]`, `response_class=StreamingResponse` and
+`response_model=None` on the underlying route (the event model is documented through
+`responses[status_code]["content"]` instead, since FastAPI cannot validate a stream),
+and returns a `StreamingResponse` with media type `text/event-stream`.
+
+Both async and sync generators are supported; sync generators are iterated in a
+threadpool via `starlette.concurrency.iterate_in_threadpool`.
+
+!!! note
+    `status_code` only affects which status key the event schema is documented under —
+    the returned `StreamingResponse` is always `200`. For a non-`200` SSE response, use
+    `ServerSentEventsAPIView` with `@override(status_code=...)` on `events` instead.
+
+```python
+@sse_route(
+    "/custom-events",
+    response_model=ResponseEvent[Item],
+    serializer_options={"by_alias": True, "exclude_none": True},
+    headers={"Cache-Control": "no-store", "X-Stream": "items"},
+    tags=["streaming"],
+)
+async def custom_events(self) -> AsyncIterator[ResponseEvent[Item]]: ...
+```
 
 ---
 
@@ -164,7 +311,26 @@ source.onerror = () => {
 
 ## OpenAPI documentation
 
-FastAPI Views registers SSE endpoints with the correct `text/event-stream` response schema in the OpenAPI spec, derived from the event model (`response_schema` / `response_model`). Models referenced by the event travel in `$defs` and are relocated into `components/schemas` by `configure_app`, so the stream's shape is visible in the Swagger UI and to API client generators.
+Because a stream cannot be validated by FastAPI, SSE routes are registered with
+`response_model=None` and document the event model as explicit response *content*
+instead. `fastapi_views.views.functools.sse_openapi_content` builds it:
+
+* a model class (any `OpenAPIBase` subclass, which includes every SSE model above)
+  renders itself via `get_openapi_content()`, keyed by its `__content_type__`
+  (`text/event-stream`);
+* anything else — a union, a `TypeAliasType` such as `ResponseEvent[Item]` — is rendered
+  through a pydantic `TypeAdapter` in `serialization` mode and keyed by
+  `AnyServerSentEvent.__content_type__`.
+
+Both use `ref_template="#/components/schemas/{model}"`, so nested models travel in `$defs`
+and are relocated into `components/schemas` by `configure_app`. A `ResponseEvent[Item]`
+stream therefore shows up as a discriminated `oneOf` over
+`ResponseStarted` / `ResponseResult_Item_` / `ResponseError` / `ResponseCancelled` /
+`ResponseFinished` in the Swagger UI and to API client generators.
+
+The companion helper `sse_data_annotation(model)` extracts the `data` field annotation used
+to serialize each payload, falling back to `Any` for unions and type aliases (so pydantic
+infers the serializer from the runtime value).
 
 ---
 

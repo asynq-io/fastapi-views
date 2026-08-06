@@ -9,6 +9,7 @@ from fastapi_views.models.streaming import (
     ResponseEvent,
     ResponseFinished,
     ResponseResult,
+    ResultData,
 )
 from fastapi_views.views import ServerSentEventsAPIView, sse_route
 
@@ -19,7 +20,14 @@ class Item(BaseModel):
 
 
 CustomResult = ResponseResult[Item]
+CustomResultData = ResultData[Item]
 CustomResponseEvent = ResponseEvent[Item]
+
+
+def page(index: int, *items: Item) -> CustomResult:
+    return CustomResult(
+        data=CustomResultData(items=list(items), index=index, total_results=4),
+    )
 
 
 class SSEView(ServerSentEventsAPIView):
@@ -28,35 +36,23 @@ class SSEView(ServerSentEventsAPIView):
     response_schema = CustomResponseEvent
 
     async def events(self) -> AsyncIterator[CustomResponseEvent]:
-        yield CustomResult.new(
-            items=[Item(id=1, name="test"), Item(id=2, name="test")],
-            index=1,
-            total_results=2,
-        )
+        yield page(1, Item(id=1, name="test"), Item(id=2, name="test"))
         await asyncio.sleep(2)
-        yield CustomResult.new(
-            items=[Item(id=3, name="test"), Item(id=4, name="test")],
-            index=2,
-            total_results=2,
-        )
+        yield page(2, Item(id=3, name="test"), Item(id=4, name="test"))
         await asyncio.sleep(1)
-        yield ResponseFinished.new()
+        yield ResponseFinished.new(duration_s=3)
 
-    @sse_route("/custom-function", response_model=CustomResponseEvent)
+    @sse_route(
+        "/custom-function",
+        response_model=CustomResponseEvent,
+        serializer_options={"by_alias": True, "exclude_none": True},
+    )
     async def function_sse_route(self) -> AsyncIterator[CustomResponseEvent]:
-        yield CustomResult.new(
-            items=[Item(id=1, name="test"), Item(id=2, name="test")],
-            index=1,
-            total_results=2,
-        )
+        yield page(1, Item(id=1, name="test"), Item(id=2, name="test"))
         await asyncio.sleep(2)
-        yield CustomResult.new(
-            items=[Item(id=3, name="test"), Item(id=4, name="test")],
-            index=2,
-            total_results=2,
-        )
+        yield page(2, Item(id=3, name="test"), Item(id=4, name="test"))
         await asyncio.sleep(1)
-        yield ResponseFinished.new()
+        yield ResponseFinished.new(duration_s=3)
 
 
 router = ViewRouter()

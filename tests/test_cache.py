@@ -68,11 +68,6 @@ async def cached_view_client(
         yield client
 
 
-# ---------------------------------------------------------------------------
-# build_key
-# ---------------------------------------------------------------------------
-
-
 class _BaseKeyView(CachedAPIView, AsyncListAPIView):
     response_schema = Item
 
@@ -137,11 +132,6 @@ def test_build_key_missing_header_excluded() -> None:
     assert view_without.build_key() == _md5("/items")
 
 
-# ---------------------------------------------------------------------------
-# get_cache_headers
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("hit", "ttl", "cache_control", "expected"),
     [
@@ -167,11 +157,6 @@ def test_get_cache_headers_no_cache_control_when_no_ttl() -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=False, ttl=None, cache_control=None)
     assert "cache-control" not in headers
-
-
-# ---------------------------------------------------------------------------
-# CacheControl
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -208,11 +193,6 @@ def test_get_cache_headers_cache_control_object_keeps_explicit_max_age() -> None
     assert headers["cache-control"] == "max-age=30"
 
 
-# ---------------------------------------------------------------------------
-# Vary
-# ---------------------------------------------------------------------------
-
-
 def test_get_vary_headers_combines_key_headers_and_vary_and_dedupes() -> None:
     class VaryView(_BaseKeyView):
         cache_key_headers = ("X-Tenant-Id",)
@@ -235,11 +215,6 @@ def test_get_cache_headers_no_vary_when_unconfigured() -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=True, ttl=None, cache_control=None)
     assert "Vary" not in headers
-
-
-# ---------------------------------------------------------------------------
-# @use_cache decorator + CacheMiddleware integration
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -329,11 +304,6 @@ async def test_cached_custom_cache_control() -> None:
     assert response.headers["cache-control"] == "no-store"
 
 
-# ---------------------------------------------------------------------------
-# CacheMiddleware — non-HTTP scope passthrough
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_middleware_passthrough_non_http_scope() -> None:
     received: list[dict] = []
@@ -350,11 +320,6 @@ async def test_middleware_passthrough_non_http_scope() -> None:
     middleware = CacheMiddleware(dummy_app, backend=InMemoryCache())
     await middleware({"type": "lifespan"}, receive_noop, send_noop)
     assert received == [{"type": "lifespan"}]
-
-
-# ---------------------------------------------------------------------------
-# Error response is not cached
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -378,11 +343,6 @@ async def test_error_response_not_cached() -> None:
     assert len(mem_cache._data) == 0
 
 
-# ---------------------------------------------------------------------------
-# Cache context does not bleed between requests
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_cache_context_does_not_bleed_between_requests() -> None:
     """A MISS's cache context is per-request, so the next request is a clean HIT."""
@@ -401,11 +361,6 @@ async def test_cache_context_does_not_bleed_between_requests() -> None:
 
     assert first.headers["x-cache"] == "MISS"
     assert second.headers["x-cache"] == "HIT"
-
-
-# ---------------------------------------------------------------------------
-# cache_key_headers differentiate tenants end-to-end
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -435,11 +390,6 @@ async def test_cache_key_headers_isolate_tenants() -> None:
     assert call_log == ["alpha", "beta"]  # alpha served from cache on third request
     # The key header is advertised to downstream caches so they key on it too.
     assert r1.headers["vary"] == "X-Tenant-Id"
-
-
-# ---------------------------------------------------------------------------
-# Cache — backend management and passthroughs
-# ---------------------------------------------------------------------------
 
 
 def test_cache_backend_unset_raises() -> None:
@@ -474,11 +424,6 @@ async def test_cache_passthrough_methods() -> None:
     backend.pop.assert_awaited_once_with("k")
 
 
-# ---------------------------------------------------------------------------
-# Cache._format_key
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("key", "args", "kwargs", "expected"),
     [
@@ -492,11 +437,6 @@ async def test_cache_passthrough_methods() -> None:
 )
 def test_format_key(key, args, kwargs, expected) -> None:
     assert Cache()._format_key(key, *args, **kwargs) == expected
-
-
-# ---------------------------------------------------------------------------
-# Cache.__call__ decorator
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -597,11 +537,6 @@ async def test_cache_decorator_unresolvable_annotation_uses_any() -> None:
     assert first == second == {"v": 1}
 
 
-# ---------------------------------------------------------------------------
-# InMemoryCache backend
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_memory_get_missing_returns_none() -> None:
     assert await InMemoryCache().get("missing") is None
@@ -662,11 +597,6 @@ async def test_memory_pop_expired_returns_none() -> None:
     backend._data["k"] = ExpiringItem(b"v", time.monotonic() - 1)
     assert await backend.pop("k") is None
     assert "k" not in backend._data
-
-
-# ---------------------------------------------------------------------------
-# RedisCache backend (mocked client)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio

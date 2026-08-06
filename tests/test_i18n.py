@@ -29,11 +29,6 @@ def _reset_manager() -> Iterator[None]:
         translations_module._manager = original
 
 
-# --------------------------------------------------------------------------- #
-# Fallback chain configuration
-# --------------------------------------------------------------------------- #
-
-
 @pytest.mark.parametrize(
     ("fallbacks", "expected"),
     [
@@ -114,11 +109,6 @@ def test_match_supported(tag: str, expected: str | None) -> None:
     assert manager.match_supported(tag) == expected
 
 
-# --------------------------------------------------------------------------- #
-# Key resolution honours the fallback chain
-# --------------------------------------------------------------------------- #
-
-
 @pytest.mark.parametrize(
     ("locale", "expected"),
     [
@@ -168,11 +158,6 @@ def test_translate_uses_current_locale() -> None:
     with override_locale("pl"):
         assert translate("greeting") == "Cześć"
     assert translate("greeting") == "Hello"
-
-
-# --------------------------------------------------------------------------- #
-# LocaleMiddleware detection honours fallbacks
-# --------------------------------------------------------------------------- #
 
 
 def _make_request(

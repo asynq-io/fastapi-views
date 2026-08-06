@@ -11,19 +11,34 @@ Every bulk operation is **all-or-nothing**: the view delegates the whole batch t
 Bulk views talk to your data layer through `AsyncBulkRepository` (or the sync `BulkRepository`), a standalone protocol requiring exactly the methods the bulk views call:
 
 ```python
-class AsyncBulkRepository(Protocol[M]):
-    async def create_many(self, items: Sequence[Mapping[str, Any]]) -> Sequence[M]: ...
-    async def update_many(self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any) -> Sequence[M]: ...
+class AsyncBulkRepository(Protocol[M_co]):
+    async def create_many(self, items: Sequence[Mapping[str, Any]], /) -> Sequence[M_co]: ...
+    async def update_many(self, values: Mapping[str, Any], /, *args: Any, **kwargs: Any) -> Sequence[M_co]: ...
     async def bulk_update(self, items: Sequence[Mapping[str, Any]], /) -> None: ...
     async def delete_many(self, *args: Any, **kwargs: Any) -> None: ...
 ```
 
+All bulk actions live on a **single route** — `/bulk` — and are told apart by the HTTP method:
+
+| Method | Action | Repository call | Success |
+|--------|--------|-----------------|---------|
+| `POST` | `bulk_create` | `create_many` | `201 Created` |
+| `PUT` | `bulk_update` | `bulk_update` (per item) | `204 No Content` |
+| `PATCH` | `update_many` | `update_many` (filtered) | `200 OK` |
+| `DELETE` | `bulk_delete` | `delete_many` (filtered) | `204 No Content` |
+
 There are two update strategies, mapping to two different repository methods:
 
-- **Per-item bulk update** (`PUT /bulk-update`) sends a list of items, each carrying its own primary key and values, and calls `bulk_update`. It is meant for an `executemany`-style statement, which cannot return rows — so the route responds with `204 No Content`.
-- **Filtered update** (`PATCH /bulk-update`) sends one set of values and selects rows with a **filter** (the same mechanism as bulk-delete), calling `update_many(values, *args, **kwargs)` with the filter resolved to criteria. The statement can use `RETURNING`, so the route responds with the updated objects.
+- **Per-item bulk update** (`PUT /bulk`) sends a list of items, each carrying its own primary key and values, and calls `bulk_update`. It is meant for an `executemany`-style statement, which cannot return rows — so the route responds with `204 No Content`.
+- **Filtered update** (`PATCH /bulk`) sends one set of values and selects rows with a **filter** (the same mechanism as bulk-delete), calling `update_many(values, *args, **kwargs)` with the filter resolved to criteria. The statement can use `RETURNING`, so the route responds with the updated objects.
 
-`create_many` / `bulk_update` receive a list of plain dicts (validated request bodies), plus any `repository_options` declared on the view. Bulk **delete** resolves a filter to keyword arguments and calls `delete_many`.
+How each action builds its repository call:
+
+- **`create_many` / `bulk_update`** receive a list of plain dicts — each validated item dumped with `model_dump()` and merged with `get_kwargs(action)` — followed by the view's [`repository_options`](#repository-options) as keyword arguments.
+- **`update_many`** receives the values dumped with `model_dump(exclude_unset=True)`, so only fields the client actually sent are applied, followed by the resolved filter criteria.
+- **`delete_many`** receives only the resolved filter criteria.
+
+Filtered actions (`PATCH` / `DELETE`) do **not** forward `repository_options`.
 
 ---
 
@@ -38,8 +53,11 @@ There are two update strategies, mapping to two different repository methods:
 | `create_schema` | Per-item schema for the bulk-create body |
 | `bulk_update_schema` | Per-item schema for the bulk-update body — **must carry the primary key** |
 | `update_schema` | Schema of the values applied to every row selected by the filter |
-| `filter` | Filter class selecting rows for update-many and bulk-delete |
+| `filter` | Filter class selecting rows for update-many and bulk-delete — **required**, set it to `None` to opt out |
 | `repository` | Repository instance implementing the bulk contract |
+| `bulk_route` | Path all four actions share (default `"/bulk"`) |
+| `return_on_create` / `return_on_update` | Whether `POST` / `PATCH` respond with a body (default `True`) |
+| `repository_options` | Extra keyword arguments forwarded to `create_many` / `bulk_update` |
 
 ```python
 class ItemViewSet(AsyncBulkAPIViewSet):
@@ -56,30 +74,33 @@ This registers:
 
 | Method | Path | Body | Action |
 |--------|------|------|--------|
-| POST | `/items/bulk-create` | `[CreateItem, ...]` | create many → `[Item, ...]` |
-| PUT | `/items/bulk-update` | `[UpdateItem, ...]` | update each item by its key → `204` |
-| PATCH | `/items/bulk-update` | `ItemValues` (+ filter query) | update matching rows → `[Item, ...]` |
-| DELETE | `/items/bulk-delete` | — (filter query) | delete matching rows → `204` |
+| POST | `/items/bulk` | `[CreateItem, ...]` | create many → `[Item, ...]` |
+| PUT | `/items/bulk` | `[UpdateItem, ...]` | update each item by its key → `204` |
+| PATCH | `/items/bulk` | `ItemValues` (+ filter query) | update matching rows → `[Item, ...]` |
+| DELETE | `/items/bulk` | — (filter query) | delete matching rows → `204` |
 
-Mix it in alongside a regular viewset to get both standard CRUD and bulk endpoints:
+Each operation also documents the usual error responses: `400` everywhere, `409 Conflict` on `POST`/`PUT`/`PATCH`, and `404 Not Found` on `PUT`.
+
+Mix it in alongside a regular viewset to get both standard CRUD and bulk endpoints on the same resource:
 
 ```python
-class ItemViewSet(AsyncBulkAPIViewSet, AsyncAPIViewSet):
+class ItemViewSet(AsyncBulkAPIViewSet, AsyncGenericViewSet):
     ...
+    # GET/POST /items, GET/PUT/PATCH/DELETE /items/{id}
+    # POST/PUT/PATCH/DELETE /items/bulk
 ```
+
+The bulk actions reuse the same `repository` attribute, so it has to satisfy both the plain `AsyncRepository` protocol and the bulk one.
 
 ---
 
-## Configurable routes
+## Configurable route
 
-Each route path is overridable per view:
+All bulk actions share one path, set by `bulk_route`:
 
 ```python
 class ItemViewSet(AsyncBulkAPIViewSet):
-    bulk_create_route = "/batch"
-    bulk_update_route = "/batch"
-    update_many_route = "/batch"
-    bulk_delete_route = "/batch"
+    bulk_route = "/batch"   # POST/PUT/PATCH/DELETE /items/batch
     ...
 ```
 
@@ -93,11 +114,42 @@ Update-many and bulk-delete select rows with a **filter**, not a hard-coded id l
 class ItemFilter(BaseFilter):
     name: str | None = None
 
-# PATCH  /items/bulk-update?name=widget  ->  repository.update_many(values, name="widget")
-# DELETE /items/bulk-delete?name=widget  ->  repository.delete_many(name="widget")
+# PATCH  /items/bulk?name=widget  ->  repository.update_many(values, name="widget")
+# DELETE /items/bulk?name=widget  ->  repository.delete_many(name="widget")
 ```
 
-Set `filter = None` to act on everything matched by `get_kwargs`.
+`filter` is a required attribute on the filtered views — set it to `None` to act on everything matched by `get_kwargs` (handy for tenant-scoped views):
+
+```python
+class TenantBulkDeleteView(AsyncGenericBulkDestroyAPIView):
+    filter = None
+    repository = ItemRepository()
+
+    def get_kwargs(self, _action=None, /):
+        return {"tenant_id": current_tenant()}   # DELETE /items/bulk -> delete_many(tenant_id=...)
+```
+
+Two overridable methods control how a filter becomes a repository call:
+
+- `resolve_filter(filter)` returns the `(args, kwargs)` passed to the repository — by default `(), filter.as_kwargs()`. Override it to translate the filter into positional criteria (e.g. SQLAlchemy expressions).
+- `get_filter_args(filter, action=None)` merges `get_kwargs(action)` into the filter via `filter.with_kwargs(...)` and then delegates to `resolve_filter`. When `filter = None`, it short-circuits and returns `get_kwargs(action)` alone.
+
+---
+
+## Repository options
+
+`repository_options` is a class-level dict of extra keyword arguments forwarded to `create_many` and `bulk_update` — use it for driver-level knobs your repository accepts:
+
+```python
+class ItemViewSet(AsyncBulkAPIViewSet):
+    repository_options: ClassVar[dict[str, Any]] = {"batch_size": 500}
+    ...
+
+# repository.create_many(data, batch_size=500)
+# repository.bulk_update(data, batch_size=500)
+```
+
+Override `get_repository_options(action)` to vary them per action.
 
 ---
 
@@ -107,12 +159,13 @@ Bulk-create and update-many return the affected objects by default. Set `return_
 
 ```python
 class ItemViewSet(AsyncBulkAPIViewSet):
-    return_on_create = False   # POST  /bulk-create -> 201 with empty body
-    return_on_update = False   # PATCH /bulk-update -> 200 with empty body
+    return_on_create = False   # POST  /bulk -> 201 with empty body
+    return_on_update = False   # PATCH /bulk -> 200 with empty body
     ...
 ```
 
-Per-item bulk update (`PUT /bulk-update`) always responds `204 No Content` — its `executemany`-style repository call cannot return rows.
+Per-item bulk update (`PUT /bulk`) always responds `204 No Content` — its `executemany`-style repository call cannot return rows.
+
 ---
 
 ## Lifecycle hooks
@@ -127,10 +180,12 @@ class ItemViewSet(AsyncBulkAPIViewSet):
     async def before_bulk_update(self, data: list[dict]) -> None: ...
     async def after_bulk_update(self) -> None: ...
     async def before_update_many(self, values: dict) -> None: ...
-    async def after_update_many(self, objects) -> None: ...
+    async def after_update_many(self, objs) -> None: ...
     async def before_bulk_delete(self) -> None: ...
     async def after_bulk_delete(self) -> None: ...
 ```
+
+The `before_*` hooks see the data that is about to be sent to the repository and run before the call; the `after_*` hooks run after it and before the response is built. `after_bulk_update` and both delete hooks take no payload, because their repository calls do not return rows. On the synchronous views the same hooks are plain `def` methods.
 
 ---
 
@@ -138,14 +193,44 @@ class ItemViewSet(AsyncBulkAPIViewSet):
 
 Use a single bulk view when you do not want all four actions. All share the same `AsyncBulkRepository` / `BulkRepository` protocol:
 
-| Class | Action |
-|-------|--------|
-| `AsyncGenericBulkCreateAPIView` | bulk-create |
-| `AsyncGenericBulkUpdateAPIView` | bulk-update (per-item) |
-| `AsyncGenericUpdateManyAPIView` | update-many (filtered) |
-| `AsyncGenericBulkDestroyAPIView` | bulk-delete |
+| Class | Method | Required attributes |
+|-------|--------|---------------------|
+| `AsyncGenericBulkCreateAPIView` | `POST` | `create_schema`, `response_schema` |
+| `AsyncGenericBulkUpdateAPIView` | `PUT` | `bulk_update_schema` |
+| `AsyncGenericUpdateManyAPIView` | `PATCH` | `update_schema`, `filter`, `response_schema` |
+| `AsyncGenericBulkDestroyAPIView` | `DELETE` | `filter` |
 
-All have synchronous counterparts without the `Async` prefix (e.g., `BulkAPIViewSet`, `GenericBulkCreateAPIView`).
+Combining any subset registers those methods on the shared `bulk_route`, so only the verbs you mix in exist.
+
+All have synchronous counterparts without the `Async` prefix (`BulkAPIViewSet`, `GenericBulkCreateAPIView`, `GenericBulkUpdateAPIView`, `GenericUpdateManyAPIView`, `GenericBulkDestroyAPIView`).
+
+The repository attribute is typed by `WithAsyncBulkRepositoryMixin[M]` / `WithBulkRepositoryMixin[M]`, which the generic views already mix in.
+
+---
+
+## Bypassing the repository layer
+
+Below the generic views sit the abstract ones, which register the same route and status code but leave the action body to you. Implement the action method with whatever signature you need — its parameters become the endpoint's parameters:
+
+```python
+from fastapi_views.views.bulk import AsyncBulkCreateAPIView
+
+
+class ItemImportView(AsyncBulkCreateAPIView):
+    response_schema = Item
+
+    async def bulk_create(self, items: list[CreateItem]) -> list[Item]:
+        return await my_importer.run(items)   # POST /items/bulk -> 201, [Item, ...]
+```
+
+| Class | Method | Abstract method |
+|-------|--------|-----------------|
+| `AsyncBulkCreateAPIView` / `BulkCreateAPIView` | `POST` | `bulk_create` |
+| `AsyncBulkUpdateAPIView` / `BulkUpdateAPIView` | `PUT` | `bulk_update` |
+| `AsyncUpdateManyAPIView` / `UpdateManyAPIView` | `PATCH` | `update_many` |
+| `AsyncBulkDestroyAPIView` / `BulkDestroyAPIView` | `DELETE` | `bulk_delete` |
+
+`return_on_create` and `return_on_update` apply here too; the `PUT` and `DELETE` views always return an empty body.
 
 ---
 

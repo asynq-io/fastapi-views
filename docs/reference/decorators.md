@@ -13,21 +13,23 @@ Use these inside any `View` or `APIView` subclass to register additional endpoin
 | `@put(path, **kwargs)` | PUT | 200 |
 | `@patch(path, **kwargs)` | PATCH | 200 |
 | `@delete(path, **kwargs)` | DELETE | 204 |
-| `@route(path, methods, **kwargs)` | Any | — |
-| `@action(path, *, detail=False, response_headers=None, **kwargs)` | Any (default GET) | 200 |
+| `@route(path, methods=[...], **kwargs)` | any (defaults to GET) | 200 |
+| `@action(path, *, detail=False, **kwargs)` | any (defaults to GET) | 200 |
 | `@sse_route(path, **kwargs)` | GET | 200 (SSE) |
 
-`@override` (alias for `@annotate`) sets metadata on an existing CRUD action method — useful for overriding `status_code` or adding `responses` to a standard action.
+Every decorator also accepts `response_headers=` (a `ResponseHeaders` subclass), which documents headers on the success response and is consumed by the view rather than forwarded to FastAPI.
+
+`@override` (alias for `@annotate`) sets route metadata on an existing CRUD action method (`list`, `retrieve`, `create`, …) — useful for overriding `status_code`, `path`, `summary`, `responses` or `dependencies` of a standard action. It *replaces* the metadata previously attached to that method, so apply it once per method and do not stack it with `@throws` or a route decorator.
 
 ## `@action`
 
 `@action` is DRF-style sugar over `@route` for adding an extra routable method to a view:
 
 - the path defaults to the hyphenated method name (`mark_read` → `/mark-read`);
-- `detail=True` nests the route under the view's detail route (e.g. `POST /{id}/publish`);
+- `detail=True` nests the route under the view's detail route (`detail_route`, `/{id}` by default);
 - `response_headers=` (a `ResponseHeaders` subclass) documents headers on the success response.
 
-The response model comes from an explicit `response_model=` argument, otherwise it falls back to the view's `response_schema`.
+The response model comes from an explicit `response_model=` argument, otherwise from the method's return annotation, and finally from the view's `response_schema`. `Response` subclasses inside the annotation are ignored, so `-> Article | Response` still documents `Article`.
 
 ```python
 from uuid import UUID
@@ -43,13 +45,24 @@ class ArticleViewSet(AsyncAPIViewSet):
 
 ## Error utilities
 
-`errors(*exceptions)` builds a FastAPI-compatible `responses` dict from a list of `APIError` subclasses. `throws(*exceptions)` is a shorthand that wraps `errors` into an `@override` call.
+`errors(*exceptions)` builds a FastAPI-compatible `responses` dict from `APIError` subclasses. Bodies are documented as `application/problem+json`, and several errors sharing a status code become an `anyOf` of their models.
+
+`throws(*exceptions)` is a shorthand that wraps `errors` into an `@override` call, so it applies to a **standard** action only — for a method that already has a route decorator, pass `responses=errors(...)` to that decorator instead.
 
 ## Exception catching decorators
 
-`@catch(exc_type, **kwargs)` wraps a view method to catch a specific exception type and convert it to an `APIError` response, reading error details from `self.raises` or the keyword arguments.
+`@catch(exc_type, **kwargs)` wraps a view method to catch a specific exception type (or a tuple of them) and convert it to an `APIError` response, reading error details from `self.raises` or from the keyword arguments.
 
 `@catch_defined` is similar but catches all exception types listed in `self.raises` automatically.
+
+Both work on sync and async methods and are applied *below* the route decorator:
+
+```python
+class ItemView(APIView):
+    @get("/{id}")
+    @catch(KeyError, status=404)
+    async def get_item(self, id: int) -> Item: ...
+```
 
 ---
 

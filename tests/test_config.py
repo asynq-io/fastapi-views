@@ -26,11 +26,6 @@ def test_configure_app_registers_prometheus_middleware_once(app):
     assert sum(1 for m in app.user_middleware if m.cls is PrometheusMiddleware) == 1
 
 
-def test_configure_app_enables_request_logging_when_structlog_installed(app):
-    configure_app(app)
-    assert any(m.cls is RequestLoggingMiddleware for m in app.user_middleware)
-
-
 def test_configure_app_disables_request_logging_middleware(app):
     configure_app(app, enable_request_logging_middleware=False)
     assert all(m.cls is not RequestLoggingMiddleware for m in app.user_middleware)

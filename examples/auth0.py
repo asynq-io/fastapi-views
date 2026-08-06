@@ -6,8 +6,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
+from fastapi_views.auth import AutoScopesAuthView
 from fastapi_views.integrations.auth0 import Auth0
-from fastapi_views.views.viewsets import AsyncAPIViewSet
+from fastapi_views.views.viewsets import AsyncAPIViewSet, AsyncReadOnlyAPIViewSet
 
 ## Auth setup
 
@@ -73,8 +74,31 @@ class ItemViewSet(AsyncAPIViewSet):
         self.items.pop(id, None)
 
 
+class ReportSchema(BaseModel):
+    id: UUID
+    title: str
+
+
+class ReportViewSet(AutoScopesAuthView, AsyncReadOnlyAPIViewSet):
+    auth = auth
+    resource = "reports"
+    api_component_name = "Report"
+    response_schema = ReportSchema
+    reports: ClassVar[dict[UUID, ReportSchema]] = {}
+
+    async def list(self) -> list[ReportSchema]:
+        return list(self.reports.values())
+
+    async def retrieve(self, id: UUID) -> ReportSchema | None:
+        return self.reports.get(id)
+
+
 router = ViewRouter(prefix="/items")
 router.register_view(ItemViewSet)
 
+reports_router = ViewRouter(prefix="/reports")
+reports_router.register_view(ReportViewSet)
+
 app.include_router(router)
+app.include_router(reports_router)
 configure_app(app)

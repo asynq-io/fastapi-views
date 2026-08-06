@@ -5,24 +5,46 @@ FastAPI Views ships a small, composable authentication layer built on top of Fas
 
 - a **scheme** (`AuthorizationScheme`) extracts the raw credential from the request — the
   `Authorization: Bearer <token>` header, an API-key header, a cookie, …
-- an **`Auth`** turns that raw credential into a **principal** by implementing `verify()`
+- an **auth object** turns that raw credential into a **principal** by implementing `verify()`
 
 Concrete primitives compose those two:
 
-- **`Auth`** — the base primitive: a scheme plus a presence check, returning the raw credential
+- **`AuthBase`** — the base primitive: a scheme plus a presence check, returning the raw credential
 - **`TokenAuth` / `ScopesAuth`** — bearer-token bases; `ScopesAuth` adds scope enforcement
 - **`JWTAuth`** — verifies and issues JWTs (via `joserfc`), with scope support
 - **`Auth0`** — verifies tokens with the `auth0-api-python` SDK
-- **`APIKeyAuth`** — a header-based API-key scheme
+- **`APIKeyAuth` / `ConstAPIKeyAuth`** — header-based API-key schemes
+- **`AutoScopesAuthView`** — a view mixin that derives the required scope from the action
+
+`fastapi_views.auth` re-exports the pieces that don't need an optional dependency:
+
+```python
+from fastapi_views.auth import (
+    APIKeyAuth,
+    AuthBase,
+    AuthorizationScheme,
+    AutoScopesAuthView,
+    ConstAPIKeyAuth,
+    HierarchicalScopeValidator,
+    Scope,
+    ScopeValidator,
+    SimpleScopeValidator,
+)
+```
+
+`TokenAuth` and `ScopesAuth` live in `fastapi_views.auth.abc`, `JWTAuth` in
+`fastapi_views.auth.jwt` and `Auth0` in `fastapi_views.integrations.auth0`.
 
 A protected dependency resolves to the **decoded claims as a `dict[str, Any]`** — there is no
 token model. Access claims by key (`token["sub"]`). Scope enforcement lives only on the
 token-based auths, so an API key — which carries no scopes — never exposes a `requires` method.
 
-The JWT pieces require the `jose` extra:
+The JWT pieces require the `jose` extra (`joserfc`), the Auth0 integration the `auth0` extra
+(`auth0-api-python`):
 
 ```bash
 pip install "fastapi-views[jose]"
+pip install "fastapi-views[auth0]"
 ```
 
 ---
@@ -53,6 +75,11 @@ async def me(token: Annotated[dict[str, Any], auth.authenticated()]):
 `auth.authenticated()` returns a FastAPI `Security` dependency that resolves to the decoded
 claims. A request without an `Authorization: Bearer <token>` header yields `401 Unauthorized`;
 an invalid, malformed, or expired token also yields `401`.
+
+The full signature is
+`JWTAuth(config, scheme=None, custom_class=None, scope_validator=None)`; only `config` is
+required. Leaving `scheme` as `None` installs a non-erroring `HTTPBearer` scheme, so the `401`
+comes from the auth object (as an `APIError`) rather than from FastAPI.
 
 ---
 
@@ -92,8 +119,28 @@ config = JWTConfig(
 auth = JWTAuth(config, scheme=None)
 ```
 
+All fields, with their defaults:
+
+| Field | Default | Purpose |
+| --- | --- | --- |
+| `key` | `None` | `joserfc` key or `KeySet`; `get_key()` raises `ValueError` while unset |
+| `key_type` | `None` | `"oct" \| "RSA" \| "EC" \| "OKP"`, used by `import_key` |
+| `issuer_url` | `""` | Marks `iss` essential and is used as the base URL for `fetch_jwks` |
+| `header` | `{}` | JWS/JWE header used when encoding |
+| `algorithms` | `None` | Accepted algorithms |
+| `claims_registry` | `JWTClaimsRegistry(now=utc_timestamp, leeway=10)` | Claim validation on `verify()` |
+| `encoder_cls` / `decoder_cls` | `None` | Custom JSON encoder/decoder classes |
+| `registry` | `None` | `JWSRegistry` or `JWERegistry` |
+| `default_type` | `None` | Default token type passed to `jwt.encode` |
+| `expiration_seconds` | `None` | Default token lifetime → `exp` on issue |
+
 When `issuer_url` is set, the `iss` claim is required on `verify()` and auto-populated on
 `create_access_token()`. When `expiration_seconds` is set, `exp` is computed from `iat` at issue time.
+When exactly one algorithm is given and `header` has no `alg`, `header["alg"]` is filled in for you.
+
+`config.import_key(data, parameters=None)` imports a key from a serialized form — a JWKS
+document (any mapping containing `"keys"`) becomes a `KeySet`, anything else is imported as a
+single key using `key_type`.
 
 ---
 
@@ -145,8 +192,10 @@ You normally never call `verify` yourself — `authenticated()` and `requires()`
 
 ### Asymmetric keys fetched at startup
 
-For RS256/ES256 you typically fetch the issuer's JWKS on startup. `JWTAuth.fetch_jwks`
-(requires `httpx`) downloads and imports the key set, using `config.issuer_url` as the base URL:
+For RS256/ES256 you typically fetch the issuer's JWKS on startup.
+`await auth.fetch_jwks(url, **kwargs)` (requires `httpx`, otherwise `ImportError`) downloads and
+imports the key set, using `config.issuer_url` as the base URL and forwarding `kwargs` to the
+`GET` request:
 
 ```python
 from contextlib import asynccontextmanager
@@ -168,14 +217,17 @@ app = FastAPI(lifespan=lifespan)
 
 ## Publishing a JWKS endpoint
 
-`config.jwks` returns the **public** key set (private material stripped), ready to serve at
-`/.well-known/jwks.json`:
+`JWTAuth.jwks` is a cached property returning the **public** key set (private material
+stripped), ready to serve at `/.well-known/jwks.json`. A single key is wrapped in a
+`{"keys": [...]}` document; a `KeySet` is serialized as-is:
 
 ```python
 @app.get("/.well-known/jwks.json")
 async def jwks():
-    return auth.config.jwks
+    return auth.jwks
 ```
+
+Because it is cached, read it only after the key is loaded (e.g. after `fetch_jwks`).
 
 ---
 
@@ -185,8 +237,11 @@ async def jwks():
 space-delimited `scope` claim when issuing the token:
 
 ```python
-auth.encode({"sub": "user-1", "scope": "read:items write:items"})
+auth.encode({"sub": "user-1", "scope": "read:items edit:items"})
 ```
+
+`ScopesAuth.get_granted_scopes(token)` reads that claim; override it if your tokens carry
+scopes elsewhere (this is exactly what the Auth0 integration does).
 
 ### `requires(*scopes)`
 
@@ -201,23 +256,33 @@ async def get_report(token: Annotated[dict, auth.requires("read:reports")]):
 
 @app.post("/reports")
 async def create_report(
-    token: Annotated[dict, auth.requires("read:reports", "write:reports")],
+    token: Annotated[dict, auth.requires("read:reports", "edit:reports")],
 ):
     ...
 ```
 
-A missing scope produces:
+`requires(*scopes)` is just `Security(self.dependency, scopes=scopes)`, so it works anywhere a
+FastAPI dependency does: as an `Annotated` marker, in `dependencies=[...]`, or as a parameter
+default. A missing scope produces the standard problem-details body:
 
 ```json
 {
-  "status": 403,
+  "type": "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3",
   "title": "Forbidden",
-  "detail": "Token is missing required scope: write:reports"
+  "status": 403,
+  "detail": "Token is missing required scope: edit:reports"
 }
 ```
 
 Scopes follow the `action:resource` pattern (e.g. `read:items`, `*:orders`), matching the
-shape of Auth0 permissions.
+shape of Auth0 permissions. `Scope` is an annotated `str` (stripped, 1–2048 characters) and the
+default action names are available as constants:
+
+```python
+from fastapi_views.auth.scopes import All, Delete, Edit, Read
+
+# Read == "read", Edit == "edit", Delete == "delete", All == "*"
+```
 
 ### Scope validation
 
@@ -252,11 +317,13 @@ Customise the hierarchy by subclassing and overriding the `scope_hierarchy` clas
 (mapping each action to the set of actions it implies):
 
 ```python
+from typing import ClassVar
+
 from fastapi_views.auth.scopes import HierarchicalScopeValidator
 
 
 class MyScopeValidator(HierarchicalScopeValidator):
-    scope_hierarchy = {
+    scope_hierarchy: ClassVar[dict[str, set[str]]] = {
         "read": set(),
         "write": {"read"},
         "admin": {"read", "write"},
@@ -288,19 +355,36 @@ extra). It is itself a `ScopesAuth`, so `authenticated()` and `requires()` work 
 `verify()` returns Auth0's verified claims dict:
 
 ```python
-from auth0_api_python.api_client import ApiClient
+from auth0_api_python import ApiClient, ApiClientOptions
 
 from fastapi_views.integrations.auth0 import Auth0
 
 api_client = ApiClient(
-    domain="your-tenant.auth0.com",
-    audience="https://api.example.com",
+    ApiClientOptions(
+        domain="your-tenant.auth0.com",
+        audience="https://api.example.com",
+    )
 )
 auth = Auth0(api_client)  # scheme defaults to HTTP Bearer
 ```
 
-Errors from the SDK are mapped to the matching `APIError` (status, title, headers); invalid
-tokens surface as `401 Unauthorized`.
+Errors from the SDK are mapped to the matching `APIError` (status, title, detail and headers
+taken from the SDK error); invalid tokens surface as `401 Unauthorized`.
+
+Auth0 exposes authorization data in two different places depending on tenant configuration:
+the space-delimited `scope` claim, or a `permissions` list when RBAC "Add Permissions in the
+Access Token" is enabled. Select which one to read with `permission_key`:
+
+```python
+auth = Auth0(api_client, permission_key="permissions")
+```
+
+Both string (`"read:items edit:items"`) and list (`["read:items"]`) claim shapes are handled.
+The full signature is
+`Auth0(api_client, scheme=None, scope_validator=None, custom_class=None, permission_key="scope")`.
+
+A runnable end-to-end example lives in
+[`examples/auth0.py`](https://github.com/asynq-io/fastapi-views/blob/main/examples/auth0.py).
 
 ---
 
@@ -333,7 +417,24 @@ async def ping(key: Annotated[str, api_auth.authenticated()]):
 Customise the header name and OpenAPI metadata:
 
 ```python
-APIKeyAuth(name="Authorization-Key", description="Service key")
+APIKeyAuth(name="Authorization-Key", scheme_name="ServiceKey", description="Service key")
+```
+
+### `ConstAPIKeyAuth`
+
+When a single static key is enough, `ConstAPIKeyAuth` does the comparison for you using
+`secrets.compare_digest` (constant time), rejecting a missing or mismatched key with
+`401 Unauthorized`:
+
+```python
+from fastapi_views.auth import ConstAPIKeyAuth
+
+api_auth = ConstAPIKeyAuth(settings.api_key, name="X-Api-Key")
+
+
+@app.get("/ping")
+async def ping(key: Annotated[str, api_auth.authenticated()]):
+    return {"pong": True}
 ```
 
 ---
@@ -373,7 +474,51 @@ def cookie_scheme(session: str | None = Cookie(default=None)) -> str | None:
 auth = JWTAuth(config, scheme=cookie_scheme)
 ```
 
-If you don't need scopes at all, subclass `Auth` directly — it has no `requires` method.
+If you don't need scopes at all, subclass `AuthBase` directly — it has no `requires` method.
+Override `unauthorized()` to control the `401` raised when the credential is absent (this is
+how `APIKeyAuth` adds its `WWW-Authenticate: APIKey` header), and `get_dependency()` to change
+how the raw credential is turned into a principal.
+
+### Wrapping claims in your own type
+
+`ScopesAuth` (and therefore `JWTAuth` and `Auth0`) accepts a `custom_class` callable, applied to
+the verified claims dict *after* scope validation. The dependency then resolves to whatever it
+returns:
+
+```python
+from pydantic import BaseModel
+
+
+class Principal(BaseModel):
+    sub: str
+    scope: str = ""
+
+
+auth = JWTAuth(config, custom_class=Principal.model_validate)
+
+
+@app.get("/me")
+async def me(principal: Annotated[Principal, auth.authenticated()]):
+    return {"sub": principal.sub}
+```
+
+---
+
+## Testing protected routes
+
+`AuthBase.with_test_user(user)` is a context manager that short-circuits the dependency and
+returns `user` for every request made inside it — no signing, no headers, no
+`dependency_overrides`. It is reset on exit, including when the body raises:
+
+```python
+async def test_me(client, auth):
+    with auth.with_test_user({"sub": "tester"}):
+        response = await client.get("/me")
+    assert response.json() == {"sub": "tester"}
+```
+
+The override applies before scope validation too, so a test user is never rejected by
+`requires(...)`. Any falsy-but-not-`None` value (e.g. `{}`) still counts as a test user.
 
 ---
 
@@ -398,7 +543,7 @@ def get_current_user(*scopes: str):
 
 # Reusable aliases
 CurrentUser = Annotated[UserModel, get_current_user()]
-EditorUser = Annotated[UserModel, get_current_user("documents:edit")]
+EditorUser = Annotated[UserModel, get_current_user("edit:documents")]
 
 
 @app.get("/me")
@@ -426,7 +571,7 @@ from fastapi_views import ViewRouter, configure_app
 router = ViewRouter(prefix="/items", dependencies=[auth.authenticated()])
 
 # ...or additionally require scopes for all routes
-router = ViewRouter(prefix="/items", dependencies=[auth.requires("items:read")])
+router = ViewRouter(prefix="/items", dependencies=[auth.requires("read:items")])
 
 router.register_view(ItemViewSet)
 
@@ -444,19 +589,21 @@ When different actions need different requirements, set `action_dependencies` on
 view class — e.g. different scopes for reads and writes:
 
 ```python
+from typing import ClassVar
+
 from fastapi_views.views.generics import AsyncGenericViewSet
 
 
 class ItemViewSet(AsyncGenericViewSet):
     api_component_name = "Item"
     ...
-    action_dependencies = {
-        "list": [auth.requires("items:read")],
-        "retrieve": [auth.requires("items:read")],
-        "create": [auth.requires("items:edit")],
-        "update": [auth.requires("items:edit")],
-        "partial_update": [auth.requires("items:edit")],
-        "destroy": [auth.requires("items:edit")],
+    action_dependencies: ClassVar = {
+        "list": [auth.requires("read:items")],
+        "retrieve": [auth.requires("read:items")],
+        "create": [auth.requires("edit:items")],
+        "update": [auth.requires("edit:items")],
+        "partial_update": [auth.requires("edit:items")],
+        "destroy": [auth.requires("delete:items")],
     }
 ```
 
@@ -464,3 +611,56 @@ Bulk views support the same attribute with the `bulk_create`, `bulk_update`,
 `update_many` and `bulk_delete` actions. Per-action dependencies compose with `dependencies=[...]`
 passed to `ViewRouter(...)` or `register_view(...)`, and can be computed dynamically
 by overriding `get_dependencies(action)` instead.
+
+### `AutoScopesAuthView` — derive the scope from the action
+
+Spelling out `action_dependencies` for every view gets repetitive when scopes follow the
+`action:resource` convention. Mix `AutoScopesAuthView` in and it builds the required scope for
+you from the action, using its `action_scopes` mapping:
+
+```python
+from typing import ClassVar
+
+from fastapi_views.auth import AutoScopesAuthView
+from fastapi_views.views.viewsets import AsyncAPIViewSet
+
+
+class ItemViewSet(AutoScopesAuthView, AsyncAPIViewSet):
+    auth = auth
+    resource = "items"
+    api_component_name = "Item"
+    response_schema = ItemSchema
+    ...
+```
+
+`list`/`retrieve` now require `read:items`, `create`/`update`/`partial_update` require
+`edit:items`, and `destroy` requires `delete:items`.
+
+Two class attributes drive it:
+
+- **`auth`** — the `ScopesAuth` instance to enforce with (required)
+- **`resource`** — the resource half of the scope; defaults to `None`, in which case
+  `get_name()` is used (i.e. `api_component_name`, falling back to the class name)
+
+The default `action_scopes` mapping is:
+
+| Scope prefix | Actions |
+| --- | --- |
+| `read` | `list`, `retrieve`, `events` |
+| `edit` | `create`, `update`, `partial_update`, `bulk_create`, `bulk_update`, `update_many` |
+| `delete` | `destroy`, `bulk_delete` |
+
+Registering a custom action that isn't in the mapping raises `LookupError` at route-build
+time — a deliberate fail-fast so a new endpoint can never ship unprotected. Extend the mapping
+to cover it:
+
+```python
+class ItemViewSet(AutoScopesAuthView, AsyncAPIViewSet):
+    auth = auth
+    resource = "items"
+    action_scopes: ClassVar = {**AutoScopesAuthView.action_scopes, "publish": "edit"}
+```
+
+`AutoScopesAuthView` also widens `default_errors` to `(BadRequest, Unauthorized, Forbidden)`, so
+`401` and `403` are documented on every generated route. Any `action_dependencies` you declare
+are appended after the generated scope dependency.

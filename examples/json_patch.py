@@ -1,15 +1,11 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
+from uuid import UUID
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
 from fastapi_views.views.jsonpatch import AsyncGenericJsonPatchAPIView
-
-if TYPE_CHECKING:
-    from uuid import UUID
 
 # --- Schemas ---
 

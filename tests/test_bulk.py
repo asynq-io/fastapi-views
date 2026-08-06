@@ -130,9 +130,7 @@ async def test_async_bulk_create():
         repository = RecordingAsyncRepository()
 
     async with view_client(ItemViewSet) as client:
-        response = await client.post(
-            "/test/bulk-create", json=[{"name": "a"}, {"name": "b"}]
-        )
+        response = await client.post("/test/bulk", json=[{"name": "a"}, {"name": "b"}])
         assert response.status_code == HTTP_201_CREATED
         data = response.json()
         assert [item["name"] for item in data] == ["a", "b"]
@@ -154,7 +152,7 @@ async def test_async_bulk_update():
     item_id = uuid4()
     async with view_client(ItemViewSet) as client:
         response = await client.put(
-            "/test/bulk-update", json=[{"id": str(item_id), "name": "updated"}]
+            "/test/bulk", json=[{"id": str(item_id), "name": "updated"}]
         )
         assert response.status_code == HTTP_204_NO_CONTENT
         assert response.content == b""
@@ -175,7 +173,7 @@ async def test_async_update_many():
 
     async with view_client(ItemViewSet) as client:
         response = await client.patch(
-            "/test/bulk-update", params={"name": "old"}, json={"name": "new"}
+            "/test/bulk", params={"name": "old"}, json={"name": "new"}
         )
         assert response.status_code == HTTP_200_OK
         assert [item["name"] for item in response.json()] == ["new"]
@@ -195,7 +193,7 @@ async def test_async_bulk_delete_forwards_filter_kwargs():
         repository = repo
 
     async with view_client(ItemViewSet) as client:
-        response = await client.delete("/test/bulk-delete", params={"name": "widget"})
+        response = await client.delete("/test/bulk", params={"name": "widget"})
         assert response.status_code == HTTP_204_NO_CONTENT
         assert response.content == b""
         assert repo.delete_calls == [((), {"name": "widget"})]
@@ -213,7 +211,7 @@ async def test_bulk_create_without_return():
         repository = RecordingAsyncRepository()
 
     async with view_client(ItemViewSet) as client:
-        response = await client.post("/test/bulk-create", json=[{"name": "a"}])
+        response = await client.post("/test/bulk", json=[{"name": "a"}])
         assert response.status_code == HTTP_201_CREATED
         assert response.content == b""
 
@@ -231,7 +229,7 @@ async def test_update_many_without_return():
 
     async with view_client(ItemViewSet) as client:
         response = await client.patch(
-            "/test/bulk-update", params={"name": "a"}, json={"name": "b"}
+            "/test/bulk", params={"name": "a"}, json={"name": "b"}
         )
         assert response.status_code == HTTP_200_OK
         assert response.content == b""
@@ -250,25 +248,23 @@ async def test_sync_bulk_viewset_end_to_end():
         repository = repo
 
     async with view_client(SyncItemViewSet) as client:
-        created = await client.post("/test/bulk-create", json=[{"name": "a"}])
+        created = await client.post("/test/bulk", json=[{"name": "a"}])
         assert created.status_code == HTTP_201_CREATED
         assert [item["name"] for item in created.json()] == ["a"]
 
         item_id = created.json()[0]["id"]
-        updated = await client.put(
-            "/test/bulk-update", json=[{"id": item_id, "name": "b"}]
-        )
+        updated = await client.put("/test/bulk", json=[{"id": item_id, "name": "b"}])
         assert updated.status_code == HTTP_204_NO_CONTENT
         assert repo.bulk_update_items == [[{"id": UUID(item_id), "name": "b"}]]
 
         patched = await client.patch(
-            "/test/bulk-update", params={"name": "b"}, json={"name": "c"}
+            "/test/bulk", params={"name": "b"}, json={"name": "c"}
         )
         assert patched.status_code == HTTP_200_OK
         assert [item["name"] for item in patched.json()] == ["c"]
         assert repo.update_many_calls == [({"name": "c"}, {"name": "b"})]
 
-        deleted = await client.delete("/test/bulk-delete", params={"name": "c"})
+        deleted = await client.delete("/test/bulk", params={"name": "c"})
         assert deleted.status_code == HTTP_204_NO_CONTENT
         assert repo.delete_calls == [((), {"name": "c"})]
 
@@ -286,12 +282,12 @@ async def test_sync_bulk_viewset_without_return():
         repository = RecordingSyncRepository()
 
     async with view_client(SyncNoReturnViewSet) as client:
-        created = await client.post("/test/bulk-create", json=[{"name": "a"}])
+        created = await client.post("/test/bulk", json=[{"name": "a"}])
         assert created.status_code == HTTP_201_CREATED
         assert created.content == b""
 
         patched = await client.patch(
-            "/test/bulk-update", params={"name": "a"}, json={"name": "b"}
+            "/test/bulk", params={"name": "a"}, json={"name": "b"}
         )
         assert patched.status_code == HTTP_200_OK
         assert patched.content == b""
@@ -305,14 +301,29 @@ def test_async_generic_bulk_create_view_registers_only_bulk_create():
 
     app = build_app(CreateOnlyView)
     paths = app.openapi()["paths"]
-    assert set(paths) == {"/items/bulk-create"}
-    assert set(paths["/items/bulk-create"]) == {"post"}
+    assert set(paths) == {"/items/bulk"}
+    assert set(paths["/items/bulk"]) == {"post"}
+
+
+def test_bulk_viewset_registers_all_actions_on_one_route():
+    class ItemViewSet(AsyncBulkAPIViewSet):
+        response_schema = Item
+        create_schema = CreateItem
+        bulk_update_schema = UpdateItem
+        update_schema = ItemValues
+        filter = NameFilter
+        repository = RecordingAsyncRepository()
+
+    app = build_app(ItemViewSet)
+    paths = app.openapi()["paths"]
+    assert set(paths) == {"/items/bulk"}
+    assert set(paths["/items/bulk"]) == {"post", "put", "patch", "delete"}
 
 
 @pytest.mark.anyio
-async def test_bulk_create_route_override():
+async def test_bulk_route_override():
     class BatchCreateView(AsyncGenericBulkCreateAPIView):
-        bulk_create_route = "/batch"
+        bulk_route = "/batch"
         response_schema = Item
         create_schema = CreateItem
         repository = RecordingAsyncRepository()
@@ -320,7 +331,7 @@ async def test_bulk_create_route_override():
     async with view_client(BatchCreateView) as client:
         response = await client.post("/test/batch", json=[{"name": "a"}])
         assert response.status_code == HTTP_201_CREATED
-        missed = await client.post("/test/bulk-create", json=[])
+        missed = await client.post("/test/bulk", json=[])
         assert missed.status_code == HTTP_404_NOT_FOUND
 
 
@@ -336,7 +347,7 @@ async def test_bulk_delete_without_filter_uses_get_kwargs():
             return {"tenant_id": 1}
 
     async with view_client(TenantBulkDeleteView) as client:
-        response = await client.delete("/test/bulk-delete")
+        response = await client.delete("/test/bulk")
         assert response.status_code == HTTP_204_NO_CONTENT
         assert repo.delete_calls == [((), {"tenant_id": 1})]
 
@@ -379,12 +390,10 @@ async def test_bulk_hooks_receive_expected_arguments():
 
     item_id = uuid4()
     async with view_client(HookedViewSet) as client:
-        await client.post("/test/bulk-create", json=[{"name": "a"}])
-        await client.put("/test/bulk-update", json=[{"id": str(item_id), "name": "b"}])
-        await client.patch(
-            "/test/bulk-update", params={"name": "b"}, json={"name": "c"}
-        )
-        await client.delete("/test/bulk-delete", params={"name": "c"})
+        await client.post("/test/bulk", json=[{"name": "a"}])
+        await client.put("/test/bulk", json=[{"id": str(item_id), "name": "b"}])
+        await client.patch("/test/bulk", params={"name": "b"}, json={"name": "c"})
+        await client.delete("/test/bulk", params={"name": "c"})
 
     assert calls[0] == ("before_create", [{"name": "a"}])
     assert calls[1][0] == "after_create"
@@ -412,16 +421,11 @@ async def test_repository_options_forwarded_to_repository():
         repository = repo
 
     async with view_client(OptionsViewSet) as client:
-        await client.post("/test/bulk-create", json=[{"name": "a"}])
-        await client.put("/test/bulk-update", json=[{"id": str(uuid4()), "name": "b"}])
+        await client.post("/test/bulk", json=[{"name": "a"}])
+        await client.put("/test/bulk", json=[{"id": str(uuid4()), "name": "b"}])
 
     assert repo.bulk_create_options == [{"batch_size": 2}]
     assert repo.bulk_update_options == [{"batch_size": 2}]
-
-
-# --------------------------------------------------------------------------- #
-# Regression: schemas of one bulk viewset must not clobber another's          #
-# --------------------------------------------------------------------------- #
 
 
 class AlphaItem(BaseModel):
@@ -500,17 +504,17 @@ def test_two_bulk_viewsets_document_their_own_schemas():
             "items"
         ]["$ref"]
 
-    assert body_item_ref("/a/bulk-create", "post") == "#/components/schemas/CreateAlpha"
-    assert body_item_ref("/b/bulk-create", "post") == "#/components/schemas/CreateBeta"
-    assert body_item_ref("/a/bulk-update", "put") == "#/components/schemas/UpdateAlpha"
-    assert body_item_ref("/b/bulk-update", "put") == "#/components/schemas/UpdateBeta"
+    assert body_item_ref("/a/bulk", "post") == "#/components/schemas/CreateAlpha"
+    assert body_item_ref("/b/bulk", "post") == "#/components/schemas/CreateBeta"
+    assert body_item_ref("/a/bulk", "put") == "#/components/schemas/UpdateAlpha"
+    assert body_item_ref("/b/bulk", "put") == "#/components/schemas/UpdateBeta"
 
     def body_ref(path: str, method: str) -> str:
         operation = spec["paths"][path][method]
         return operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
 
-    assert body_ref("/a/bulk-update", "patch") == "#/components/schemas/ValuesAlpha"
-    assert body_ref("/b/bulk-update", "patch") == "#/components/schemas/ValuesBeta"
+    assert body_ref("/a/bulk", "patch") == "#/components/schemas/ValuesAlpha"
+    assert body_ref("/b/bulk", "patch") == "#/components/schemas/ValuesBeta"
 
     def response_item_ref(path: str, method: str, status: int) -> str:
         operation = spec["paths"][path][method]
@@ -521,11 +525,11 @@ def test_two_bulk_viewsets_document_their_own_schemas():
         return schema["items"]["$ref"]
 
     assert (
-        response_item_ref("/a/bulk-create", "post", HTTP_201_CREATED)
+        response_item_ref("/a/bulk", "post", HTTP_201_CREATED)
         == "#/components/schemas/AlphaItem"
     )
     assert (
-        response_item_ref("/b/bulk-create", "post", HTTP_201_CREATED)
+        response_item_ref("/b/bulk", "post", HTTP_201_CREATED)
         == "#/components/schemas/BetaItem"
     )
 
@@ -538,10 +542,10 @@ async def test_bulk_create_validates_against_own_schema():
         AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
     ):
         # Valid for CreateBeta but not for CreateAlpha
-        invalid = await client.post("/a/bulk-create", json=[{"title": "x"}])
+        invalid = await client.post("/a/bulk", json=[{"title": "x"}])
         assert invalid.status_code == HTTP_422_UNPROCESSABLE_CONTENT
 
-        valid = await client.post("/a/bulk-create", json=[{"name": "x"}])
+        valid = await client.post("/a/bulk", json=[{"name": "x"}])
         assert valid.status_code == HTTP_201_CREATED
         assert valid.json()[0]["name"] == "x"
 
@@ -558,18 +562,18 @@ def test_bulk_openapi_documents_status_codes():
     app = build_app(DocumentedViewSet)
     spec = app.openapi()
 
-    create_responses = spec["paths"]["/items/bulk-create"]["post"]["responses"]
+    create_responses = spec["paths"]["/items/bulk"]["post"]["responses"]
     schema = create_responses["201"]["content"]["application/json"]["schema"]
     assert schema["type"] == "array"
     assert schema["items"]["$ref"] == "#/components/schemas/Item"
 
-    update_responses = spec["paths"]["/items/bulk-update"]["put"]["responses"]
+    update_responses = spec["paths"]["/items/bulk"]["put"]["responses"]
     assert "204" in update_responses
 
-    patch_responses = spec["paths"]["/items/bulk-update"]["patch"]["responses"]
+    patch_responses = spec["paths"]["/items/bulk"]["patch"]["responses"]
     schema = patch_responses["200"]["content"]["application/json"]["schema"]
     assert schema["type"] == "array"
     assert schema["items"]["$ref"] == "#/components/schemas/Item"
 
-    delete_responses = spec["paths"]["/items/bulk-delete"]["delete"]["responses"]
+    delete_responses = spec["paths"]["/items/bulk"]["delete"]["responses"]
     assert "204" in delete_responses
