@@ -33,6 +33,7 @@ Action = Literal[
     "bulk_create",
     "bulk_update",
     "bulk_delete",
+    "update_many",
 ]
 WebSocketAction = Literal["receive", "send"]
 

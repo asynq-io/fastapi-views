@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import http
 import re
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, get_origin
 
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -22,10 +22,25 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-def _camel_to_title(name: str) -> str:
-    """Convert CamelCase to Title Case (e.g., UserNotFound -> User Not Found)."""
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+_CLASS_VAR = re.compile(r"^(?:[\w.]+\.)?ClassVar\b")
 
-    return re.sub(r"(?<!^)(?=[A-Z])", " ", name)
+
+def _camel_to_title(name: str) -> str:
+    """Convert CamelCase to Title Case (e.g., UserNotFound -> User Not Found).
+
+    Runs of capitals are kept together, so `HTTPError` becomes `HTTP Error`.
+    """
+
+    return _CAMEL_BOUNDARY.sub(" ", name)
+
+
+def _is_class_var(annotation: Any) -> bool:
+    """Detect `ClassVar[...]`, including string (PEP 563) annotations."""
+
+    if isinstance(annotation, str):
+        return _CLASS_VAR.match(annotation.strip()) is not None
+    return annotation is ClassVar or get_origin(annotation) is ClassVar
 
 
 _sentinel = object()
@@ -68,7 +83,7 @@ class APIError(Exception):
             status = http.HTTPStatus(status_code)
             kwargs.setdefault("status", status.value)
             kwargs.setdefault("title", status.phrase)
-            kwargs.setdefault("detail", status.description)
+            kwargs.setdefault("detail", status.description or status.phrase)
             kwargs.setdefault("type", _RFC_TYPE_MAP.get(status_code, "about:blank"))
         self._model_instance = self.model(**kwargs)
 
@@ -122,7 +137,11 @@ class APIError(Exception):
 
             # Get default value if exists
             default = getattr(cls, field_name, _sentinel)
-            if default is _sentinel:
+            if _is_class_var(field_type):
+                # ClassVar attributes stay class attributes, never model fields
+                if default is not _sentinel:
+                    extra_fields[field_name] = (field_type, default)
+            elif default is _sentinel:
                 extra_fields[field_name] = (field_type, ...)
             elif isinstance(default, (list, dict, set)):
                 extra_fields[field_name] = (field_type, default)

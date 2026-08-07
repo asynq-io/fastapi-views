@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
-
-from fastapi_views.logging._compat import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
@@ -17,7 +17,10 @@ if TYPE_CHECKING:
 
     Fallbacks = Mapping[str | tuple[str, ...], str | Sequence[str]]
 
-logger = get_logger("translations.manager")
+logger = logging.getLogger("translations.manager")
+
+_KEY_SEGMENT = r"[^\W\d][\w-]*"
+_DOTTED_KEY = re.compile(rf"{_KEY_SEGMENT}(?:\.{_KEY_SEGMENT})+")
 
 
 class TranslationManager(ABC):
@@ -119,21 +122,26 @@ class TranslationManager(ABC):
         text = self._resolve_key(key, locale)
         # Expose the resolved locale to the formatter (e.g. Jinja/Babel filters),
         # so an explicitly passed `locale` is honored during interpolation too.
-        return self.format_text(text, **kwargs)
+        with self.override_locale(locale):
+            return self.format_text(text, **kwargs)
 
     def _resolve_key(self, key: str, locale: str) -> str:
         """Look up ``key`` across the fallback chain for ``locale``.
 
-        Each candidate locale is tried in turn; if none provide the key, the
-        text after the last ``.`` in the key is used so a missing key degrades
-        gracefully instead of raising.
+        Each candidate locale is tried in turn; if none provide the key, a
+        dotted *lookup key* degrades to the text after its last ``.`` instead of
+        raising (``errors.not_found`` -> ``not_found``). Anything that does not
+        look like a lookup key -- free text such as ``"Item not found."`` or
+        ``"3.5 items"`` -- is returned unchanged, so literal messages are never
+        emptied or truncated.
         """
         for candidate in self.get_fallback_chain(locale):
             text = self._try_get_key(key, candidate)
             if text is not None:
                 return text
-        _, _, text = key.rpartition(".")
-        return text
+        if _DOTTED_KEY.fullmatch(key):
+            return key.rpartition(".")[2]
+        return key
 
     def _try_get_key(self, key: str, locale: str) -> str | None:
         """Resolve ``key`` for a single ``locale``, or ``None`` if it is missing."""

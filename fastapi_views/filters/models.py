@@ -2,12 +2,18 @@ from collections.abc import MutableSequence
 from typing import Any, ClassVar, Literal
 
 from fastapi import Query
-from pydantic import BaseModel, PrivateAttr, field_validator
+from pydantic import (
+    BaseModel,
+    NonNegativeInt,
+    PositiveInt,
+    PrivateAttr,
+    field_validator,
+)
 
-from fastapi_views.pagination import PageNumber, PageSize, PageToken
+from fastapi_views.pagination import Cursor, PageNumber, PageSize
 
 from .operations import FilterOperation, LogicalOperation, SortOperation
-from .types import AnyFields, SearchQuery, Sort
+from .types import AnyFields, SearchQuery, Sort, set_query_param, unwrap_query_params
 
 
 class BaseFilter(BaseModel):
@@ -23,7 +29,14 @@ class BaseFilter(BaseModel):
             special_fields: set[str] = getattr(base, "special_fields", set())
             parent_special_fields |= special_fields
 
-        cls.special_fields |= parent_special_fields
+        # rebind instead of |= to avoid mutating the set inherited from a parent
+        cls.special_fields = cls.special_fields | parent_special_fields
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        for field in cls.model_fields.values():
+            unwrap_query_params(field)
 
     @property
     def filters(self) -> MutableSequence[FilterOperation | LogicalOperation]:
@@ -55,7 +68,7 @@ class ModelFilter(BaseFilter):
                 operation.set_prefix(field_name)
             return model_filters
         if "__" in field_name:
-            field_name, _, op = field_name.partition("__")
+            field_name, _, op = field_name.rpartition("__")
         else:
             op = "eq"
         return [FilterOperation(field=field_name, operator=op, values=value)]
@@ -77,29 +90,35 @@ class ModelFilter(BaseFilter):
 
 
 class BasePaginationFilter(BaseFilter):
-    special_fields = {"page_size"}
+    pagination_fields: ClassVar[set[str]] = set()
 
-    page_size: PageSize = 100
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        cls.special_fields |= cls.pagination_fields
+
+    def get_pagination(self, **kwargs: Any) -> dict[str, Any]:
+        return self.model_dump(include=self.pagination_fields, **kwargs)
+
+
+class OffsetLimitFilter(BasePaginationFilter):
+    pagination_fields = {"offset", "limit"}
+
+    offset: NonNegativeInt = 0
+    limit: PositiveInt = 100
 
 
 class PaginationFilter(BasePaginationFilter):
-    special_fields = {"page"}
+    pagination_fields = {"page", "page_size"}
 
     page: PageNumber = 1
-
-    @property
-    def offset(self) -> int:
-        return (self.page - 1) * self.page_size
-
-    @property
-    def limit(self) -> int:
-        return self.page_size
+    page_size: PageSize = 100
 
 
-class TokenPaginationFilter(BasePaginationFilter):
-    special_fields = {"page_token"}
+class CursorPaginationFilter(BasePaginationFilter):
+    pagination_fields = {"cursor", "page_size"}
 
-    page_token: PageToken | None = None
+    cursor: Cursor | None = None
+    page_size: PageSize = 100
 
 
 class OrderingFilter(BaseFilter):
@@ -109,14 +128,18 @@ class OrderingFilter(BaseFilter):
 
     sort: Sort
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if "sort" in cls.model_fields and cls.ordering_fields:
-            cls.model_fields["sort"].default = Query(
-                None,
-                description=f"List of fields to sort by. \
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        field = cls.model_fields.get("sort")
+        if field is not None and cls.ordering_fields:
+            set_query_param(
+                field,
+                Query(
+                    description=f"List of fields to sort by. \
                 Prefix with '-' to sort in descending order. \
                 Available values: {', '.join(cls.ordering_fields)}",
+                ),
             )
 
     @field_validator("sort", mode="after")
@@ -180,11 +203,13 @@ class FieldsFilter(BaseFilter):
 
     fields: AnyFields
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
         if cls.fields_from:
             fields = tuple(cls.fields_from.model_fields)
             cls.model_fields["fields"].annotation = set[Literal[fields]]  # type: ignore[valid-type]
-        super().__init_subclass__(**kwargs)
+            cls.model_rebuild(force=True, _parent_namespace_depth=0)
 
     def get_fields(self) -> set[str] | None:
         return self.fields

@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import inspect
 from collections import defaultdict
-from collections.abc import AsyncIterable, Callable, Iterable
+from collections.abc import AsyncIterable, Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, Concatenate, TypeVar
 
 from fastapi.responses import StreamingResponse
@@ -39,10 +39,46 @@ V = TypeVar("V", bound="View")
 EndpointFn = Callable[Concatenate[V, _P], Any]
 
 
+def _merge_responses(
+    existing: Mapping[int | str, Any],
+    new: Mapping[int | str, Any],
+) -> dict[int | str, Any]:
+    merged: dict[int | str, Any] = dict(existing)
+    for status, response in new.items():
+        current = merged.get(status)
+        if isinstance(current, Mapping) and isinstance(response, Mapping):
+            merged[status] = {**current, **response}
+        else:
+            merged[status] = response
+    return merged
+
+
+def _merge_options(
+    existing: Mapping[str, Any],
+    new: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Merge route metadata, letting the outer (later applied) decorator win.
+
+    Returns a new mapping and never mutates either input: the same options dict
+    may be shared across methods, classes and registrations.
+    """
+    merged: dict[str, Any] = {**existing, **new}
+    if "responses" in merged:
+        merged["responses"] = _merge_responses(
+            existing.get("responses") or {},
+            new.get("responses") or {},
+        )
+    return merged
+
+
+def _annotate(func: EndpointFn, options: Mapping[str, Any]) -> EndpointFn:
+    func.__setattr__("kwargs", _merge_options(getattr(func, "kwargs", {}), options))
+    return func
+
+
 def annotate(**kwargs: Unpack[PathRouteOptions]) -> Callable[[EndpointFn], EndpointFn]:
     def wrapper(func: EndpointFn) -> EndpointFn:
-        func.__setattr__("kwargs", kwargs)
-        return func
+        return _annotate(func, kwargs)
 
     return wrapper
 
@@ -128,8 +164,7 @@ def action(
         if detail:
             options["detail"] = True
         setattr(func, VIEWSET_ROUTE_FLAG, True)
-        func.__setattr__("kwargs", options)
-        return func
+        return _annotate(func, options)
 
     return wrapper
 
@@ -231,6 +266,7 @@ def sse_route(
             )
             return StreamingResponse(
                 async_iterator,
+                status_code=status_code,
                 media_type="text/event-stream",
                 headers=headers,
             )

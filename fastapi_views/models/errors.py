@@ -37,6 +37,24 @@ class ErrorDetails(OpenAPIBase):
             description="Request correlation identifier",
         )
 
+        def _drop_empty_correlation_id(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+            if self.correlation_id is not None:
+                return kwargs
+            exclude = kwargs.get("exclude")
+            if exclude is None:
+                kwargs["exclude"] = {"correlation_id"}
+            elif isinstance(exclude, dict):
+                kwargs["exclude"] = {**exclude, "correlation_id": True}
+            else:
+                kwargs["exclude"] = {*exclude, "correlation_id"}
+            return kwargs
+
+        def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+            return super().model_dump(**self._drop_empty_correlation_id(kwargs))
+
+        def model_dump_json(self, **kwargs: Any) -> str:
+            return super().model_dump_json(**self._drop_empty_correlation_id(kwargs))
+
     errors: list[Any] = Field([], description="List of any additional errors")
 
 
@@ -65,7 +83,7 @@ def create_error_model(
     if name is None:
         name = title.replace(" ", "")
     if detail is None:
-        detail = status_code.description
+        detail = status_code.description or status_code.phrase
     __base__: ErrorDetailsType = kwargs.pop("__base__", ErrorDetails)
     return create_model(
         name,

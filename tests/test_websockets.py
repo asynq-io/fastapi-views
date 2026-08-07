@@ -121,6 +121,70 @@ def test_websocket_connections_isolated_per_subclass():
     assert ViewB._connections == []
 
 
+def test_websocket_serializers_isolated_per_subclass():
+    class SerializerViewA(WebSocketAPIView):
+        message_schema = int
+
+        async def handler(self) -> None:
+            pass
+
+    class SerializerViewB(WebSocketAPIView):
+        message_schema = int
+
+        async def handler(self) -> None:
+            pass
+
+    adapter_a = SerializerViewA.get_serializer("receive")
+
+    assert SerializerViewA._serializers is not SerializerViewB._serializers
+    assert SerializerViewA._serializers == {int: adapter_a}
+    assert SerializerViewB._serializers == {}
+    assert SerializerViewB.get_serializer("receive") is not adapter_a
+
+
+def test_websocket_init_subclass_is_cooperative():
+    initialized: list[str] = []
+
+    class TrackingMixin:
+        def __init_subclass__(cls, **kwargs: object) -> None:
+            super().__init_subclass__(**kwargs)
+            initialized.append(cls.__name__)
+
+    class CooperativeView(WebSocketAPIView, TrackingMixin):
+        async def handler(self) -> None:
+            pass
+
+    assert initialized == ["CooperativeView"]
+    assert CooperativeView._connections == []
+
+
+def test_websocket_text_frame_closes_cleanly():
+    with TestClient(ws_app(EchoView)).websocket_connect("/ws") as ws:
+        ws.send_text('"hello"')
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_bytes()
+    assert EchoView._connections == []
+
+
+@pytest.mark.anyio
+async def test_websocket_cleanup_does_not_mask_accept_error():
+    class FailingAcceptView(WebSocketAPIView):
+        async def handler(self) -> None:
+            pass
+
+    mock_ws = MagicMock()
+    mock_ws.accept = AsyncMock(side_effect=RuntimeError("accept failed"))
+    mock_ws.close = AsyncMock()
+    endpoint = FailingAcceptView.get_websocket_endpoint()
+    view = FailingAcceptView(mock_ws)
+
+    with pytest.raises(RuntimeError, match="accept failed"):
+        await endpoint(view)
+
+    assert FailingAcceptView._connections == []
+    mock_ws.close.assert_awaited_once()
+
+
 def test_websocket_connection_removed_after_disconnect():
     app = ws_app(EchoView)
     with TestClient(app).websocket_connect("/ws") as ws:

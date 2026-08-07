@@ -39,7 +39,9 @@ from .functools import VIEWSET_ROUTE_FLAG, errors
 from .mixins import DependencyMixin, DetailViewMixin, ErrorHandlerMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
+
+    from fastapi import params
 
     from fastapi_views.models import ResponseHeaders
 
@@ -56,6 +58,50 @@ def _contains_response_type(annotation: Any) -> bool:
     if get_origin(annotation) is None and isinstance(annotation, type):
         return issubclass(annotation, Response)
     return any(_contains_response_type(arg) for arg in get_args(annotation))
+
+
+_BODY_KEYS = ("model", "content")
+
+
+def _merge_response_entry(
+    generated: dict[str, Any],
+    explicit: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge one status-code entry, letting ``explicit`` win key by key.
+
+    A body declared by ``explicit`` (``model`` or ``content``) replaces the
+    generated one instead of documenting both, while ``headers`` maps are
+    combined. Both inputs are left untouched — a per-status dict may be the
+    very object stored on a decorated method, shared across registrations.
+    """
+    merged = {**generated, **explicit}
+    if any(key in explicit for key in _BODY_KEYS):
+        for key in _BODY_KEYS:
+            if key not in explicit:
+                merged.pop(key, None)
+    headers = {**generated.get("headers", {}), **explicit.get("headers", {})}
+    if headers:
+        merged["headers"] = headers
+    return merged
+
+
+def _merge_responses(
+    generated: dict[int | str, Any],
+    explicit: dict[int | str, Any],
+) -> dict[int | str, Any]:
+    """Merge two OpenAPI ``responses`` maps, preferring ``explicit``.
+
+    Status codes only ``generated`` documents survive, so an explicitly
+    declared response never erases the errors the route can really return.
+    """
+    merged: dict[int | str, Any] = dict(generated)
+    for status, response in explicit.items():
+        current = merged.get(status)
+        if isinstance(current, dict) and isinstance(response, dict):
+            merged[status] = _merge_response_entry(current, response)
+        else:
+            merged[status] = response
+    return merged
 
 
 class View(DependencyMixin, ABC):
@@ -230,6 +276,7 @@ class View(DependencyMixin, ABC):
         **kwargs: Any,
     ) -> dict[str, Any]:
         kw = getattr(endpoint, "kwargs", {})
+        generated_responses = kwargs.get("responses") or {}
         kwargs.update(kw)
         path = kwargs.get("path", path)
         kwargs["endpoint"] = endpoint
@@ -238,9 +285,10 @@ class View(DependencyMixin, ABC):
         endpoint_name = kwargs["name"]
         kwargs.setdefault("methods", ["GET"])
         kwargs.setdefault("operation_id", f"{cls.get_slug_name()}_{endpoint_name}")
-        kwargs["responses"] = {
-            e.get_status(): {"model": e.model} for e in cls.errors
-        } | kwargs.get("responses", {})
+        kwargs["responses"] = _merge_responses(
+            {e.get_status(): {"model": e.model} for e in cls.errors},
+            _merge_responses(generated_responses, kw.get("responses") or {}),
+        )
         status_code = kwargs.get("status_code")
         if status_code and not is_body_allowed_for_status_code(status_code):
             kwargs["response_model"] = None
@@ -269,6 +317,8 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     """
 
     response_schema: T | None = None
+    #: Extra route-level dependencies applied per action, e.g. auth scopes.
+    action_dependencies: ClassVar[Mapping[Action, Sequence[params.Depends]]] = {}
     default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
@@ -278,6 +328,18 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         self.validation_context = None
         self.serializer_options = self.default_serializer_options.copy()
         super().__init__(request, response)
+
+    @classmethod
+    def get_dependencies(cls, action: Action | None = None) -> list[params.Depends]:
+        """Route-level dependencies for ``action``'s endpoint.
+
+        Returns the :attr:`action_dependencies` entry for ``action``, e.g.
+        auth scopes such as ``auth.requires("items:read")``. Override for
+        fully dynamic per-action dependencies.
+        """
+        if action is None:
+            return []
+        return list(cls.action_dependencies.get(action, ()))
 
     @classmethod
     def get_response_headers(
@@ -353,15 +415,30 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
 
         kwargs.setdefault("response_model", cls.get_response_schema(action))
 
+        dependencies = [
+            *cls.get_dependencies(action),
+            *(kwargs.get("dependencies") or ()),
+        ]
+        if dependencies:
+            kwargs["dependencies"] = dependencies
+
+        # A custom route's ``status_code`` / ``methods`` live on the decorated
+        # method and only reach ``kwargs`` further down the MRO, so read them
+        # from there too, or nothing gets documented for ``@action`` routes.
+        route_options = getattr(endpoint, "kwargs", {})
+        status_code = route_options.get("status_code") or kwargs.get("status_code")
+        methods = route_options.get("methods") or kwargs.get("methods")
         extra_responses = cls.get_extra_responses(
             action=action,
-            status_code=kwargs.get("status_code"),
-            methods=kwargs.get("methods"),
+            status_code=status_code or HTTP_200_OK,
+            methods=methods or ["GET"],
         )
-        kwargs["responses"] = (
-            errors(*extra_errors, *cls.default_errors)
-            | extra_responses
-            | kwargs.get("responses", {})
+        kwargs["responses"] = _merge_responses(
+            _merge_responses(
+                errors(*extra_errors, *cls.default_errors),
+                extra_responses,
+            ),
+            kwargs.get("responses") or {},
         )
         return super().get_api_action(endpoint, prefix=prefix, path=path, **kwargs)
 
@@ -651,10 +728,10 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = self.update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -678,10 +755,10 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = await self.update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.update)
@@ -705,7 +782,7 @@ class BasePartialUpdateAPIView(APIView, DetailViewMixin):
             methods=["PATCH"],
             status_code=status_code,
             action="partial_update",
-            extra_errors=(BadRequest,),
+            extra_errors=(NotFound,),
         )
 
         yield from super().get_api_actions(prefix)
@@ -729,10 +806,10 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = self.partial_update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)
@@ -756,10 +833,10 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
             **kwargs: P.kwargs,
         ) -> Response:
             obj = await self.partial_update(*args, **kwargs)
+            if obj is None and self.raise_on_none:
+                self.raise_not_found_error()
             if not self.return_on_update:
                 obj = None
-            elif obj is None and self.raise_on_none:
-                self.raise_not_found_error()
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.partial_update)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,23 @@ from fastapi_views.models import (
     create_error_model,
 )
 from fastapi_views.models.sse import AnyServerSentEvent
+from fastapi_views.opentelemetry import OPENTELEMETRY_INSTALLED
+
+requires_opentelemetry = pytest.mark.skipif(
+    not OPENTELEMETRY_INSTALLED,
+    reason="opentelemetry is not installed",
+)
+
+
+@pytest.fixture
+def tracer():
+    sdk_trace = pytest.importorskip("opentelemetry.sdk.trace")
+    return sdk_trace.TracerProvider().get_tracer("fastapi-views-tests")
+
+
+@pytest.fixture
+def error_details():
+    return ErrorDetails(title="Test", status=HTTP_400_BAD_REQUEST, detail="detail")
 
 
 def test_base_schema_from_attributes():
@@ -134,6 +152,58 @@ def test_create_error_model_with_type():
     model = create_error_model(400, type="https://example.com/errors/bad")
     instance = model(detail="test")
     assert "example.com" in str(instance.type)
+
+
+def test_create_error_model_empty_description_falls_back_to_phrase():
+    instance = create_error_model(422)()
+    assert instance.detail == "Unprocessable Entity"
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 429, 500, 503])
+def test_create_error_model_default_detail_never_empty(status):
+    assert create_error_model(status)().detail
+
+
+@requires_opentelemetry
+def test_correlation_id_omitted_without_active_span(error_details):
+    assert error_details.correlation_id is None
+    assert "correlation_id" not in json.loads(error_details.model_dump_json())
+    assert "correlation_id" not in error_details.model_dump()
+
+
+@requires_opentelemetry
+def test_correlation_id_present_with_active_span(tracer):
+    with tracer.start_as_current_span("test-span") as span:
+        details = ErrorDetails(
+            title="Test", status=HTTP_400_BAD_REQUEST, detail="detail"
+        )
+        expected = f"{span.get_span_context().trace_id:032x}"
+
+    assert details.correlation_id == expected
+    assert json.loads(details.model_dump_json())["correlation_id"] == expected
+    assert details.model_dump()["correlation_id"] == expected
+
+
+@requires_opentelemetry
+def test_correlation_id_omission_keeps_user_exclude(error_details):
+    dumped = error_details.model_dump(exclude={"instance"})
+    assert "instance" not in dumped
+    assert "correlation_id" not in dumped
+    assert dumped["detail"] == "detail"
+
+    dumped = error_details.model_dump(exclude={"instance": True})
+    assert "instance" not in dumped
+    assert "correlation_id" not in dumped
+
+
+@requires_opentelemetry
+def test_correlation_id_documented_in_openapi_schema():
+    schema = ErrorDetails.get_openapi_schema()
+    assert "correlation_id" in schema["properties"]
+    assert (
+        schema["properties"]["correlation_id"]["description"]
+        == "Request correlation identifier"
+    )
 
 
 def test_create_error_model_extra_kwargs():

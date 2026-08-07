@@ -1,9 +1,10 @@
 ## View
 
-from fastapi import Depends, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from pydantic import BaseModel
 
-from fastapi_views import ViewRouter
+from fastapi_views import ViewRouter, configure_app
+from fastapi_views.exceptions import Conflict, NotFound
 from fastapi_views.views import (
     APIView,
     AsyncListAPIView,
@@ -11,7 +12,9 @@ from fastapi_views.views import (
     View,
     get,
     post,
+    throws,
 )
+from fastapi_views.views.functools import errors
 
 
 class BasicView(View):
@@ -43,6 +46,11 @@ class BasicAPIView(APIView):
     async def get_item(self):
         # automatically converted to APIModel
         return {"id": 1, "name": "example"}
+
+    @get("/{id}", responses=errors(Conflict))
+    @throws(NotFound)
+    async def get_one(self, id: int):
+        return {"id": id, "name": "example"}
 
 
 ## Shared dependency
@@ -86,3 +94,8 @@ router = ViewRouter()
 
 router.register_view(BasicView, prefix="/view")
 router.register_view(BasicAPIView, prefix="/apiview")
+router.register_view(ReadAPIView, prefix="/items")
+
+app = FastAPI(title="Basic Example")
+app.include_router(router)
+configure_app(app)

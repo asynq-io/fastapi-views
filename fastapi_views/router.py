@@ -53,9 +53,17 @@ class ViewRouter(APIRouter):
         self._check_not_abstract(view)
         # Sort is stable, so same-specificity routes keep their declared order.
         routes = sorted(view.get_api_actions(prefix), key=_route_sort_key)
+        # Merged, not overwritten, so they compose with the view's own
+        # (per-action) dependencies instead of silently replacing them.
+        dependencies = kwargs.pop("dependencies", None)
         response_headers = self.response_headers
         for route_params in routes:
             route_params.update(kwargs)
+            if dependencies:
+                route_params["dependencies"] = [
+                    *dependencies,
+                    *(route_params.get("dependencies") or ()),
+                ]
             if response_headers is not None:
                 self._document_response_headers(route_params, response_headers)
             self.add_api_route(**route_params)

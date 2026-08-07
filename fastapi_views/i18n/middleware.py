@@ -21,7 +21,7 @@ class LocaleMiddleware:
         """
         Determines the user's preferred locale by checking:
         1. Query parameter (`?lang=xx`)
-        2. Stored cookie (`preferred_locale`)
+        2. Stored cookie (`locale`)
         3. Accept-Language header
         4. Default locale (fallback)
         returns best match and flag for setting cookie

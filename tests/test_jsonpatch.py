@@ -174,6 +174,24 @@ async def test_patch_openapi_advertises_json_patch_media_type(view):
 
 
 @pytest.mark.anyio
+async def test_patch_openapi_documents_not_found_and_bad_request(view):
+    async with view_client(view) as client:
+        response = await client.get("/openapi.json")
+    responses = response.json()["paths"]["/test/{id}"]["patch"]["responses"]
+    assert "application/problem+json" in responses[str(HTTP_404_NOT_FOUND)]["content"]
+    assert "application/problem+json" in responses[str(HTTP_400_BAD_REQUEST)]["content"]
+
+
+@pytest.mark.anyio
+async def test_sync_patch_openapi_documents_not_found_and_bad_request(sync_view):
+    async with view_client(sync_view) as client:
+        response = await client.get("/openapi.json")
+    responses = response.json()["paths"]["/test/{id}"]["patch"]["responses"]
+    assert "application/problem+json" in responses[str(HTTP_404_NOT_FOUND)]["content"]
+    assert "application/problem+json" in responses[str(HTTP_400_BAD_REQUEST)]["content"]
+
+
+@pytest.mark.anyio
 async def test_patch_replaces_field(view):
     async with view_client(view) as client:
         response = await client.patch(

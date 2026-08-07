@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 
 import pytest
 from starlette.requests import Request
 
+from fastapi_views.exceptions import NotFound
+from fastapi_views.handlers import api_error_handler
 from fastapi_views.i18n import (
     InMemoryTranslations,
     LocaleMiddleware,
     NoTranslations,
     configure_translations,
+    get_locale,
     override_locale,
     translate,
 )
 from fastapi_views.i18n import translations as translations_module
+from fastapi_views.i18n.formatter import StrFormatter
+from fastapi_views.i18n.jinja2 import JinjaFormatter
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -27,11 +34,6 @@ def _reset_manager() -> Iterator[None]:
         yield
     finally:
         translations_module._manager = original
-
-
-# --------------------------------------------------------------------------- #
-# Fallback chain configuration
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.parametrize(
@@ -114,11 +116,6 @@ def test_match_supported(tag: str, expected: str | None) -> None:
     assert manager.match_supported(tag) == expected
 
 
-# --------------------------------------------------------------------------- #
-# Key resolution honours the fallback chain
-# --------------------------------------------------------------------------- #
-
-
 @pytest.mark.parametrize(
     ("locale", "expected"),
     [
@@ -146,6 +143,69 @@ def test_format_key_missing_everywhere_degrades_to_key_tail() -> None:
     assert manager.format_key("errors.not_found") == "not_found"
 
 
+@pytest.fixture
+def empty_manager() -> InMemoryTranslations:
+    return InMemoryTranslations({"en": {}}, default="en", supported_locales=["en"])
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("errors.not_found", "not_found"),
+        ("errors.http.not-found", "not-found"),
+        ("errors._private", "_private"),
+        ("błędy.nie_znaleziono", "nie_znaleziono"),
+    ],
+)
+def test_missing_dotted_key_degrades_to_tail(
+    empty_manager: InMemoryTranslations, key: str, expected: str
+) -> None:
+    assert empty_manager.format_key(key) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Item not found.",
+        "3.5 items",
+        "Item does not exist",
+        "errors.not found",
+        "Requires version 1.2 or newer.",
+        "...",
+        "Failed. Try again.",
+    ],
+)
+def test_missing_free_text_is_returned_unchanged(
+    empty_manager: InMemoryTranslations, text: str
+) -> None:
+    assert empty_manager.format_key(text) == text
+
+
+def test_translate_free_text_with_period_survives() -> None:
+    configure_translations(
+        InMemoryTranslations({"en": {}}, default="en", supported_locales=["en"])
+    )
+    assert translate("Item not found.") == "Item not found."
+    assert translate("3.5 items") == "3.5 items"
+
+
+def test_api_error_detail_with_period_survives_handler_round_trip() -> None:
+    configure_translations(
+        InMemoryTranslations(
+            {"en": {}},
+            default="en",
+            supported_locales=["en"],
+            formatter=StrFormatter(),
+        )
+    )
+    request = MagicMock()
+    request.url.path = "/items/1"
+
+    response = api_error_handler(request, NotFound("Item not found."))
+
+    assert json.loads(bytes(response.body))["detail"] == "Item not found."
+
+
 def test_format_key_rejects_unsupported_locale() -> None:
     manager = InMemoryTranslations({"en": {}}, default="en", supported_locales=["en"])
     with pytest.raises(ValueError, match="Unsupported locale"):
@@ -170,9 +230,51 @@ def test_translate_uses_current_locale() -> None:
     assert translate("greeting") == "Hello"
 
 
-# --------------------------------------------------------------------------- #
-# LocaleMiddleware detection honours fallbacks
-# --------------------------------------------------------------------------- #
+class _LocaleRecordingFormatter:
+    def format(self, text: str, **kwargs: Any) -> str:
+        return f"{text}:{get_locale()}"
+
+
+def test_explicit_locale_reaches_the_formatter() -> None:
+    configure_translations(
+        InMemoryTranslations(
+            {"en": {"greeting": "Hello"}, "pl": {"greeting": "Cześć"}},
+            default="en",
+            supported_locales=["en", "pl"],
+            formatter=_LocaleRecordingFormatter(),
+        )
+    )
+    manager = translations_module.get_manager()
+    assert manager.format_key("greeting", locale="pl") == "Cześć:pl"
+    assert manager.format_key("greeting") == "Hello:en"
+
+
+def test_explicit_locale_does_not_leak_after_formatting() -> None:
+    configure_translations(
+        InMemoryTranslations(
+            {"en": {"greeting": "Hello"}, "pl": {"greeting": "Cześć"}},
+            default="en",
+            supported_locales=["en", "pl"],
+            formatter=_LocaleRecordingFormatter(),
+        )
+    )
+    assert translate("greeting", locale="pl") == "Cześć:pl"
+    assert get_locale() == "en"
+
+
+def test_explicit_locale_governs_babel_interpolation() -> None:
+    configure_translations(
+        InMemoryTranslations(
+            {"en": {"n": "{{ v | number }}"}},
+            default="en",
+            supported_locales=["en", "pl"],
+            formatter=JinjaFormatter(),
+        )
+    )
+    assert translate("n", locale="pl", v=1234.5) == "1\xa0234,5"
+    assert translate("n", v=1234.5) == "1,234.5"
+    with override_locale("pl"):
+        assert translate("n", v=1234.5) == "1\xa0234,5"
 
 
 def _make_request(

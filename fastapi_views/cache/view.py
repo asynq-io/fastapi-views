@@ -14,7 +14,7 @@ from fastapi_views.views.api import APIView
 from fastapi_views.views.mixins import ConditionalMixin
 
 from .cache import Cache, cache
-from .middleware import _CacheContext
+from .middleware import _CACHE_SCOPE_KEY, _STATUS_CACHEABLE_MAX, _CacheContext
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
@@ -206,7 +206,30 @@ class ConditionalCachedAPIView(ConditionalMixin, CachedAPIView):
 
             @use_cache(ttl=60)
             async def retrieve(self, id: UUID) -> Item: ...
+
+    A miss whose response is downgraded to ``304`` still populates the cache
+    with the full body, so revalidating clients warm the cache for everyone
+    instead of re-running the view on every request.
     """
+
+    def finalize_response(self, response: Response) -> Response:
+        """Hand the full body to the cache before any ``304`` downgrade.
+
+        :meth:`~fastapi_views.views.mixins.ConditionalMixin.make_conditional`
+        replaces a successful response with an empty ``304`` when the client is
+        current, leaving the middleware nothing to persist. Recording the
+        pre-downgrade body on the request's cache context keeps the write in the
+        middleware (a single write per miss) while caching the representation
+        the next non-conditional request should be served.
+        """
+        ctx: _CacheContext | None = self.request.scope.get(_CACHE_SCOPE_KEY)
+        if (
+            ctx is not None
+            and isinstance(response.body, bytes)
+            and response.status_code < _STATUS_CACHEABLE_MAX
+        ):
+            ctx.body = response.body
+        return super().finalize_response(response)
 
 
 def use_cache(
@@ -244,7 +267,7 @@ def use_cache(
             if result is None:
                 return None
 
-            self.request.scope["_fastapi_views_cache"] = _CacheContext(
+            self.request.scope[_CACHE_SCOPE_KEY] = _CacheContext(
                 key=key,
                 ttl=ttl,
                 headers=self.get_cache_headers(

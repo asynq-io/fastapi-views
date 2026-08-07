@@ -1,12 +1,14 @@
 # Basic usage
 
-FastAPI Views provides three base classes for building views, each with a different level of abstraction. Start with `View` for maximum control, or jump straight to `APIView` for automatic serialization.
+FastAPI Views provides two base classes for building views — `View` for maximum control and `APIView` for automatic serialization and error handling — plus a set of single-action `*APIView` mixins you can combine freely.
 
 ---
 
 ## `View` — low-level class-based view
 
-`View` is the foundation. It gives you a class-based home for your endpoint logic without imposing any serialization or error-handling conventions. You add routes using the `@get`, `@post`, `@put`, `@patch`, and `@delete` decorators, and you return FastAPI `Response` objects directly — exactly as you would in a plain function-based route.
+`View` is the foundation. It gives you a class-based home for your endpoint logic without imposing any `response_schema` or error-handling conventions. You add routes using the `@get`, `@post`, `@put`, `@patch`, and `@delete` decorators, and you can return FastAPI `Response` objects directly — exactly as you would in a plain function-based route.
+
+A returned `Response` is passed through untouched. Any other value is JSON-serialized with a Pydantic `TypeAdapter` built from the method's return annotation (or from an explicit `response_model=`), and `str`/`bytes` are sent as `text/plain`.
 
 ```python
 from fastapi import Response
@@ -31,8 +33,27 @@ class BasicView(View):
 | `@put(path)` | PUT | 200 |
 | `@patch(path)` | PATCH | 200 |
 | `@delete(path)` | DELETE | 204 |
+| `@route(path, methods=[...])` | any (defaults to GET) | 200 |
+| `@action(path, *, detail=False)` | any (defaults to GET) | 200 |
 
-All decorators accept the same keyword arguments as FastAPI's `@app.get` / `@router.get` (e.g., `status_code`, `response_model`, `tags`, `summary`, `dependencies`).
+All decorators accept the same keyword arguments as FastAPI's `@app.get` / `@router.get` (e.g., `status_code`, `response_model`, `tags`, `summary`, `responses`, `dependencies`), plus `response_headers=` (a `ResponseHeaders` subclass) to document headers on the success response.
+
+`@action` additionally defaults the path to the hyphenated method name and can nest under the detail route — see [ViewSets](viewset.md#custom-actions-with-action).
+
+To change route options of a *standard* CRUD action (`list`, `retrieve`, `create`, …) — which has no decorator of its own — use `@override` (an alias of `@annotate`):
+
+```python
+from fastapi_views.views import AsyncCreateAPIView, override
+
+class ItemView(AsyncCreateAPIView):
+    response_schema = ItemSchema
+
+    @override(status_code=200, summary="Upsert an item")
+    async def create(self, item: ItemSchema) -> ItemSchema:
+        ...
+```
+
+Route metadata merges across stacked decorators, so `@override` composes with `@throws` and with a route decorator in either order: the outer (later-applied) decorator wins on scalar options such as `status_code`, and `responses` maps are unioned.
 
 ### Accessing the request and response
 
@@ -85,7 +106,9 @@ class UserView(View):
 
 ## `APIView` — view with automatic serialization
 
-`APIView` extends `View` with Pydantic v2 serialization and built-in error handling. Set `response_schema` to a Pydantic model and return plain dicts or model instances — the view converts them to a validated JSON response automatically.
+`APIView` extends `View` with alias-aware Pydantic v2 serialization, per-action dependencies, OpenAPI error documentation and exception handling. Set `response_schema` to a Pydantic model and return plain dicts or model instances — the view converts them to a validated JSON response automatically.
+
+`response_schema` is the schema of the standard CRUD actions and the OpenAPI fallback for custom routes; a custom route serializes against its own return annotation (or `response_model=`) when it has one.
 
 ```python
 from pydantic import BaseModel
@@ -101,6 +124,27 @@ class ItemAPIView(APIView):
     @get("")
     async def get_item(self) -> ItemSchema:
         # Return a dict — it will be validated against ItemSchema
+        return {"id": 1, "name": "Widget"}
+```
+
+### Serialization settings
+
+| Attribute | Default | Purpose |
+|-----------|---------|---------|
+| `response_schema` | `None` | Schema used to validate and serialize response bodies |
+| `validate_response` | `True` | Validate the returned value before dumping it; set to `False` to dump without validation |
+| `from_attributes` | `None` | Read values off arbitrary objects (ORM instances) during validation |
+| `default_serializer_options` | `{"by_alias": True}` | Pydantic dump options; copied onto `self.serializer_options` per request |
+
+`self.serializer_options` and `self.validation_context` are per-request, so a handler can adjust them before returning:
+
+```python
+class ItemAPIView(APIView):
+    response_schema = ItemSchema
+
+    @get("")
+    async def get_item(self) -> ItemSchema:
+        self.serializer_options["exclude_none"] = True
         return {"id": 1, "name": "Widget"}
 ```
 
@@ -120,17 +164,29 @@ class ItemView(AsyncRetrieveAPIView):
         return item  # None → 404 Not Found
 ```
 
+`DetailViewMixin` is also what defines the detail path and the 404 message:
+
+| Attribute | Default | Purpose |
+|-----------|---------|---------|
+| `detail_route` | `"/{id}"` | Path suffix appended for detail actions (and `@action(detail=True)`) |
+| `raise_on_none` | `True` | Raise `NotFound` when the handler returns `None` |
+| `error_message` | `"{} does not exist"` | Message template, formatted with the view name |
+
+Override `get_detail_route(action)` if a single view needs different detail paths per action.
+
 ### Error handling with `raises`
 
 Define a mapping from Python exceptions to API error details using the `raises` class variable, then use the `@catch` decorator on individual methods:
 
 ```python
+from typing import ClassVar
+
 from fastapi_views.views import APIView, get
-from fastapi_views.views.functools import catch
+from fastapi_views.views.functools import catch, catch_defined
 
 class ItemAPIView(APIView):
     response_schema = ItemSchema
-    raises = {
+    raises: ClassVar[dict] = {
         KeyError: {"status": 404, "detail": "Item not found"},
         PermissionError: {"status": 403, "detail": "Access denied"},
     }
@@ -139,7 +195,15 @@ class ItemAPIView(APIView):
     @catch(KeyError)
     async def get_item(self, id: int) -> ItemSchema:
         return items[id]  # KeyError → 404 Not Found
+
+    @get("/{id}/related")
+    @catch_defined
+    async def get_related(self, id: int) -> ItemSchema:
+        # every exception type listed in ``raises`` is caught here
+        return items[id]
 ```
+
+A `raises` value may also be a plain string, which is used as the `detail` (the status then defaults to `400`).
 
 You can also pass error details directly to `@catch`:
 
@@ -154,6 +218,156 @@ class ItemAPIView(APIView):
     async def get_item(self, id: int) -> ItemSchema:
         return items[id]
 ```
+
+Both decorators work on sync and async methods, and go *below* the route decorator.
+
+### Documenting errors in OpenAPI
+
+`errors` is a class attribute listing `APIError` subclasses documented on **every** route of the view. On top of it, `APIView.default_errors` (`BadRequest`) is always documented, and the CRUD actions add the errors they can raise themselves (`NotFound` for retrieve/update/partial_update, `Conflict` for create).
+
+```python
+from fastapi_views.exceptions import Conflict, Forbidden
+from fastapi_views.views import AsyncRetrieveAPIView, throws
+
+class ItemView(AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+    errors = (Forbidden,)
+
+    @throws(Conflict)
+    async def retrieve(self, id: int) -> ItemSchema | None:
+        ...
+```
+
+`@throws(*exceptions)` documents extra errors for a single action. It also stacks with a route decorator — in either order — and `errors(*exceptions)` builds the same mapping if you prefer to pass it as `responses=`:
+
+```python
+from fastapi_views.exceptions import Conflict, NotFound
+from fastapi_views.views import APIView, get
+from fastapi_views.views.functools import errors, throws
+
+class ItemAPIView(APIView):
+    response_schema = ItemSchema
+
+    @get("/{id}", responses=errors(NotFound))
+    async def get_item(self, id: int) -> ItemSchema:
+        ...
+
+    @get("/{id}/related", responses=errors(Conflict))
+    @throws(NotFound)          # both 404 and 409 are documented
+    async def get_related(self, id: int) -> ItemSchema:
+        ...
+```
+
+Error bodies are documented as `application/problem+json`, and several distinct errors sharing a status code are documented as an `anyOf`.
+
+A `responses` mapping given on a method (directly or via `@throws`) is **merged** with what the action generates by itself (the default `400`, `404`/`409` for detail/create actions, response headers, a `304`) rather than replacing it, so `@throws(Conflict)` on `retrieve` still documents the automatic `404`. Within a status code the explicit entry wins key by key, and if it declares a body (`model` or `content`) that body replaces the generated one instead of being documented alongside it:
+
+```python
+class ItemView(AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+
+    # 404 keeps this description and only this body; 400 is still documented
+    @override(
+        responses={404: {"description": "Item is gone", "model": GoneSchema}},
+    )
+    async def retrieve(self, id: int) -> ItemSchema | None:
+        ...
+```
+
+`headers` maps are combined, so a method-level `responses={200: ...}` never drops the headers contributed by `get_response_headers` or `ConditionalMixin`. The class-level `errors` tuple is always merged in.
+
+---
+
+## Per-action dependencies
+
+`action_dependencies` maps an action name to route-level dependencies, so each generated route only gets the dependencies that belong to it. Router-level dependencies passed to `register_view` are merged with these, not replaced.
+
+```python
+from typing import ClassVar
+
+from fastapi import Depends
+from fastapi_views.views import AsyncListAPIView, AsyncCreateAPIView
+
+class ItemView(AsyncListAPIView, AsyncCreateAPIView):
+    response_schema = ItemSchema
+    action_dependencies: ClassVar = {
+        "list": [Depends(read_only)],
+        "create": [Depends(require_editor)],
+    }
+```
+
+Override the `get_dependencies(action)` classmethod for fully dynamic behaviour. See [Authentication](auth.md#per-action-dependencies) for scope-based examples.
+
+---
+
+## Documenting response headers
+
+Override the `get_response_headers(action)` classmethod to attach a `ResponseHeaders` model to an action's success response in the OpenAPI schema:
+
+```python
+from fastapi_views.models import ResponseHeaders
+from fastapi_views.views import AsyncListAPIView
+
+class PaginationHeaders(ResponseHeaders):
+    x_total_count: int
+
+class ItemView(AsyncListAPIView):
+    response_schema = ItemSchema
+
+    @classmethod
+    def get_response_headers(cls, action=None):
+        return PaginationHeaders if action == "list" else None
+
+    async def list(self) -> list[ItemSchema]:
+        items = db.list_items()
+        self.response.headers["x-total-count"] = str(len(items))
+        return items
+```
+
+Headers can also be declared per route with `response_headers=` on any route decorator, or for a whole router with `ViewRouter(response_headers=...)`.
+
+---
+
+## Conditional requests
+
+`ConditionalMixin` adds `ETag` / `Last-Modified` validators and `304 Not Modified` handling to any view, with no cache backend involved. Mix it in **before** the action classes so its hooks win in the MRO.
+
+The automatic form needs a single attribute — the mixin hashes the serialized body into a strong `ETag` and downgrades to a `304` when the client's copy is current:
+
+```python
+from fastapi_views.views import AsyncRetrieveAPIView
+from fastapi_views.views.mixins import ConditionalMixin
+
+class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+    etag = True
+
+    async def retrieve(self, id: int) -> ItemSchema | None:
+        return db.get(id)
+```
+
+Opting in also documents the validator headers on the success response and, for safe methods, a `304` — on custom routes as well as on the generated CRUD actions.
+
+The cheapest form instead compares a validator you already have (a version column, `updated_at`) and short-circuits before the body is built:
+
+```python
+from fastapi import Response
+from fastapi_views.views import AsyncRetrieveAPIView
+from fastapi_views.views.mixins import ConditionalMixin
+
+class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
+    response_schema = ItemSchema
+    conditional_requests = True  # so the validators and the 304 are documented
+
+    async def retrieve(self, id: int) -> ItemSchema | Response | None:
+        item = db.get(id)
+        if item is None:
+            return None
+        # 304 when the client's copy is current, otherwise stamp Last-Modified
+        return self.check_last_modified(item.updated_at) or item
+```
+
+`check_etag(etag)` is the `ETag` counterpart, and `not_modified(...)`, `etag_matches(...)`, `not_modified_since(...)` are available for hand-rolled logic. See [Caching](cache.md#conditional-requests-with-conditionalmixin) for `last_modified`, combining conditional requests with a cache backend, and the full OpenAPI details.
 
 ---
 
@@ -197,18 +411,24 @@ class ReadAPIView(AsyncListAPIView, AsyncRetrieveAPIView):
         return None  # Triggers 404 Not Found
 ```
 
-Available async action mixins:
+Available async action mixins (paths are relative to the prefix passed to `register_view`):
 
-| Mixin | HTTP method | Path |
-|-------|------------|------|
-| `AsyncListAPIView` | GET | `/` |
-| `AsyncCreateAPIView` | POST | `/` |
-| `AsyncRetrieveAPIView` | GET | `/{id}` |
-| `AsyncUpdateAPIView` | PUT | `/{id}` |
-| `AsyncPartialUpdateAPIView` | PATCH | `/{id}` |
-| `AsyncDestroyAPIView` | DELETE | `/{id}` |
+| Mixin | Action | HTTP method | Path | Status |
+|-------|--------|------------|------|--------|
+| `AsyncListAPIView` | `list` | GET | *(prefix)* | 200 |
+| `AsyncCreateAPIView` | `create` | POST | *(prefix)* | 201 |
+| `AsyncRetrieveAPIView` | `retrieve` | GET | `/{id}` | 200 |
+| `AsyncUpdateAPIView` | `update` | PUT | `/{id}` | 200 |
+| `AsyncPartialUpdateAPIView` | `partial_update` | PATCH | `/{id}` | 200 |
+| `AsyncDestroyAPIView` | `destroy` | DELETE | `/{id}` | 204 |
 
 Each mixin has a synchronous counterpart without the `Async` prefix (e.g., `ListAPIView`, `RetrieveAPIView`).
+
+A few extra hooks come with these mixins:
+
+- `AsyncListAPIView.response_schema_as_list` (default `True`) wraps the schema in `list[...]` for the `list` action — set it to `False` when `list` returns an envelope such as a paginated page. It applies to `ListAPIView` / `AsyncListAPIView` only: the [generic list views](generics.md#filters-and-pagination) derive the container from their `filter` instead (no filter → `list[...]`, `PaginationFilter` → `NumberedPage`, `OffsetLimitFilter` → `OffsetPage`, `CursorPaginationFilter` → `CursorPage`), and ignore the flag.
+- `AsyncCreateAPIView.get_location(obj)` returns a URL to send as the `Location` header of a `201`; `return_on_create = False` responds with an empty body instead of the created object.
+- `return_on_update = False` does the same for `update` / `partial_update`.
 
 ---
 
@@ -238,6 +458,26 @@ security = HTTPBearer()
 
 router.register_view(ReadAPIView, dependencies=[Depends(security)])
 ```
+
+`dependencies` are **merged** with the view's own `action_dependencies` (router-level ones run first) instead of replacing them.
+
+Two more things `ViewRouter` does for you:
+
+- **Route ordering** — routes are registered most-specific-first, so a static route such as `/items/stats` is never shadowed by `/items/{id}`.
+- **Router-wide response headers** — `ViewRouter(response_headers=...)` documents a `ResponseHeaders` model on the success response of every route it registers:
+
+```python
+from fastapi_views import ViewRouter
+from fastapi_views.models import ResponseHeaders
+
+class TracingHeaders(ResponseHeaders):
+    x_request_id: str
+
+router = ViewRouter(prefix="/items", response_headers=TracingHeaders)
+router.register_view(ReadAPIView)
+```
+
+Registering an abstract view (one with unimplemented action methods) raises a `TypeError`.
 
 ---
 

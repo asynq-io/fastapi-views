@@ -28,7 +28,7 @@ def decode_cursor(cursor: str) -> str:
         return cursor
 
 
-PageToken = Annotated[
+Cursor = Annotated[
     str,
     AfterValidator(decode_cursor),
     PlainSerializer(encode_cursor, return_type=str, when_used="json"),
@@ -39,14 +39,22 @@ class BasePage(BaseSchema, Generic[T]):
     items: list[T] = Field([], description="Array of items")
 
 
-class TokenPage(BasePage[T]):
-    cursor: PageToken | None = Field(None, description="Current page token")
-    next_page: PageToken | None = Field(None, description="Next page token")
-    previous_page: PageToken | None = Field(None, description="Previous page token")
+class CursorPage(BasePage[T]):
+    cursor: Cursor | None = Field(None, description="Current page token")
+    next_page: Cursor | None = Field(None, description="Next page token")
+    previous_page: Cursor | None = Field(None, description="Previous page token")
 
 
 class NumberedPage(BasePage[T]):
     current_page: int = Field(description="Number of current page")
     page_size: int = Field(description="Number of items returned")
+    has_more: bool | None = Field(None, description="Whether more items exist")
     total_pages: int | None = Field(None, description="Total pages available")
+    total_items: int | None = Field(None, description="Total items available")
+
+
+class OffsetPage(BasePage[T]):
+    offset: int = Field(description="Offset of the first returned item")
+    limit: int = Field(description="Maximum number of items returned")
+    has_more: bool | None = Field(None, description="Whether more items exist")
     total_items: int | None = Field(None, description="Total items available")

@@ -1,6 +1,6 @@
-import logging
 import socket
 
+import structlog
 from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -11,6 +11,16 @@ from opentelemetry.sdk.trace.export import (
 )
 
 from fastapi_views import configure_app
+from fastapi_views.headers import DEFAULT_REQUEST_HEADERS, HeaderFilter
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+)
 
 resource = Resource.create(
     attributes={
@@ -28,13 +38,20 @@ app = FastAPI(title="My API")
 
 configure_app(
     app,
-    enable_prometheus_middleware=False,
     prometheus_exporter_resource=resource,
-    log_config={"log_level": logging.INFO, "log_format": "console"},
+    enable_request_logging_middleware=True,
+    request_header_filter=HeaderFilter({*DEFAULT_REQUEST_HEADERS, "x-tenant-id"}),
+    gzip_middleware_min_size=500,
+    limits=1000,
+    excluded_urls="/healthcheck,/metrics",
 )
+
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"status": "ok"}
 
 
 @app.get("/test")
 async def raise_error():
-    # example of Internal Server Error being returned, with exception being recorded and correlation id returned
     raise ValueError("Server side error")
