@@ -96,6 +96,7 @@ dev = [
     "aiosqlite>=0.22.1",
     "greenlet>=3.5.4",
     "ipython",
+    "pyyaml>=6.0.3",
     "sqlargon[pagination]==1.0.3b1",
 ]
 
