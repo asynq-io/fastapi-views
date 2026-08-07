@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from unittest.mock import patch
 
@@ -29,8 +30,11 @@ def app_module(tmp_path, monkeypatch):
     return module_name
 
 
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def normalize(text: str) -> str:
-    return " ".join(text.split())
+    return " ".join(ANSI_ESCAPE.sub("", text).split())
 
 
 def test_import_from_string_success():
