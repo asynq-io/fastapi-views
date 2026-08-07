@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 def simplify_operation_ids(app: FastAPI) -> None:
-    """Simplify operation IDs so that generated clients have simpler api function names"""
     for route in app.routes:
         if isinstance(route, APIRoute):
             route.operation_id = route.name.replace(" ", "")
@@ -94,7 +93,6 @@ def _setup_prometheus(
     enable_middleware: bool | None,
     exporter_resource: Resource | None,
 ) -> bool:
-    """Resolve the prometheus backend, returning whether to add the middleware."""
     if exporter_resource is None:
         return True if enable_middleware is None else enable_middleware
     if enable_middleware:

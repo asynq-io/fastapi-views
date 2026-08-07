@@ -26,10 +26,6 @@ class AsyncDecorator(Protocol):
 
 
 def _resolve_return_type(func: Callable[..., Any]) -> Any:
-    """Best-effort resolution of an async function's awaited return type.
-
-    An unannotated or unresolvable return type degrades to ``Any``.
-    """
     try:
         return get_type_hints(func).get("return", Any)
     except Exception:  # noqa: BLE001
@@ -42,10 +38,6 @@ def _build_type_adapter(type_: Any) -> TypeAdapter[Any]:
 
 
 def _get_type_adapter(type_: Any) -> TypeAdapter[Any]:
-    """Return a (usually cached) ``TypeAdapter`` for ``type_``.
-
-    Falls back to an uncached adapter for unhashable annotations.
-    """
     try:
         return _build_type_adapter(type_)
     except TypeError:

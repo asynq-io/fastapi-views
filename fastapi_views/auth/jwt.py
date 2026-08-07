@@ -95,6 +95,7 @@ class JWTAuth(ScopesAuth):
         key = self.config.get_key()
         if self._jwks_cache is not None and self._jwks_cache[0] is key:
             return self._jwks_cache[1]
+        serialized: jwk.KeySetSerialization
         if isinstance(key, jwk.KeySet):
             serialized = key.as_dict(private=False)
         else:
