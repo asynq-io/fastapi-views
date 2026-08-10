@@ -69,7 +69,7 @@ async def test_async_list_custom_status_code():
         response_schema = dict
 
         @override(status_code=206)
-        async def list(self) -> list[dict]:
+        async def list(self) -> list[dict[str, Any]]:
             return [{"x": "item"}]
 
     async with view_client(CustomStatusListView) as c:
@@ -443,7 +443,7 @@ def test_base_list_api_view_get_response_schema_non_list_action():
     class MyListView(AsyncListAPIView):
         response_schema = dict
 
-        async def list(self) -> list[dict]:
+        async def list(self) -> list[dict[str, Any]]:
             return []
 
     assert MyListView.get_response_schema(action=None) is dict

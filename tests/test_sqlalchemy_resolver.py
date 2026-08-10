@@ -537,7 +537,7 @@ def test_apply_cursor_pagination_no_cursor_raises(
 
 
 def test_apply_cursor_pagination_receives_context(qs: MockQueryset) -> None:
-    calls: list[dict] = []
+    calls: list[dict[str, Any]] = []
 
     class CursorResolver(SQLAlchemyFilterResolver):
         filter_model = MockFilterModel

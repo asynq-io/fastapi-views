@@ -318,7 +318,7 @@ async def test_cached_custom_cache_control() -> None:
 
 @pytest.mark.anyio
 async def test_middleware_passthrough_non_http_scope() -> None:
-    received: list[dict] = []
+    received: list[dict[str, Any]] = []
 
     async def dummy_app(scope: Any, _receive: Any, _send: Any) -> None:
         received.append(scope)
