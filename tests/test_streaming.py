@@ -5,7 +5,12 @@ from uuid import UUID
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from fastapi_views.models import AnyServerSentEvent, ErrorDetails, ErrorDetailsType
+from fastapi_views.models import (
+    AnyServerSentEvent,
+    BaseSchema,
+    ErrorDetails,
+    ErrorDetailsType,
+)
 from fastapi_views.models.streaming import (
     ResponseCancelled,
     ResponseError,
@@ -13,7 +18,13 @@ from fastapi_views.models.streaming import (
     ResponseFinished,
     ResponseResult,
     ResponseStarted,
+    ResultData,
 )
+
+
+class Item(BaseSchema):
+    id: int
+    name: str
 
 
 def test_response_started_new():
@@ -39,6 +50,59 @@ def test_response_result_new_defaults():
     assert event.data.items == []
     assert event.data.index is None
     assert event.data.total_results is None
+
+
+def test_parameterized_response_result_new_accepts_model_instances():
+    items = [Item(id=1, name="first"), Item(id=2, name="second")]
+    event = ResponseResult[Item].new(items=items, index=1, total_results=2)
+    assert isinstance(event.data, ResultData)
+    assert event.data.items == items
+    assert all(isinstance(item, Item) for item in event.data.items)
+    assert event.data.index == 1
+    assert event.data.total_results == 2
+
+
+def test_parameterized_response_result_new_round_trip():
+    event = ResponseResult[Item].new(items=[Item(id=1, name="first")])
+    dumped = event.model_dump()
+    assert dumped["data"]["items"] == [{"id": 1, "name": "first"}]
+    restored = ResponseResult[Item].model_validate(dumped)
+    assert restored.data.items == [Item(id=1, name="first")]
+    assert restored.id == event.id
+
+
+def test_parameterized_response_result_new_coerces_dicts():
+    event = ResponseResult[Item].new(items=[{"id": 3, "name": "third"}])
+    assert event.data.items == [Item(id=3, name="third")]
+
+
+def test_parameterized_response_result_new_rejects_invalid_items():
+    with pytest.raises(ValidationError):
+        ResponseResult[Item].new(items=[{"id": "not-an-int", "name": "x"}])
+
+
+def test_unparameterized_response_result_new_still_accepts_dicts():
+    event = ResponseResult.new(items=[{"a": 1}])
+    assert event.data.items == [{"a": 1}]
+
+
+def test_sibling_new_helpers_build_their_declared_payloads():
+    assert isinstance(
+        ResponseStarted.new().data,
+        ResponseStarted.model_fields["data"].annotation,
+    )
+    assert isinstance(
+        ResponseError.new("boom").data,
+        ResponseError.model_fields["data"].annotation,
+    )
+    assert isinstance(
+        ResponseFinished.new().data,
+        ResponseFinished.model_fields["data"].annotation,
+    )
+    assert isinstance(
+        ResponseCancelled.new().data,
+        ResponseCancelled.model_fields["data"].annotation,
+    )
 
 
 def test_response_error_new():

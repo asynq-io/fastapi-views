@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -22,6 +23,7 @@ from fastapi_views.handlers import (
     api_error_handler,
     http_exception_handler,
 )
+from fastapi_views.headers import HeaderFilter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -166,6 +168,46 @@ def test_http_exception_handler_direct():
     exc = HTTPException(status_code=HTTP_404_NOT_FOUND, detail="not found")
     response = http_exception_handler(request, exc)
     assert response.status_code == HTTP_404_NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_unhandled_exception_handler_logs_only_loggable_headers(
+    handler_app, caplog
+):
+    transport = ASGITransport(app=handler_app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with caplog.at_level(logging.ERROR, logger="exceptions.handler"):
+            await client.get(
+                "/unhandled",
+                headers={"authorization": "Bearer secret", "user-agent": "pytest"},
+            )
+
+    record = next(r for r in caplog.records if r.message == "unhandled_exception")
+    headers = record.__dict__["headers"]
+    assert headers["user_agent"] == "pytest"
+    assert "authorization" not in headers
+
+
+@pytest.mark.anyio
+async def test_unhandled_exception_handler_honours_custom_header_filter(caplog):
+    app = FastAPI()
+    add_error_handlers(app, HeaderFilter({"x-tenant-id"}))
+
+    @app.get("/unhandled")
+    def raise_unhandled():
+        msg = "unhandled error"
+        raise RuntimeError(msg)
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with caplog.at_level(logging.ERROR, logger="exceptions.handler"):
+            await client.get(
+                "/unhandled",
+                headers={"x-tenant-id": "acme", "user-agent": "pytest"},
+            )
+
+    record = next(r for r in caplog.records if r.message == "unhandled_exception")
+    assert record.__dict__["headers"] == {"x_tenant_id": "acme"}
 
 
 def test_api_error_handler_with_instance_already_set():

@@ -9,12 +9,13 @@ from httpx import ASGITransport, AsyncClient
 from starlette.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
+    HTTP_202_ACCEPTED,
     HTTP_204_NO_CONTENT,
     HTTP_400_BAD_REQUEST,
 )
 
 from fastapi_views import ViewRouter
-from fastapi_views.exceptions import BadRequest, NotFound
+from fastapi_views.exceptions import BadRequest, Conflict, NotFound
 from fastapi_views.handlers import add_error_handlers
 from fastapi_views.models import BaseSchema
 from fastapi_views.models.sse import AnyServerSentEvent
@@ -205,7 +206,9 @@ async def test_catch_sync_passes_through(error_app, error_client):
 async def test_catch_defined_async(error_app, error_client):
     class CatchDefinedView(APIView):
         response_schema = DummySchema
-        raises: ClassVar[dict] = {ValueError: "defined error message"}
+        raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {
+            ValueError: "defined error message"
+        }
 
         @get(path="")
         @catch_defined
@@ -228,7 +231,7 @@ async def test_catch_defined_async(error_app, error_client):
 async def test_catch_defined_sync(error_app, error_client):
     class SyncCatchDefinedView(ListAPIView):
         response_schema = DummySchema
-        raises: ClassVar[dict] = {
+        raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {
             ValueError: {"detail": "sync defined error", "status": 400}
         }
 
@@ -323,22 +326,140 @@ async def test_sse_route_with_retry(error_app, error_client):
 
 
 @pytest.mark.anyio
+async def test_sse_route_status_code_is_returned(error_app, error_client):
+    class SseStatusView(APIView):
+        @sse_route(path="", status_code=HTTP_202_ACCEPTED, response_model=DummyEvent)
+        async def stream(self):
+            yield DummyEvent(id="1", event="update", data=DummySchema(x="accepted"))
+
+    router = ViewRouter()
+    router.register_view(SseStatusView, prefix="/sse-status")
+    error_app.include_router(router)
+
+    response = await error_client.get("/sse-status")
+    assert response.status_code == HTTP_202_ACCEPTED
+    assert "text/event-stream" in response.headers["content-type"]
+    assert "event: update" in response.text
+    assert "accepted" in response.text
+
+    operation = error_app.openapi()["paths"]["/sse-status"]["get"]
+    assert "text/event-stream" in operation["responses"]["202"]["content"]
+
+
+@pytest.mark.anyio
+async def test_route_decorator_on_top_of_throws_keeps_both(error_app, error_client):
+    class OuterRouteView(APIView):
+        @get("/{id}")
+        @throws(NotFound)
+        async def get_item(self, id: int) -> DummySchema:
+            return DummySchema(x=str(id))
+
+    router = ViewRouter()
+    router.register_view(OuterRouteView, prefix="/outer-route")
+    error_app.include_router(router)
+
+    paths = error_app.openapi()["paths"]
+    assert "/outer-route/{id}" in paths
+    operation = paths["/outer-route/{id}"]["get"]
+    assert "404" in operation["responses"]
+    content = operation["responses"]["404"]["content"]
+    assert "application/problem+json" in content
+
+    response = await error_client.get("/outer-route/1")
+    assert response.status_code == HTTP_200_OK
+    assert response.json()["x"] == "1"
+
+
+@pytest.mark.anyio
+async def test_throws_on_top_of_route_decorator_keeps_both(error_app, error_client):
+    class OuterThrowsView(APIView):
+        @throws(NotFound)
+        @get("/{id}")
+        async def get_item(self, id: int) -> DummySchema:
+            return DummySchema(x=str(id))
+
+    router = ViewRouter()
+    router.register_view(OuterThrowsView, prefix="/outer-throws")
+    error_app.include_router(router)
+
+    paths = error_app.openapi()["paths"]
+    assert "/outer-throws/{id}" in paths
+    assert "/outer-throws" not in paths
+    operation = paths["/outer-throws/{id}"]["get"]
+    assert set(paths["/outer-throws/{id}"]) == {"get"}
+    assert "404" in operation["responses"]
+
+    response = await error_client.get("/outer-throws/2")
+    assert response.status_code == HTTP_200_OK
+    assert response.json()["x"] == "2"
+
+
+def test_stacked_responses_are_merged(error_app):
+    class MergedResponsesView(APIView):
+        @get("/merged", responses=errors(Conflict))
+        @throws(NotFound)
+        async def get_item(self) -> DummySchema:
+            return DummySchema(x="merged")
+
+    router = ViewRouter()
+    router.register_view(MergedResponsesView, prefix="/merged-responses")
+    error_app.include_router(router)
+
+    operation = error_app.openapi()["paths"]["/merged-responses/merged"]["get"]
+    assert {"404", "409"} <= set(operation["responses"])
+    for status in ("404", "409"):
+        assert "application/problem+json" in operation["responses"][status]["content"]
+
+
+def test_shared_decorator_does_not_leak_between_methods(error_app):
+    not_found = throws(NotFound)
+
+    class SharedDecoratorView(APIView):
+        @get("/first")
+        @not_found
+        async def first(self) -> DummySchema:
+            return DummySchema(x="first")
+
+        @post("/second")
+        @not_found
+        async def second(self) -> DummySchema:
+            return DummySchema(x="second")
+
+    assert SharedDecoratorView.first.kwargs["path"] == "/first"
+    assert SharedDecoratorView.second.kwargs["path"] == "/second"
+    assert (
+        SharedDecoratorView.first.kwargs["responses"]
+        is not SharedDecoratorView.second.kwargs["responses"]
+    )
+
+    router = ViewRouter()
+    router.register_view(SharedDecoratorView, prefix="/shared")
+    error_app.include_router(router)
+
+    paths = error_app.openapi()["paths"]
+    assert set(paths["/shared/first"]) == {"get"}
+    assert set(paths["/shared/second"]) == {"post"}
+    assert "404" in paths["/shared/first"]["get"]["responses"]
+    assert "404" in paths["/shared/second"]["post"]["responses"]
+
+
+@pytest.mark.anyio
 async def test_http_method_decorators():
     class MultiMethodView(View):
         @get(path="/items")
-        async def list_items(self) -> list:
+        async def list_items(self) -> list[Any]:
             return [1, 2, 3]
 
         @post(path="/items")
-        async def create_item(self) -> dict:
+        async def create_item(self) -> dict[str, Any]:
             return {"created": True}
 
         @put(path="/items/{item_id}")
-        async def update_item(self, item_id: int) -> dict:
+        async def update_item(self, item_id: int) -> dict[str, Any]:
             return {"updated": item_id}
 
         @patch(path="/items/{item_id}")
-        async def partial_update_item(self, item_id: int) -> dict:
+        async def partial_update_item(self, item_id: int) -> dict[str, Any]:
             return {"patched": item_id}
 
         @delete(path="/items/{item_id}")

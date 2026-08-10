@@ -65,7 +65,9 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
         serializer = self.get_serializer(sse_data_annotation(event_schema))
 
         async for sse in self.events(*args, **kwargs):
-            data = serializer.dump_json(sse.data).decode("utf-8")
+            data = serializer.dump_json(sse.data, **self.serializer_options).decode(
+                "utf-8"
+            )
             yield serialize_sse(sse.id, sse.event, data, sse.retry)
 
     @abstractmethod

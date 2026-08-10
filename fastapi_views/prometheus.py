@@ -3,22 +3,37 @@ from __future__ import annotations
 import socket
 from typing import TYPE_CHECKING, Any
 
+from starlette.responses import Response
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from opentelemetry.sdk.resources import Resource
+    from starlette.requests import Request
 
 
-def add_prometheus_exporter(app: FastAPI, resource: Resource | None = None) -> None:
+def render_metrics(request: Request) -> Response:
+    """Render the default `prometheus_client` registry in the negotiated format."""
+    from prometheus_client import REGISTRY
+    from prometheus_client.exposition import choose_encoder
+
+    encoder, content_type = choose_encoder(request.headers.get("accept", ""))
+    return Response(encoder(REGISTRY), media_type=content_type)
+
+
+def add_prometheus_exporter(
+    app: FastAPI,
+    resource: Resource | None = None,
+    endpoint: str = "/metrics",
+) -> None:
     from opentelemetry import metrics
     from opentelemetry.exporter.prometheus import PrometheusMetricReader
     from opentelemetry.sdk.metrics import MeterProvider
-    from prometheus_client import make_asgi_app
 
     metrics.set_meter_provider(
         MeterProvider(resource=resource, metric_readers=[PrometheusMetricReader()])
     )
 
-    app.mount("/metrics", make_asgi_app())
+    app.add_route(endpoint, render_metrics)
 
 
 def add_prometheus_middleware(

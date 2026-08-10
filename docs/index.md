@@ -17,21 +17,26 @@ FastAPI Views brings Django REST Framework-style class-based views to FastAPI �
 
 ## Features
 
-- **Class-based views** — `View`, `APIView`, `ViewSet`, and `GenericViewSet` at three levels of abstraction; mix-in only the actions you need
+- **Class-based views** — `View`, `APIView`, `APIViewSet`, and `GenericViewSet` at three levels of abstraction; mix-in only the actions you need
 - **Full CRUD in one class** — `list`, `create`, `retrieve`, `update`, `partial_update`, `destroy` with correct HTTP semantics out of the box (`201 Created`, `204 No Content`, `Location` header, etc.)
 - **Generic views with the repository pattern** — plug in any data source (SQLAlchemy, Motor, plain dicts) via a simple protocol; no ORM dependency
-- **DRF-style filters** — `ModelFilter`, `OrderingFilter`, `SearchFilter`, `PaginationFilter`, `TokenPaginationFilter`, `FieldsFilter`, and a combined `Filter` class; built-in SQLAlchemy and Python object resolvers
+- **Bulk actions** — `AsyncBulkAPIViewSet` adds bulk create, per-item bulk update, filtered update, and filtered delete on a single `/bulk` route
+- **JSON Patch** — RFC 6902 `PATCH` support with `application/json-patch+json` request bodies (optional extra)
+- **DRF-style filters** — `ModelFilter`, `OrderingFilter`, `SearchFilter`, `PaginationFilter`, `OffsetLimitFilter`, `CursorPaginationFilter`, `FieldsFilter`, and a combined `Filter` class; built-in SQLAlchemy and Python object resolvers
 - **RFC 9457 Problem Details** — every error response is machine-readable; built-in classes for the most common cases; custom errors auto-register in the OpenAPI spec
 - **Fast Pydantic v2 serialization** — `TypeAdapter` cached per schema type avoids the double validation/model instantiation that FastAPI does by default, reducing per-request overhead
+- **Response caching** — `CachedAPIView`, the `@cache` decorator, and `CacheMiddleware`, with in-memory and Redis backends (optional extra)
+- **Conditional requests** — `ConditionalMixin` emits `ETag` / `Last-Modified` validators and answers `304 Not Modified` from a cheap version column, without serialising a body
+- **Documented response headers** — declare a `ResponseHeaders` model on a view, action, or router and the headers show up in the OpenAPI spec
 - **Server-Sent Events** — `ServerSentEventsAPIView` and `@sse_route` handle framing, content-type, and Pydantic validation automatically
-- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects are handled gracefully
-- **Authentication & authorization** — JWT bearer auth (`JWTAuth`), OAuth2 scope enforcement with hierarchical scopes (`OAuth2JWTAuth`), Auth0 integration, and constant-time API-key auth (`require_api_key`); protected routers and JWKS publishing included (optional extras)
+- **WebSockets** — `WebSocketAPIView` handles connection lifecycle, per-class connection tracking, broadcast helpers, and Pydantic validation of binary frames; disconnects and failed handshakes are cleaned up without masking the original error
+- **Authentication & authorization** — bearer-token auth built on FastAPI's `Security` system: `JWTAuth` (JWKS import, claims validation, token minting), hierarchical OAuth2 scope enforcement via `requires(*scopes)`, header API-key auth (`APIKeyAuth`, `ConstAPIKeyAuth`), and an Auth0 integration (optional extras)
 - **Internationalization (i18n)** — per-request locale detection (query param, cookie, `Accept-Language`) with configurable locale fallbacks, pluggable translation managers (JSON files, in-memory, or custom), `str.format`/Jinja2 formatters, and `Translated[str]` model fields; built-in error messages are translatable out of the box (optional extra)
 - **Async and sync support** — every class ships an `Async` and a synchronous variant; sync endpoints run in a thread pool
-- **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, OpenTelemetry instrumentation, locale detection, request logging, and a request-size limit
+- **One-call setup** — `configure_app(app)` registers error handlers, Prometheus middleware, OpenTelemetry instrumentation, locale detection, optional request logging, and a concurrency limit
 - **Prometheus metrics** — `/metrics` endpoint with request count, latency histogram, and in-flight requests (optional extra)
 - **OpenTelemetry tracing** — `correlation_id` injected into every error response for easy trace correlation (optional extra)
-- **Structured request logging** — opt-in `console` or `json` request logging via `configure_app(log_config=...)` (optional extra)
+- **Structured request logging** — opt-in `RequestLoggingMiddleware` backed by `structlog`, enabled with `configure_app(enable_request_logging_middleware=True)` (optional extra)
 - **Readable OpenAPI operation IDs** — `list_item`, `create_item`, `retrieve_item` instead of FastAPI's long path-derived defaults
 - **CLI** — export a static `openapi.json` / `openapi.yaml` without starting a server
 
@@ -52,12 +57,15 @@ pip install fastapi-views
 | `prometheus` | Prometheus metrics middleware (`/metrics` endpoint) |
 | `opentelemetry` | OpenTelemetry tracing instrumentation |
 | `cli` | CLI tool for generating static OpenAPI JSON/YAML files |
-| `logging` | Structured (`console`/`json`) request logging via `structlog` |
+| `structlog` | Structured request logging via `structlog` |
 | `websockets` | `websockets` library for `WebSocketAPIView` |
-| `jose` | JWT authentication (`joserfc`) — `JWTAuth`, `OAuth2JWTAuth` |
+| `jose` | JWT authentication (`joserfc`) — `JWTAuth` |
 | `auth0` | Auth0 token validation (`auth0-api-python`) |
 | `i18n` | Internationalization — `babel` and `jinja2` formatters |
-| `standard` | Curated bundle: `uvloop`, `uvicorn`, `prometheus`, `opentelemetry`, `cli` |
+| `cache` | Redis cache backend (`redis`) |
+| `jsonpatch` | JSON Patch support (`jsonpatch`, `jsonpointer`) |
+| `sqlargon` | SQLAlchemy repositories via `sqlargon[pagination]` |
+| `standard` | Curated bundle: `uvloop`, `uvicorn`, `starlette-exporter`, `opentelemetry-instrumentation-fastapi`, `typer` |
 
 Install all extras at once:
 
@@ -140,7 +148,7 @@ Three levels of abstraction let you choose the right amount of automation:
 
 - **`View`** — low-level base class. You control routing with `@get`, `@post`, `@put`, `@patch`, `@delete` decorators and return `Response` objects directly. Zero magic.
 - **`APIView`** — adds Pydantic v2 serialization and error handling. Return plain dicts or model instances; the view serializes them automatically.
-- **`ViewSet` / `APIViewSet`** — combines multiple CRUD actions into one class. Mix and match with provided mixin classes (`ListAPIView`, `CreateAPIView`, etc.) for exactly the surface you need.
+- **`APIViewSet` / `AsyncAPIViewSet`** — combines multiple CRUD actions into one class. Mix and match with provided mixin classes (`ListAPIView`, `CreateAPIView`, etc.) for exactly the surface you need.
 
 ### Generic views with the repository pattern
 
@@ -156,13 +164,51 @@ The `Filter` system mirrors Django REST Framework's `FilterSet` API:
 - **`OrderingFilter`** — sort by whitelisted fields using `?sort=name` or `?sort=-created_at`
 - **`SearchFilter`** — full-text search across multiple fields with `?q=…`
 - **`PaginationFilter`** — page-number pagination returning a `NumberedPage`
-- **`TokenPaginationFilter`** — cursor-based pagination returning a `TokenPage`
+- **`CursorPaginationFilter`** — cursor-based pagination returning a `CursorPage`
 - **`FieldsFilter`** — sparse fieldsets; return only requested fields with `?fields=id,name`
 - **`Filter`** — convenience class combining all of the above
 
 Built-in resolvers for SQLAlchemy and plain Python objects translate filter objects into queries with zero glue code.
 
 See [Filters](usage/filters.md) for usage details.
+
+### Bulk actions
+
+`AsyncBulkAPIViewSet` (and its sync counterpart) add bulk endpoints on a single `/bulk`
+route, distinguished by HTTP method: `POST` creates many, `PUT` updates each item by its own
+key, `PATCH` updates every row matching a filter, and `DELETE` removes them. They delegate to
+`create_many` / `bulk_update` / `update_many` / `delete_many` on the repository.
+
+See [Bulk actions](usage/bulk.md).
+
+### JSON Patch
+
+RFC 6902 `PATCH` support: accept an `application/json-patch+json` document, apply it to the
+current representation, and persist the result. Requires the `jsonpatch` extra.
+
+See [JSON Patch](usage/jsonpatch.md).
+
+### Response caching and conditional requests
+
+`CachedAPIView`, the `@cache` decorator, and `CacheMiddleware` cache rendered responses in an
+in-memory or Redis backend (`cache` extra) and emit `Cache-Control` headers.
+
+Independently, `ConditionalMixin` handles HTTP revalidation. Compare a cheap validator you
+already have — a version column, an `updated_at` — and skip building the body entirely when
+the client is current:
+
+```python
+class ItemView(ConditionalMixin, AsyncRetrieveAPIView):
+    async def retrieve(self, item_id: int) -> Item | Response:
+        item = await self.get_item(item_id)
+        return self.check_etag(str(item.version)) or item
+```
+
+`check_etag` returns a `304 Not Modified` when `If-None-Match` matches, and otherwise stamps
+the `ETag` on the response it is about to send. `check_last_modified` is the
+`If-Modified-Since` counterpart.
+
+See [Caching](usage/cache.md).
 
 ### RFC 9457 Problem Details error handling
 
@@ -212,13 +258,16 @@ See [WebSockets](usage/websockets.md).
 
 ### Authentication & authorization
 
-A lightweight JWT layer built on FastAPI's `Security` system. `JWTAuth` turns a token
-validator into reusable `authenticated()` dependencies; `OAuth2JWTAuth` adds hierarchical
-scope enforcement via `requires(*scopes)`. Token validators ship for standard JWTs
-(`JoserfcTokenValidator`, requires the `jose` extra) and Auth0 (`Auth0TokenValidator`,
-`auth0` extra), or you can write your own. Also included: header-based API-key auth
-(`require_api_key`), JWKS publishing (`JWTAuth.get_jwks`), and `protected_router` to guard
-every route under a prefix.
+A lightweight bearer-token layer built on FastAPI's `Security` system. `AuthBase` turns a
+scheme into a reusable `authenticated()` dependency; `ScopesAuth` adds scope enforcement via
+`requires(*scopes)`, validated by default with a `HierarchicalScopeValidator`. `JWTAuth`
+(requires the `jose` extra) implements `ScopesAuth` on top of `joserfc` — configured with a
+`JWTConfig`, it verifies claims, imports or fetches a JWKS (`fetch_jwks`), exposes the public
+key set as `jwks`, and can mint tokens (`encode`, `create_access_token`). Auth0 validation
+lives in `fastapi_views.integrations.auth0` (`auth0` extra). Also included: header-based
+API-key auth (`APIKeyAuth`, and `ConstAPIKeyAuth` for constant-time comparison against a
+fixed key), `AutoScopesAuthView` to derive per-action scopes on a view, and
+`with_test_user(...)` to bypass auth in tests.
 
 See [Authentication](usage/auth.md).
 
@@ -236,37 +285,58 @@ See [Internationalization](usage/i18n.md).
 
 ### OpenTelemetry integration
 
-When `opentelemetry-sdk` is installed, `configure_app` automatically injects the active trace's `correlation_id` into every error response. This makes it trivial to correlate an error seen by a user with a span in your tracing backend.
+When `opentelemetry-instrumentation-fastapi` is importable, `configure_app` instruments the
+application and `ErrorDetails` gains a `correlation_id` field, populated from the active
+span's trace id whenever an error response is built. This makes it trivial to correlate an
+error seen by a user with a span in your tracing backend. Without the extra the field is
+absent from both the response body and the OpenAPI schema.
 
-See [OpenTelemetry](usage/opentelemetry.md).
+See [Observability](usage/opentelemetry.md).
 
 ### Prometheus metrics
 
-When the `prometheus` extra is installed, `configure_app` mounts a `/metrics` endpoint that exposes standard HTTP request metrics (request count, latency histogram, in-flight requests) compatible with `prometheus_client`.
+When the `prometheus` extra is installed, `configure_app` registers a `/metrics` route exposing standard HTTP request metrics (request count, latency histogram, in-flight requests) compatible with `prometheus_client`. Passing a `prometheus_exporter_resource` instead selects OpenTelemetry-based export, which serves the same path and additionally negotiates the response format via `Accept`.
+
+See [Observability](usage/opentelemetry.md) for the differences between the two modes.
 
 ### Structured request logging
 
-Pass `log_config={"log_format": "console" | "json"}` to `configure_app` (requires the
-`logging` extra) to install a request-logging middleware backed by `structlog`. Use
-`console` for human-readable local development and `json` for structured production logs.
+Pass `enable_request_logging_middleware=True` to `configure_app` (requires the `structlog`
+extra) to install `RequestLoggingMiddleware`, which logs a `request` and a `response` event
+per request via `structlog` — including request id, client, method, path, filtered headers,
+query params, status code, and duration. The log level follows the status code (`ERROR` for
+5xx, `WARNING` for 4xx, `INFO` otherwise). Configuring `structlog`'s own output rendering
+is left to your application.
 
 ### `configure_app` — one-call setup
 
 `configure_app(app)` wires up:
 
-- RFC 9457 error handlers for `APIError`, FastAPI's `RequestValidationError`, and unhandled exceptions
-- a GZip middleware (configurable minimum size) and a request-size limit middleware
+- RFC 9457 error handlers for `APIError`, `HTTPException`, FastAPI's `RequestValidationError`, and unhandled exceptions — plus an OpenAPI post-processor that drops FastAPI's default `422` responses and `ValidationError` schemas
+- a GZip middleware (configurable via `gzip_middleware_min_size`) and `RequestLimitMiddleware`, which caps the number of **concurrently handled** requests (`limits`, default `1000`)
 - Prometheus middleware (if `starlette-exporter` is installed)
-- OpenTelemetry instrumentation (if `opentelemetry-sdk` is installed)
+- OpenTelemetry instrumentation (if `opentelemetry-instrumentation-fastapi` is installed); extra keyword arguments are forwarded to the instrumentor
 - `LocaleMiddleware` and the global translation source, when a `translation_manager` is passed
-- structured request logging, when a `log_config` is passed
+- `RequestLoggingMiddleware`, when `enable_request_logging_middleware=True` is passed
 - simplified OpenAPI operation IDs
+
+`enable_prometheus_middleware` defaults to `None`, meaning "on unless a
+`prometheus_exporter_resource` is given" — so `configure_app(app, prometheus_exporter_resource=r)`
+selects exporter mode on its own. Passing `enable_prometheus_middleware=True` *and* a resource
+raises `ValueError`, since that explicitly asks for two exporters.
+
+Middlewares end up in this order, outermost to innermost:
+
+```
+RequestLoggingMiddleware -> RequestLimitMiddleware -> PrometheusMiddleware
+    -> GZipMiddleware -> LocaleMiddleware -> router
+```
 
 This single call replaces dozens of lines of middleware and exception handler boilerplate.
 
 ### ORM-agnostic design
 
-FastAPI Views has **no dependency on any ORM**. Generic views interact with data through the `Repository` protocol, which is trivially satisfied by any object exposing `create`, `get`, `list`, `update_one`, `delete`, and `get_filtered_page` methods. Pair it with SQLAlchemy, Tortoise ORM, MongoDB Motor, or a plain in-memory dict.
+FastAPI Views has **no dependency on any ORM**. Generic views interact with data through the `Repository` protocol, which is trivially satisfied by any object exposing `create`, `get`, `list`, `update_one`, `delete_one`, and `get_filtered_page` methods. Pair it with SQLAlchemy, Tortoise ORM, MongoDB Motor, or a plain in-memory dict.
 
 ### Both async and sync support
 
@@ -284,9 +354,16 @@ Generate a static `openapi.json` or `openapi.yaml` file without starting a serve
 # Install the CLI extra
 pip install 'fastapi-views[cli]'
 
-# Export the spec
-fastapi-views export myapp:app --output openapi.json
+# Export the spec (defaults to ./openapi.json)
+fastapi-views docs myapp:app --out openapi.json
+
+# ...or as YAML
+fastapi-views docs myapp:app --out openapi.yaml --format yaml
 ```
+
+The application is imported from an `<module>:<attribute>` path, resolved against the
+current working directory. `--format yaml` needs PyYAML, which `fastapi-views` deliberately
+does not declare — install it in your own project when you want YAML output.
 
 ---
 

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import copy
 import operator
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
     FieldsFilter,
+    OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
 )
@@ -69,15 +72,23 @@ class ObjectFilterResolver(FilterResolver[Objects]):
 
         return resolved
 
+    def _project(self, obj: Any, fields: set[str]) -> Any:
+        if isinstance(obj, Mapping):
+            return {key: value for key, value in obj.items() if key in fields}
+        if getattr(obj, "__dict__", None) is None:
+            return obj
+        projected = copy.copy(obj)
+        for key in [key for key in projected.__dict__ if key not in fields]:
+            del projected.__dict__[key]
+        return projected
+
     def apply_fields_filter(
         self, queryset: Objects, filter: FieldsFilter, **_: Any
     ) -> Objects:
         fields = filter.get_fields()
-        if fields:
-            for obj in queryset:
-                for field in fields:
-                    obj.__dict__.pop(field, None)
-        return queryset
+        if not fields:
+            return queryset
+        return [self._project(obj, fields) for obj in queryset]
 
     def apply_base_filter(
         self, queryset: Objects, filter: BaseFilter, **context: Any
@@ -96,6 +107,9 @@ class ObjectFilterResolver(FilterResolver[Objects]):
     def apply_pagination_filter(
         self, queryset: Objects, filter: BasePaginationFilter, **_: Any
     ) -> Objects:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, OffsetLimitFilter):
             return queryset[filter.offset : filter.offset + filter.limit]
+        if isinstance(filter, PaginationFilter):
+            offset = (filter.page - 1) * filter.page_size
+            return queryset[offset : offset + filter.page_size]
         raise NotImplementedError

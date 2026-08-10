@@ -53,9 +53,9 @@ class SyncItemRepository:
     def list(self) -> Sequence[dict[str, Any]]:
         return list(self._data.values())
 
-    def delete(self, **kwargs: Any) -> None:
+    def delete_one(self, **kwargs: Any) -> dict[str, Any] | None:
         item_id = kwargs["id"]
-        self._data.pop(item_id, None)
+        return self._data.pop(item_id, None)
 
     def update_one(
         self,
@@ -167,6 +167,16 @@ async def test_sync_partial_update_generic(client):
 async def test_sync_partial_update_not_found(client):
     with pytest.raises(NotFound):
         await client.patch(f"/sync-items/{uuid4()}", json={"name": "ghost"})
+
+
+@pytest.mark.usefixtures("sync_items_generic")
+@pytest.mark.anyio
+async def test_sync_partial_update_documents_not_found_and_bad_request(client):
+    response = await client.get("/openapi.json")
+    assert response.status_code == HTTP_200_OK
+    responses = response.json()["paths"]["/sync-items/{id}"]["patch"]["responses"]
+    assert "application/problem+json" in responses["404"]["content"]
+    assert "application/problem+json" in responses["400"]["content"]
 
 
 @pytest.mark.usefixtures("sync_items_generic")

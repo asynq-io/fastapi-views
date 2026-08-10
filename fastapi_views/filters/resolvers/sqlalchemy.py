@@ -4,16 +4,18 @@ import operator
 from contextlib import suppress
 from functools import reduce
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from weakref import WeakKeyDictionary
 
 from typing_extensions import Self
 
 from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
+    CursorPaginationFilter,
     FieldsFilter,
+    OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
-    TokenPaginationFilter,
 )
 from fastapi_views.filters.operations import (
     LogicalOperation,
@@ -24,7 +26,7 @@ from fastapi_views.filters.operations import (
 from .abc import FilterResolver
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
 try:
     from sqlalchemy import inspect as sa_inspect
@@ -85,7 +87,7 @@ class Column(Protocol):
 
 
 class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
-    _cache: ClassVar[dict[str, Any]] = {}
+    _cache: ClassVar[MutableMapping[Any, dict[str, Any]]] = WeakKeyDictionary()
     filter_model: Any
     operators: ClassVar[dict[str, Callable[[Any, Any], Any]]] = {
         "eq": operator.eq,
@@ -103,13 +105,23 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         "or": operator.or_,
     }
 
+    @classmethod
+    def _get_model_cache(cls, registry: Any) -> dict[str, Any]:
+        cache = cls.__dict__.get("_cache")
+        if cache is None:
+            cache = WeakKeyDictionary()
+            cls._cache = cache
+        return cache.setdefault(registry, {})
+
     def _get_model_cls(self, name: str) -> Any:
-        if name in self._cache:
-            return self._cache[name]
-        for mapper in self.filter_model.registry.mappers:
+        registry = self.filter_model.registry
+        cache = self._get_model_cache(registry)
+        if name in cache:
+            return cache[name]
+        for mapper in registry.mappers:
             model_class = mapper.class_
             if model_class.__tablename__ == name:
-                self._cache[name] = model_class
+                cache[name] = model_class
                 return model_class
         return None
 
@@ -210,11 +222,14 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
     def apply_pagination_filter(
         self, queryset: _Queryset, filter: BasePaginationFilter, **context: Any
     ) -> _Queryset:
-        if isinstance(filter, PaginationFilter):
+        if isinstance(filter, OffsetLimitFilter):
             return queryset.offset(filter.offset).limit(filter.limit)
-        if isinstance(filter, TokenPaginationFilter):
-            return self.apply_token_pagination(
-                queryset, filter.page_token, filter.page_size, **context
+        if isinstance(filter, PaginationFilter):
+            offset = (filter.page - 1) * filter.page_size
+            return queryset.offset(offset).limit(filter.page_size)
+        if isinstance(filter, CursorPaginationFilter):
+            return self.apply_cursor_pagination(
+                queryset, filter.cursor, filter.page_size, **context
             )
         raise NotImplementedError
 
@@ -232,11 +247,12 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             order_by.extend(extra)
         return order_by
 
-    def apply_token_pagination(
+    def apply_cursor_pagination(
         self,
         queryset: _Queryset,
         page: str | None,
         page_size: int,
+        **context: Any,
     ) -> Any:
         # warning: sqlalchemy itself does not implement token based pagination,
         # it is up to user to implement it using something like sqlakeyset: https://github.com/djrobstep/sqlakeyset

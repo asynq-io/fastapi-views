@@ -321,7 +321,7 @@ class ConditionalMixin:
 
     @classmethod
     def _conditional_response_headers(cls) -> dict[str, Any]:
-        schema = ConditionalHeaders.get_openapi_schema()
+        schema = ConditionalHeaders.get_openapi_headers()
         headers: dict[str, Any] = {}
         if cls.etag or cls.conditional_requests:
             headers["ETag"] = schema["ETag"]

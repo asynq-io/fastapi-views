@@ -17,11 +17,11 @@ from starlette.status import (
 from fastapi_views.exceptions import NotFound
 from fastapi_views.filters.models import (
     BaseFilter,
+    CursorPaginationFilter,
     FieldsFilter,
     PaginationFilter,
-    TokenPaginationFilter,
 )
-from fastapi_views.pagination import NumberedPage, TokenPage
+from fastapi_views.pagination import CursorPage, NumberedPage
 from fastapi_views.views.generics import (
     AsyncGenericCreateAPIView,
     AsyncGenericListAPIView,
@@ -77,9 +77,9 @@ class ItemRepository:
     async def list(self) -> Sequence[dict[str, Any]]:
         return list(self._data.values())
 
-    async def delete(self, **kwargs: Any) -> None:
+    async def delete_one(self, **kwargs: Any) -> dict[str, Any] | None:
         item_id = kwargs["id"]
-        self._data.pop(item_id, None)
+        return self._data.pop(item_id, None)
 
     async def update_one(
         self,
@@ -186,21 +186,63 @@ def test_generic_list_view_response_schema_pagination_filter():
     assert schema == NumberedPage[MySchema]
 
 
-def test_generic_list_view_response_schema_token_filter():
+def test_generic_list_view_response_schema_cursor_filter():
     class MySchema(BaseModel):
         name: str
 
-    class TokenPaginatedView(BaseGenericListAPIView):
+    class CursorPaginatedView(BaseGenericListAPIView):
         response_schema = MySchema
-        filter = TokenPaginationFilter
+        filter = CursorPaginationFilter
 
         def list(self, _filter):
             return []
 
     schema = BaseGenericListAPIView.__dict__["get_response_schema"].__func__(
-        TokenPaginatedView, "list"
+        CursorPaginatedView, "list"
     )
-    assert schema == TokenPage[MySchema]
+    assert schema == CursorPage[MySchema]
+
+
+def test_generic_list_view_response_schema_without_filter():
+    class MySchema(BaseModel):
+        name: str
+
+    class PlainView(BaseGenericListAPIView):
+        response_schema = MySchema
+        filter = None
+
+        def list(self, _filter):
+            return []
+
+    assert PlainView.get_response_schema("list") == list[MySchema]
+
+
+def test_generic_list_view_has_no_response_schema_as_list_attribute():
+    assert "response_schema_as_list" not in vars(BaseGenericListAPIView)
+    assert "response_schema_as_list" not in BaseGenericListAPIView.__annotations__
+
+
+@pytest.mark.anyio
+async def test_async_generic_list_without_filter_openapi_schema_is_array():
+    class MockRepo:
+        async def list(self, **_kwargs) -> list[Any]:
+            return []
+
+    class PlainListView(AsyncGenericListAPIView):
+        api_component_name = "Plain"
+        response_schema = Item
+        filter = None
+        repository = MockRepo()
+
+    async with view_client(PlainListView) as c:
+        response = await c.get("/test")
+        assert response.status_code == HTTP_200_OK
+        assert response.json() == []
+        openapi = (await c.get("/openapi.json")).json()
+        list_schema = openapi["paths"]["/test"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        assert list_schema["type"] == "array"
 
 
 def test_generic_list_view_response_schema_non_list_action():
@@ -383,7 +425,7 @@ async def test_async_generic_list_with_plain_filter():
         name: str | None = None
 
     class MockRepo:
-        async def list(self, **kwargs) -> list:
+        async def list(self, **kwargs) -> list[Any]:
             return []
 
     class FilteredListView(AsyncGenericListAPIView):
@@ -401,7 +443,7 @@ def test_sync_generic_list_with_plain_filter():
         name: str | None = None
 
     class MockRepo:
-        def list(self, **kwargs) -> list:
+        def list(self, **kwargs) -> list[Any]:
             return []
 
     view = MagicMock()

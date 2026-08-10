@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import ClassVar
+import json
+from typing import Any, ClassVar, Literal, get_args, get_origin
 
+import pytest
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
@@ -15,6 +17,7 @@ from starlette.status import (
 )
 
 from fastapi_views.exceptions import (
+    _RFC_TYPE_MAP,
     APIError,
     BadRequest,
     Conflict,
@@ -44,6 +47,34 @@ def test_camel_to_title_internal_server_error():
 
 def test_camel_to_title_no_change():
     assert _camel_to_title("Simple") == "Simple"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("HTTPError", "HTTP Error"),
+        ("ItemNotFound", "Item Not Found"),
+        ("APIKeyInvalid", "API Key Invalid"),
+        ("HTTP", "HTTP"),
+        ("S3BucketMissing", "S3 Bucket Missing"),
+    ],
+)
+def test_camel_to_title_acronyms(name, expected):
+    assert _camel_to_title(name) == expected
+
+
+def test_explicit_title_wins_over_camel_to_title():
+    class HTTPError(BadRequest):
+        title = "Upstream HTTP failure"
+
+    assert HTTPError().as_model().title == "Upstream HTTP failure"
+
+
+def test_title_derived_from_acronym_class_name():
+    class HTTPError(BadRequest):
+        pass
+
+    assert HTTPError().as_model().title == "HTTP Error"
 
 
 def test_api_error_default():
@@ -124,6 +155,40 @@ def test_unprocessable_entity():
     assert err.status_code == HTTP_422_UNPROCESSABLE_CONTENT
 
 
+def test_unprocessable_entity_default_detail_not_empty():
+    model = UnprocessableEntity().as_model()
+    assert model.detail
+    assert model.detail == "Unprocessable Entity"
+
+
+@pytest.mark.parametrize(
+    "error_class",
+    [
+        APIError,
+        BadRequest,
+        Unauthorized,
+        Forbidden,
+        NotFound,
+        Conflict,
+        UnprocessableEntity,
+        Throttled,
+        InternalServerError,
+        Unavailable,
+    ],
+)
+def test_builtin_errors_have_non_empty_default_detail(error_class):
+    body = json.loads(error_class().as_model().model_dump_json())
+    assert body["detail"], f"{error_class.__name__} has an empty detail"
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    list(_RFC_TYPE_MAP),
+)
+def test_generic_api_error_detail_not_empty_for_mapped_statuses(status_code):
+    assert APIError(status=status_code).as_model().detail
+
+
 def test_internal_server_error():
     err = InternalServerError()
     assert err.status_code == HTTP_500_INTERNAL_SERVER_ERROR
@@ -146,6 +211,46 @@ def test_custom_exception_with_literal_field():
     assert model.error_code == "APP_ERROR"
 
 
+def test_literal_discriminator_field_is_a_model_field():
+    class AppError(BadRequest):
+        error_code: str = "APP_ERROR"
+
+    annotation = AppError.model.model_fields["error_code"].annotation
+    assert get_origin(annotation) is Literal
+    assert get_args(annotation) == ("APP_ERROR",)
+
+    body = json.loads(AppError("app error").as_model().model_dump_json())
+    assert body["error_code"] == "APP_ERROR"
+
+
+def test_class_var_scalar_stays_class_attribute():
+    class TaggedError(BadRequest):
+        tag: ClassVar[str] = "internal"
+
+    assert "tag" not in TaggedError.model.model_fields
+    assert TaggedError.model.tag == "internal"
+
+    err = TaggedError("tagged")
+    assert err.as_model().tag == "internal"
+    assert "tag" not in json.loads(err.as_model().model_dump_json())
+
+
+def test_class_var_scalar_not_accepted_as_kwarg():
+    class TaggedError(BadRequest):
+        tag: ClassVar[int] = 1
+
+    err = TaggedError("tagged", tag=2)
+    assert err.as_model().tag == 1
+
+
+def test_class_var_without_default_is_ignored():
+    class LazyError(BadRequest):
+        lazy: ClassVar[str]
+
+    assert "lazy" not in LazyError.model.model_fields
+    assert LazyError("lazy").as_model().detail == "lazy"
+
+
 def test_custom_exception_with_required_field():
     class TraceError(BadRequest):
         trace_id: str
@@ -157,7 +262,7 @@ def test_custom_exception_with_required_field():
 
 def test_custom_exception_with_list_field():
     class MultiError(BadRequest):
-        details: ClassVar[list] = []
+        details: ClassVar[list[Any]] = []
 
     err = MultiError("multi error")
     model = err.as_model()
@@ -166,7 +271,7 @@ def test_custom_exception_with_list_field():
 
 def test_custom_exception_with_dict_field():
     class DictError(BadRequest):
-        meta: ClassVar[dict] = {}
+        meta: ClassVar[dict[str, Any]] = {}
 
     err = DictError("dict error")
     model = err.as_model()

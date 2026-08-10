@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 import hashlib
+import time
+import warnings
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING, Annotated, Any
+from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import urlencode
 
 import pytest
 from asgi_lifespan import LifespanManager
 from fastapi import FastAPI, Request, Response
 from httpx import ASGITransport, AsyncClient
+from pydantic._internal._model_construction import ModelMetaclass
 from starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
 
 from fastapi_views import ViewRouter
-from fastapi_views.cache.backends.memory import InMemoryCache
+from fastapi_views.cache.backends import CacheBackend
+from fastapi_views.cache.backends.memory import ExpiringItem, InMemoryCache
+from fastapi_views.cache.backends.redis import RedisCache
+from fastapi_views.cache.cache import Cache, _get_type_adapter, _resolve_return_type
 from fastapi_views.cache.middleware import CacheMiddleware
 from fastapi_views.cache.view import CacheControl, CachedAPIView, use_cache
 from fastapi_views.handlers import add_error_handlers
@@ -29,7 +35,7 @@ def _md5(s: str) -> str:
 
 
 def _mock_request(
-    path: str = "/items", query: str = "", headers: dict | None = None
+    path: str = "/items", query: str = "", headers: dict[str, str] | None = None
 ) -> Request:
     mock = MagicMock(spec=Request)
     mock.url.path = path
@@ -39,6 +45,16 @@ def _mock_request(
 
 
 class Item(BaseSchema):
+    name: str
+
+
+class _UnhashableMeta(ModelMetaclass):
+    __hash__ = None  # type: ignore[assignment]
+
+
+class ExoticItem(BaseSchema, metaclass=_UnhashableMeta):
+    """A model whose *class* is unhashable, so it cannot be a cache key."""
+
     name: str
 
 
@@ -62,11 +78,6 @@ async def cached_view_client(
         AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
     ):
         yield client
-
-
-# ---------------------------------------------------------------------------
-# build_key
-# ---------------------------------------------------------------------------
 
 
 class _BaseKeyView(CachedAPIView, AsyncListAPIView):
@@ -133,11 +144,6 @@ def test_build_key_missing_header_excluded() -> None:
     assert view_without.build_key() == _md5("/items")
 
 
-# ---------------------------------------------------------------------------
-# get_cache_headers
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ("hit", "ttl", "cache_control", "expected"),
     [
@@ -151,7 +157,7 @@ def test_get_cache_headers(
     hit: bool,
     ttl: int | None,
     cache_control: str | None,
-    expected: dict,
+    expected: dict[str, str],
 ) -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=hit, ttl=ttl, cache_control=cache_control)
@@ -163,11 +169,6 @@ def test_get_cache_headers_no_cache_control_when_no_ttl() -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=False, ttl=None, cache_control=None)
     assert "cache-control" not in headers
-
-
-# ---------------------------------------------------------------------------
-# CacheControl
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -204,11 +205,6 @@ def test_get_cache_headers_cache_control_object_keeps_explicit_max_age() -> None
     assert headers["cache-control"] == "max-age=30"
 
 
-# ---------------------------------------------------------------------------
-# Vary
-# ---------------------------------------------------------------------------
-
-
 def test_get_vary_headers_combines_key_headers_and_vary_and_dedupes() -> None:
     class VaryView(_BaseKeyView):
         cache_key_headers = ("X-Tenant-Id",)
@@ -231,11 +227,6 @@ def test_get_cache_headers_no_vary_when_unconfigured() -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=True, ttl=None, cache_control=None)
     assert "Vary" not in headers
-
-
-# ---------------------------------------------------------------------------
-# @use_cache decorator + CacheMiddleware integration
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -325,14 +316,9 @@ async def test_cached_custom_cache_control() -> None:
     assert response.headers["cache-control"] == "no-store"
 
 
-# ---------------------------------------------------------------------------
-# CacheMiddleware — non-HTTP scope passthrough
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_middleware_passthrough_non_http_scope() -> None:
-    received: list[dict] = []
+    received: list[dict[str, Any]] = []
 
     async def dummy_app(scope: Any, _receive: Any, _send: Any) -> None:
         received.append(scope)
@@ -346,11 +332,6 @@ async def test_middleware_passthrough_non_http_scope() -> None:
     middleware = CacheMiddleware(dummy_app, backend=InMemoryCache())
     await middleware({"type": "lifespan"}, receive_noop, send_noop)
     assert received == [{"type": "lifespan"}]
-
-
-# ---------------------------------------------------------------------------
-# Error response is not cached
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -374,11 +355,6 @@ async def test_error_response_not_cached() -> None:
     assert len(mem_cache._data) == 0
 
 
-# ---------------------------------------------------------------------------
-# Cache context does not bleed between requests
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_cache_context_does_not_bleed_between_requests() -> None:
     """A MISS's cache context is per-request, so the next request is a clean HIT."""
@@ -397,11 +373,6 @@ async def test_cache_context_does_not_bleed_between_requests() -> None:
 
     assert first.headers["x-cache"] == "MISS"
     assert second.headers["x-cache"] == "HIT"
-
-
-# ---------------------------------------------------------------------------
-# cache_key_headers differentiate tenants end-to-end
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -431,3 +402,333 @@ async def test_cache_key_headers_isolate_tenants() -> None:
     assert call_log == ["alpha", "beta"]  # alpha served from cache on third request
     # The key header is advertised to downstream caches so they key on it too.
     assert r1.headers["vary"] == "X-Tenant-Id"
+
+
+def test_cache_backend_unset_raises() -> None:
+    with pytest.raises(ValueError, match="Cache backend not set"):
+        _ = Cache().backend
+
+
+def test_cache_init_backend() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache()
+    cache_.init_backend(backend)
+    assert cache_.backend is backend
+
+
+@pytest.mark.anyio
+async def test_cache_passthrough_methods() -> None:
+    backend = AsyncMock(spec=CacheBackend)
+    backend.get.return_value = b"got"
+    backend.pop.return_value = b"popped"
+    cache_ = Cache(backend)
+
+    assert await cache_.get("k") == b"got"
+    backend.get.assert_awaited_once_with("k")
+
+    await cache_.set("k", b"v", ttl=30)
+    backend.set.assert_awaited_once_with("k", b"v", ttl=30)
+
+    await cache_.delete("k")
+    backend.delete.assert_awaited_once_with("k")
+
+    assert await cache_.pop("k") == b"popped"
+    backend.pop.assert_awaited_once_with("k")
+
+
+@pytest.mark.parametrize(
+    ("key", "args", "kwargs", "expected"),
+    [
+        ("static-key", (), {}, "static-key"),
+        (b"bytes-key", (), {}, b"bytes-key"),
+        ("{name}", (), {"name": "widget"}, "widget"),
+        ("{0}:{1}", ("a", "b"), {}, "a:b"),
+        ("prefix:{name}", (), {"name": "x"}, "prefix:{name}"),  # pattern not at start
+        (lambda item_id: f"item:{item_id}", (7,), {}, "item:7"),
+    ],
+)
+def test_format_key(key, args, kwargs, expected) -> None:
+    assert Cache()._format_key(key, *args, **kwargs) == expected
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_miss_calls_function_and_stores() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_item(name: str) -> Item:
+        nonlocal call_count
+        call_count += 1
+        return Item(name=name)
+
+    result = await get_item(name="widget")
+
+    assert result == Item(name="widget")
+    assert call_count == 1
+    assert await backend.get("widget") == b'{"name":"widget"}'
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_hit_skips_function() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_item(name: str) -> Item:
+        nonlocal call_count
+        call_count += 1
+        return Item(name=name)
+
+    first = await get_item(name="widget")
+    second = await get_item(name="widget")
+
+    assert call_count == 1
+    assert first == second == Item(name="widget")
+    assert isinstance(second, Item)  # validated back from JSON
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_passes_ttl_to_backend() -> None:
+    backend = AsyncMock(spec=CacheBackend)
+    backend.get.return_value = None
+    cache_ = Cache(backend)
+
+    @cache_("static", ttl=30)
+    async def get_item() -> Item:
+        return Item(name="x")
+
+    await get_item()
+
+    backend.set.assert_awaited_once_with("static", b'{"name":"x"}', ttl=30)
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_callable_key() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+
+    @cache_(lambda item_id: f"item:{item_id}")
+    async def get_item(item_id: int) -> Item:
+        return Item(name=str(item_id))
+
+    await get_item(7)
+
+    assert await backend.get("item:7") is not None
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_missing_return_annotation_round_trips() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_payload(name: str):
+        nonlocal call_count
+        call_count += 1
+        return {"name": name, "count": [1, 2]}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        first = await get_payload(name="widget")
+        second = await get_payload(name="widget")
+
+    assert call_count == 1
+    assert first == second == {"name": "widget", "count": [1, 2]}
+
+
+def test_resolve_return_type_missing_annotation_is_any() -> None:
+    async def fn(value: int):
+        return value
+
+    assert _resolve_return_type(fn) is Any
+
+
+def test_resolve_return_type_none_annotation_is_none_type() -> None:
+    async def fn() -> None:
+        return None
+
+    assert _resolve_return_type(fn) is type(None)
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_annotated_model_is_rebuilt_as_model() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+
+    @cache_("{name}")
+    async def get_item(name: str) -> Item:
+        return Item(name=name)
+
+    await get_item(name="widget")
+    cached = await get_item(name="widget")
+
+    assert isinstance(cached, Item)
+    assert cached == Item(name="widget")
+
+
+def test_get_type_adapter_caches_hashable_types() -> None:
+    assert _get_type_adapter(Item) is _get_type_adapter(Item)
+
+
+def test_get_type_adapter_handles_unhashable_annotation() -> None:
+    unhashable = Annotated[int, {"exotic": True}]
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(unhashable)
+
+    adapter = _get_type_adapter(unhashable)
+
+    assert adapter.dump_json(5) == b"5"
+    assert adapter.validate_json(b"5") == 5
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_unhashable_return_annotation_round_trips() -> None:
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(ExoticItem)
+
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    @cache_("{name}")
+    async def get_exotic(name: str) -> ExoticItem:
+        nonlocal call_count
+        call_count += 1
+        return ExoticItem(name=name)  # type: ignore[call-arg]
+
+    first = await get_exotic(name="widget")
+    second = await get_exotic(name="widget")
+
+    assert call_count == 1
+    assert isinstance(second, ExoticItem)
+    assert first == second
+
+
+def test_resolve_return_type_falls_back_to_any() -> None:
+    async def fn(value: int):
+        return {"v": value}
+
+    fn.__annotations__["return"] = "NotARealType"
+
+    assert _resolve_return_type(fn) is Any
+
+
+@pytest.mark.anyio
+async def test_cache_decorator_unresolvable_annotation_uses_any() -> None:
+    backend = InMemoryCache()
+    cache_ = Cache(backend)
+    call_count = 0
+
+    async def fn(value: int):
+        nonlocal call_count
+        call_count += 1
+        return {"v": value}
+
+    fn.__annotations__["return"] = "NotARealType"
+    wrapped = cache_("{value}")(fn)
+
+    first = await wrapped(value=1)
+    second = await wrapped(value=1)
+
+    assert call_count == 1
+    assert first == second == {"v": 1}
+
+
+@pytest.mark.anyio
+async def test_memory_get_missing_returns_none() -> None:
+    assert await InMemoryCache().get("missing") is None
+
+
+@pytest.mark.anyio
+async def test_memory_set_get_roundtrip_without_ttl() -> None:
+    backend = InMemoryCache()
+    await backend.set("k", b"v")
+    assert await backend.get("k") == b"v"
+    assert backend._data["k"].expires_at is None
+
+
+@pytest.mark.anyio
+async def test_memory_set_uses_default_ttl() -> None:
+    backend = InMemoryCache(default_ttl=60)
+    await backend.set("k", b"v")
+    assert backend._data["k"].expires_at is not None
+
+
+@pytest.mark.anyio
+async def test_memory_get_expired_removes_key() -> None:
+    backend = InMemoryCache()
+    backend._data["k"] = ExpiringItem(b"v", time.monotonic() - 1)
+    assert await backend.get("k") is None
+    assert "k" not in backend._data
+
+
+@pytest.mark.anyio
+async def test_memory_delete() -> None:
+    backend = InMemoryCache()
+    await backend.set("k", b"v")
+    await backend.delete("k")
+    assert await backend.get("k") is None
+
+
+@pytest.mark.anyio
+async def test_memory_delete_missing_key_is_noop() -> None:
+    await InMemoryCache().delete("missing")
+
+
+@pytest.mark.anyio
+async def test_memory_pop_returns_value_and_removes() -> None:
+    backend = InMemoryCache()
+    await backend.set("k", b"v")
+    assert await backend.pop("k") == b"v"
+    assert "k" not in backend._data
+
+
+@pytest.mark.anyio
+async def test_memory_pop_missing_returns_none() -> None:
+    assert await InMemoryCache().pop("missing") is None
+
+
+@pytest.mark.anyio
+async def test_memory_pop_expired_returns_none() -> None:
+    backend = InMemoryCache()
+    backend._data["k"] = ExpiringItem(b"v", time.monotonic() - 1)
+    assert await backend.pop("k") is None
+    assert "k" not in backend._data
+
+
+@pytest.mark.anyio
+async def test_redis_get() -> None:
+    client = AsyncMock()
+    client.get.return_value = b"v"
+    backend = RedisCache(client)
+    assert await backend.get("k") == b"v"
+    client.get.assert_awaited_once_with("k")
+
+
+@pytest.mark.anyio
+async def test_redis_set_passes_ttl_as_ex() -> None:
+    client = AsyncMock()
+    backend = RedisCache(client)
+    await backend.set("k", b"v", ttl=30)
+    client.set.assert_awaited_once_with("k", b"v", ex=30)
+
+
+@pytest.mark.anyio
+async def test_redis_delete() -> None:
+    client = AsyncMock()
+    backend = RedisCache(client)
+    await backend.delete("k")
+    client.delete.assert_awaited_once_with("k")
+
+
+@pytest.mark.anyio
+async def test_redis_pop_uses_getdel() -> None:
+    client = AsyncMock()
+    client.getdel.return_value = b"v"
+    backend = RedisCache(client)
+    assert await backend.pop("k") == b"v"
+    client.getdel.assert_awaited_once_with("k")

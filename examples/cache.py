@@ -8,11 +8,16 @@ from pydantic import BaseModel
 
 from fastapi_views import ViewRouter, configure_app
 from fastapi_views.cache import (
+    CacheControl,
+    CacheHeaders,
     CacheMiddleware,
     ConditionalCachedAPIView,
+    cache,
     use_cache,
 )
 from fastapi_views.cache.backends.memory import InMemoryCache
+from fastapi_views.models import ResponseHeaders
+from fastapi_views.types import Action
 from fastapi_views.views.viewsets import AsyncReadOnlyAPIViewSet
 
 
@@ -33,23 +38,43 @@ _ITEMS: dict[UUID, ItemSchema] = {
 }
 
 
+@cache("items:index", ttl=30)
+async def load_index() -> dict[UUID, ItemSchema]:
+    """Any async function can be cached; the result round-trips through JSON."""
+    return _ITEMS
+
+
 class ItemViewSet(ConditionalCachedAPIView, AsyncReadOnlyAPIViewSet):
+    """Server-side caching plus ``ETag`` / ``Last-Modified`` revalidation.
+
+    ``etag = True`` hashes a strong validator from the (possibly cached) body, so
+    even a cache hit can be answered with ``304``; ``conditional_requests = True``
+    documents the validators ``retrieve`` produces imperatively.
+    """
+
     api_component_name = "Item"
     response_schema = ItemSchema
 
     # Vary the cache key per tenant so cached bodies are not shared across them.
     cache_key_headers: ClassVar[Sequence[str]] = ("X-Tenant-Id",)
-    # Document the 304 response and validator headers in the OpenAPI schema.
+    etag = True
     conditional_requests = True
 
-    @use_cache(ttl=30)
+    @classmethod
+    def get_response_headers(
+        cls, action: Action | None = None
+    ) -> type[ResponseHeaders] | None:
+        """Only ``list`` is cached, so only it emits the cache headers."""
+        return CacheHeaders if action == "list" else None
+
+    @use_cache(ttl=30, cache_control=CacheControl(private=True))
     async def list(self) -> list[ItemSchema]:
-        """Cached for 30s; responses carry ``X-Cache`` and ``Cache-Control``."""
+        """Cached for 30s; ``ttl`` fills in ``Cache-Control: private, max-age=30``."""
         return list(_ITEMS.values())
 
     async def retrieve(self, id: UUID) -> ItemSchema | Response | None:
         """Revalidate cheaply with ``Last-Modified`` before building the body."""
-        item = _ITEMS.get(id)
+        item = (await load_index()).get(id)
         if item is None:
             return None
         # If the client's copy is current, return 304 and skip serialisation;

@@ -14,13 +14,29 @@ if TYPE_CHECKING:
 
 
 _STATUS_CACHEABLE_MAX = 300
+_CACHE_SCOPE_KEY = "_fastapi_views_cache"
 
 
 @dataclass
 class _CacheContext:
+    """What the view asks the middleware to write, carried on the ASGI scope.
+
+    ``body`` is the serialised body recorded by the view before a conditional
+    response may be downgraded to an empty ``304 Not Modified``. When set it is
+    persisted in place of the bytes actually sent, so the cache is warmed with
+    the full representation even though the client receives no body.
+    """
+
     key: str
     ttl: int | None
     headers: dict[str, Any]
+    body: bytes | None = None
+
+    def resolve_body(self, chunks: list[bytes], *, cacheable: bool) -> bytes:
+        """The bytes to persist: the recorded body, else what was sent."""
+        if self.body is not None:
+            return self.body
+        return b"".join(chunks) if cacheable else b""
 
 
 class CacheMiddleware:
@@ -32,6 +48,10 @@ class CacheMiddleware:
     once the full body has been sent, persist it to the backend::
 
         app.add_middleware(CacheMiddleware, backend=InMemoryCache())
+
+    This is the single place cache entries are written. What gets stored is the
+    body the context carries if the view recorded one (see
+    :class:`_CacheContext`), otherwise the successful response's outgoing body.
     """
 
     def __init__(self, app: ASGIApp, *, backend: CacheBackend | None = None) -> None:
@@ -50,7 +70,7 @@ class CacheMiddleware:
         async def send_wrapper(message: Any) -> None:
             nonlocal cacheable
 
-            ctx: _CacheContext | None = scope.get("_fastapi_views_cache")
+            ctx: _CacheContext | None = scope.get(_CACHE_SCOPE_KEY)
             if ctx is None:
                 await send(message)
                 return
@@ -67,12 +87,11 @@ class CacheMiddleware:
 
             await send(message)
 
-            if (
-                message["type"] == "http.response.body"
-                and not message.get("more_body", False)
-                and cacheable
-                and body_chunks
+            if message["type"] == "http.response.body" and not message.get(
+                "more_body", False
             ):
-                await cache.set(ctx.key, b"".join(body_chunks), ttl=ctx.ttl)
+                body = ctx.resolve_body(body_chunks, cacheable=cacheable)
+                if body:
+                    await cache.set(ctx.key, body, ttl=ctx.ttl)
 
         await self.app(scope, receive, send_wrapper)

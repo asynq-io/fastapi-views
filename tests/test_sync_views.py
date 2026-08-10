@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi.responses import Response
+from pydantic import Field
 from starlette.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
@@ -375,6 +376,32 @@ async def test_sse_view_response(client):
     assert "event: data_event" in content
     assert "first" in content
     assert "second" in content
+
+
+class AliasedData(BaseSchema):
+    item_name: str = Field(alias="itemName")
+
+
+class AliasedEvent(AnyServerSentEvent):
+    data: AliasedData
+
+
+@view_as_fixture("sse_aliased_events_view")
+class TestSSEAliasedView(ServerSentEventsAPIView):
+    response_schema = AliasedEvent
+
+    async def events(self):
+        yield AliasedEvent(id="1", event="aliased", data=AliasedData(item_name="first"))
+
+
+@pytest.mark.usefixtures("sse_aliased_events_view")
+@pytest.mark.anyio
+async def test_sse_view_applies_serializer_options(client):
+    response = await client.get("/test")
+    assert response.status_code == HTTP_200_OK
+    content = response.text
+    assert 'data: {"itemName":"first"}' in content
+    assert "item_name" not in content
 
 
 @view_as_fixture("bytes_view")
