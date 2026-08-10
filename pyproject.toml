@@ -66,7 +66,7 @@ auth0 = ["auth0-api-python"]
 i18n = ["babel", "jinja2"]
 cache = ["redis"]
 jsonpatch = ["jsonpatch", "jsonpointer"]
-sqlargon = ["sqlargon[pagination]>=1.0.3b1,<2"]
+sqlargon = ["sqlargon[standard]>=1.0.4b1,<2"]
 
 all = [
     "uvloop",
@@ -85,7 +85,7 @@ all = [
     "redis",
     "jsonpatch",
     "jsonpointer",
-    "sqlargon[pagination]>=1.0.3b1,<2",
+    "sqlargon[standard]>=1.0.4b1,<2",
 ]
 
 [dependency-groups]
@@ -97,7 +97,6 @@ dev = [
     "greenlet>=3.5.4",
     "ipython",
     "pyyaml>=6.0.3",
-    "sqlargon[pagination]==1.0.3b1",
 ]
 
 test = [
