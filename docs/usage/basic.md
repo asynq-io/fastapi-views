@@ -75,12 +75,14 @@ class EchoView(View):
 Inject dependencies by overriding `__init__`:
 
 ```python
+from typing import Any
+
 from fastapi import Depends, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi_views.views import View, get
 
 class Database:
-    def get_user(self, user_id: int) -> dict:
+    def get_user(self, user_id: int) -> dict[str, Any]:
         return {"id": user_id, "name": "Alice"}
 
 def get_db() -> Database:
@@ -179,14 +181,14 @@ Override `get_detail_route(action)` if a single view needs different detail path
 Define a mapping from Python exceptions to API error details using the `raises` class variable, then use the `@catch` decorator on individual methods:
 
 ```python
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from fastapi_views.views import APIView, get
 from fastapi_views.views.functools import catch, catch_defined
 
 class ItemAPIView(APIView):
     response_schema = ItemSchema
-    raises: ClassVar[dict] = {
+    raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {
         KeyError: {"status": 404, "detail": "Item not found"},
         PermissionError: {"status": 403, "detail": "Access denied"},
     }

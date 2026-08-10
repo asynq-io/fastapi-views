@@ -273,13 +273,13 @@ Pass every scope an endpoint requires as positional arguments. The token must sa
 
 ```python
 @app.get("/reports")
-async def get_report(token: Annotated[dict, auth.requires("read:reports")]):
+async def get_report(token: Annotated[dict[str, Any], auth.requires("read:reports")]):
     ...
 
 
 @app.post("/reports")
 async def create_report(
-    token: Annotated[dict, auth.requires("read:reports", "edit:reports")],
+    token: Annotated[dict[str, Any], auth.requires("read:reports", "edit:reports")],
 ):
     ...
 ```

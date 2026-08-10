@@ -524,17 +524,25 @@ from typing import Any
 from fastapi_views.filters.resolvers.abc import FilterResolver
 
 
-class MongoFilterResolver(FilterResolver[dict]):
-    def apply_base_filter(self, queryset: dict, filter, **context: Any) -> dict:
+class MongoFilterResolver(FilterResolver[dict[str, Any]]):
+    def apply_base_filter(
+        self, queryset: dict[str, Any], filter, **context: Any
+    ) -> dict[str, Any]:
         ...
 
-    def apply_fields_filter(self, queryset: dict, filter, **context: Any) -> dict:
+    def apply_fields_filter(
+        self, queryset: dict[str, Any], filter, **context: Any
+    ) -> dict[str, Any]:
         ...
 
-    def apply_ordering_filter(self, queryset: dict, filter, **context: Any) -> dict:
+    def apply_ordering_filter(
+        self, queryset: dict[str, Any], filter, **context: Any
+    ) -> dict[str, Any]:
         ...
 
-    def apply_pagination_filter(self, queryset: dict, filter, **context: Any) -> dict:
+    def apply_pagination_filter(
+        self, queryset: dict[str, Any], filter, **context: Any
+    ) -> dict[str, Any]:
         ...
 ```
 

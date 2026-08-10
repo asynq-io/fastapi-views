@@ -206,7 +206,9 @@ async def test_catch_sync_passes_through(error_app, error_client):
 async def test_catch_defined_async(error_app, error_client):
     class CatchDefinedView(APIView):
         response_schema = DummySchema
-        raises: ClassVar[dict] = {ValueError: "defined error message"}
+        raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {
+            ValueError: "defined error message"
+        }
 
         @get(path="")
         @catch_defined
@@ -229,7 +231,7 @@ async def test_catch_defined_async(error_app, error_client):
 async def test_catch_defined_sync(error_app, error_client):
     class SyncCatchDefinedView(ListAPIView):
         response_schema = DummySchema
-        raises: ClassVar[dict] = {
+        raises: ClassVar[dict[type[Exception], str | dict[str, Any]]] = {
             ValueError: {"detail": "sync defined error", "status": 400}
         }
 
@@ -445,7 +447,7 @@ def test_shared_decorator_does_not_leak_between_methods(error_app):
 async def test_http_method_decorators():
     class MultiMethodView(View):
         @get(path="/items")
-        async def list_items(self) -> list:
+        async def list_items(self) -> list[Any]:
             return [1, 2, 3]
 
         @post(path="/items")

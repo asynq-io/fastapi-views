@@ -35,7 +35,7 @@ def _md5(s: str) -> str:
 
 
 def _mock_request(
-    path: str = "/items", query: str = "", headers: dict | None = None
+    path: str = "/items", query: str = "", headers: dict[str, str] | None = None
 ) -> Request:
     mock = MagicMock(spec=Request)
     mock.url.path = path
@@ -157,7 +157,7 @@ def test_get_cache_headers(
     hit: bool,
     ttl: int | None,
     cache_control: str | None,
-    expected: dict,
+    expected: dict[str, str],
 ) -> None:
     view = _BaseKeyView(request=_mock_request(), response=MagicMock(spec=Response))
     headers = view.get_cache_headers(hit=hit, ttl=ttl, cache_control=cache_control)

@@ -117,7 +117,7 @@ When `detail` is left unset, the model default is the standard `http.HTTPStatus`
 Plain annotations on the subclass become fields of the generated error model:
 
 ```python
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 class OutOfStock(NotFound):
@@ -125,7 +125,7 @@ class OutOfStock(NotFound):
 
     sku: str                          # required — must be passed when raising
     error_code: str = "OUT_OF_STOCK"  # annotation + scalar default -> constant field
-    meta: dict = {}                   # optional field with a mutable default
+    meta: dict[str, Any] = {}         # optional field with a mutable default
     warehouse: ClassVar[str] = "eu-1" # class attribute, never serialized
 
 
@@ -151,7 +151,7 @@ Rules applied to annotations:
 | Declaration | Result |
 |-------------|--------|
 | `sku: str` | required model field — must be passed when raising |
-| `meta: dict = {}` / `tags: list = []` / `codes: set = set()` | optional model field with that mutable default |
+| `meta: dict[str, Any] = {}` / `tags: list[Any] = []` / `codes: set = set()` | optional model field with that mutable default |
 | `error_code: str = "OUT_OF_STOCK"` | `Literal["OUT_OF_STOCK"]` constant — this is the discriminator feature: documented as `const` in OpenAPI and rejected if a different value is passed. Any non-mutable default behaves this way |
 | `warehouse: ClassVar[str] = "eu-1"` | stays a plain class attribute: never a model field, never serialized, and **not** settable through constructor keywords (a `warehouse=...` kwarg is silently ignored) |
 | `lazy: ClassVar[str]` (no default) | ignored entirely |
@@ -159,7 +159,7 @@ Rules applied to annotations:
 | names starting with `_` | ignored |
 
 The `ClassVar` rule is uniform across annotation types — `ClassVar[str] = "x"` and
-`ClassVar[list] = []` both stay class attributes. Both bare and string (PEP 563 /
+`ClassVar[list[Any]] = []` both stay class attributes. Both bare and string (PEP 563 /
 `from __future__ import annotations`) forms of `ClassVar` are detected. Unannotated class
 attributes are not inspected at all.
 

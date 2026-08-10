@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import ClassVar, Literal, get_args, get_origin
+from typing import Any, ClassVar, Literal, get_args, get_origin
 
 import pytest
 from starlette.status import (
@@ -262,7 +262,7 @@ def test_custom_exception_with_required_field():
 
 def test_custom_exception_with_list_field():
     class MultiError(BadRequest):
-        details: ClassVar[list] = []
+        details: ClassVar[list[Any]] = []
 
     err = MultiError("multi error")
     model = err.as_model()
@@ -271,7 +271,7 @@ def test_custom_exception_with_list_field():
 
 def test_custom_exception_with_dict_field():
     class DictError(BadRequest):
-        meta: ClassVar[dict] = {}
+        meta: ClassVar[dict[str, Any]] = {}
 
     err = DictError("dict error")
     model = err.as_model()

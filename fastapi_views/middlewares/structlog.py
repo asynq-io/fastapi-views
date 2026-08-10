@@ -59,7 +59,7 @@ class RequestLoggingMiddleware:
         start_time = time.monotonic()
         structlog.contextvars.clear_contextvars()
 
-        context: dict = {
+        context: dict[str, Any] = {
             "request_id": request.headers.get("X-Request-Id", str(uuid4())),
             "client": f"{request.client.host}:{request.client.port}"
             if request.client

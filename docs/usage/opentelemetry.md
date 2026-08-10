@@ -386,13 +386,15 @@ The response level mapping is: `>= 500` → `ERROR`, `>= 400` → `WARNING`, eve
 the flag off and register the middleware yourself:
 
 ```python
+from typing import Any
+
 from fastapi import Request
 
 from fastapi_views import configure_app
 from fastapi_views.middlewares.structlog import RequestLoggingMiddleware
 
 
-async def extra_context(request: Request) -> dict:
+async def extra_context(request: Request) -> dict[str, Any]:
     return {"tenant": request.headers.get("X-Tenant")}
 
 

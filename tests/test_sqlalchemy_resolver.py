@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 from unittest.mock import patch
 
 import pytest
@@ -126,7 +126,10 @@ class AnotherModel:
 
 
 class MockRegistry:
-    mappers: ClassVar[list] = [MockMapper(MockModel), MockMapper(OtherModel)]
+    mappers: ClassVar[list[MockMapper]] = [
+        MockMapper(MockModel),
+        MockMapper(OtherModel),
+    ]
 
 
 class MockFilterModel:
@@ -138,8 +141,8 @@ class MockFilterModel:
 
 class MockQueryset:
     def __init__(self) -> None:
-        self._filters: list = []
-        self._order_by: list = []
+        self._filters: list[Any] = []
+        self._order_by: list[Any] = []
         self._offset_val: int | None = None
         self._limit_val: int | None = None
 
@@ -376,7 +379,7 @@ def test_get_model_cls_is_keyed_per_registry() -> None:
         name = MockColumn("other_items_name")
 
     class OtherRegistry:
-        mappers: ClassVar[list] = [MockMapper(OtherItems)]
+        mappers: ClassVar[list[MockMapper]] = [MockMapper(OtherItems)]
 
     class OtherBaseModel:
         registry = OtherRegistry()

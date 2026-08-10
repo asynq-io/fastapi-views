@@ -225,7 +225,7 @@ def test_generic_list_view_has_no_response_schema_as_list_attribute():
 @pytest.mark.anyio
 async def test_async_generic_list_without_filter_openapi_schema_is_array():
     class MockRepo:
-        async def list(self, **_kwargs) -> list:
+        async def list(self, **_kwargs) -> list[Any]:
             return []
 
     class PlainListView(AsyncGenericListAPIView):
@@ -425,7 +425,7 @@ async def test_async_generic_list_with_plain_filter():
         name: str | None = None
 
     class MockRepo:
-        async def list(self, **kwargs) -> list:
+        async def list(self, **kwargs) -> list[Any]:
             return []
 
     class FilteredListView(AsyncGenericListAPIView):
@@ -443,7 +443,7 @@ def test_sync_generic_list_with_plain_filter():
         name: str | None = None
 
     class MockRepo:
-        def list(self, **kwargs) -> list:
+        def list(self, **kwargs) -> list[Any]:
             return []
 
     view = MagicMock()
