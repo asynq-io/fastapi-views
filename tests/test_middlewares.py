@@ -242,7 +242,7 @@ async def test_request_logging_middleware_skips_excluded_path_on_exception():
 
 @pytest.mark.anyio
 async def test_request_logging_middleware_keeps_status_sent_before_exception():
-    async def failing_app(scope, receive, send):  # noqa: ARG001
+    async def failing_app(scope, receive, send):
         await send({"type": "http.response.start", "status": 200, "headers": []})
         raise ValueError("boom")
 

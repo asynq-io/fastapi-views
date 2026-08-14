@@ -1,7 +1,6 @@
 import secrets
-from typing import Annotated, Any
+from typing import Any, ClassVar
 
-from fastapi import Depends
 from fastapi.security import APIKeyHeader
 from typing_extensions import Never
 
@@ -11,6 +10,8 @@ from .abc import AuthBase
 
 
 class APIKeyAuth(AuthBase):
+    challenge: ClassVar[str] = "APIKey"
+
     def __init__(
         self,
         name: str = "X-Api-Key",
@@ -28,7 +29,7 @@ class APIKeyAuth(AuthBase):
     def unauthorized(self) -> Never:
         raise Unauthorized(
             "Invalid API Key",
-            headers={"WWW-Authenticate": "APIKey"},
+            headers={"WWW-Authenticate": self.challenge},
         )
 
 
@@ -43,16 +44,7 @@ class ConstAPIKeyAuth(APIKeyAuth):
         super().__init__(name, scheme_name, description)
         self.api_key = api_key
 
-    def get_dependency(self) -> Any:
-        async def _dependency(
-            raw: Annotated[str | None, Depends(self.scheme)],
-        ) -> Any:
-            if self._test_user is not None:
-                return self._test_user
-            if raw is None:
-                self.unauthorized()
-            if not secrets.compare_digest(raw, self.api_key):
-                self.unauthorized()
-            return raw
-
-        return _dependency
+    async def _resolve_principal(self, raw: Any) -> Any:
+        if not secrets.compare_digest(str(raw), self.api_key):
+            return None
+        return self.wrap_token(raw)

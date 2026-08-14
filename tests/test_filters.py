@@ -162,6 +162,19 @@ def test_fields_filter_with_fields_from():
     assert f.get_fields() == {"name"}
 
 
+def test_fields_filter_with_fields_from_stays_optional():
+    class MyModel(BaseModel):
+        name: str
+        age: int
+
+    class MyFieldsFilter(FieldsFilter):
+        fields_from = MyModel
+
+    assert MyFieldsFilter.model_fields["fields"].is_required() is False
+    assert MyFieldsFilter().get_fields() is None
+    assert MyFieldsFilter(fields=None).get_fields() is None
+
+
 def test_fields_filter_get_fields_none():
     f = FieldsFilter(fields=None)
     assert f.get_fields() is None
@@ -273,7 +286,7 @@ def test_query_field_with_explicit_none_default_keeps_the_query_param():
     app = FastAPI()
 
     @app.get("/items")
-    def list_items(filter: TagFilter = FilterDepends(TagFilter)):  # noqa: ARG001
+    def list_items(filter: TagFilter = FilterDepends(TagFilter)):
         return []
 
     operation = app.openapi()["paths"]["/items"]["get"]
@@ -292,7 +305,7 @@ def test_multiple_query_fields_are_independent_parameters():
     app = FastAPI()
 
     @app.get("/items")
-    def list_items(filter: LookupFilter = FilterDepends(LookupFilter)):  # noqa: ARG001
+    def list_items(filter: LookupFilter = FilterDepends(LookupFilter)):
         return []
 
     operation = app.openapi()["paths"]["/items"]["get"]
@@ -341,7 +354,7 @@ def test_query_parameters_of_a_full_filter():
     app = FastAPI()
 
     @app.get("/users")
-    def list_users(filter: UserFilter = FilterDepends(UserFilter)):  # noqa: ARG001
+    def list_users(filter: UserFilter = FilterDepends(UserFilter)):
         return []
 
     operation = app.openapi()["paths"]["/users"]["get"]

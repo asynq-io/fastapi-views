@@ -41,11 +41,14 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
 
     @classmethod
     def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
+        action = cls.events.__name__
+
         async def endpoint(
             self: ServerSentEventsAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> StreamingResponse:
+            self._authorize(action)
             return StreamingResponse(
                 self._serialized_events(*args, **kwargs),
                 status_code=status_code,

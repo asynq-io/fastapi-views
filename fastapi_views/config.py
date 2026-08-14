@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from .handlers import add_error_handlers
 from .headers import DEFAULT_REQUEST_HEADER_FILTER, HeaderFilter
 from .opentelemetry import maybe_instrument_app
+from .permissions.abc import bind_app_auth
 from .prometheus import add_prometheus_exporter, add_prometheus_middleware
 
 if TYPE_CHECKING:
@@ -113,8 +114,11 @@ def configure_app(  # noqa: PLR0913
     translation_manager: TranslationManager | None = None,
     limits: float | None = 1000,
     request_header_filter: HeaderFilter = DEFAULT_REQUEST_HEADER_FILTER,
+    auth: Any = None,
     **tracing_options: Any,
 ) -> None:
+    if auth is not None:
+        bind_app_auth(app, auth)
     maybe_instrument_app(app, **tracing_options)
     if enable_error_handlers:
         add_error_handlers(app, request_header_filter)

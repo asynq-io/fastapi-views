@@ -35,6 +35,7 @@ nav:
       - "WebSockets": usage/websockets.md
       - "Internationalization (i18n)": usage/i18n.md
       - "Authentication": usage/auth.md
+      - "Permissions": usage/permissions.md
   - "Reference":
       - "API Views": reference/views.md
       - "ViewSets": reference/viewsets.md
@@ -49,6 +50,7 @@ nav:
       - "Decorators": reference/decorators.md
       - "Server-Sent Events": reference/sse.md
       - "WebSockets": reference/websockets.md
+      - "Permissions": reference/permissions.md
 
 markdown_extensions:
   - admonition

@@ -99,9 +99,19 @@ class AsyncRepository(Protocol[M_co]):
 class WithRepositoryMixin(Generic[M]):
     repository: Repository[M]
 
+    def authorize_object(self, *args: Any, **kwargs: Any) -> None:
+        """Hook run with the resolved primary key before a detail write.
+
+        A no-op here; :class:`~fastapi_views.permissions.views.ObjectPermissionsMixin`
+        overrides it to fetch the target and run its object-level permissions.
+        """
+
 
 class WithAsyncRepositoryMixin(Generic[M]):
     repository: AsyncRepository[M]
+
+    async def authorize_object(self, *args: Any, **kwargs: Any) -> None:
+        """Async counterpart of :meth:`WithRepositoryMixin.authorize_object`."""
 
 
 class GenericView(APIView):
@@ -330,6 +340,7 @@ class AsyncGenericUpdateAPIView(
 
     async def update(self, pk: PK, update_schema: BaseModel) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="update")
+        await self.authorize_object(*args, **kwargs)
         data = update_schema.model_dump()
         await self.before_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
@@ -352,6 +363,7 @@ class GenericUpdateAPIView(
 
     def update(self, pk: PK, update_schema: BaseModel) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="update")
+        self.authorize_object(*args, **kwargs)
         data = update_schema.model_dump()
         self.before_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)
@@ -387,6 +399,7 @@ class AsyncGenericPartialUpdateAPIView(
 
     async def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
         args, kwargs = self.get_primary_key(pk, action="partial_update")
+        await self.authorize_object(*args, **kwargs)
         data = partial_update_schema.model_dump(exclude_unset=True)
         await self.before_partial_update(data)
         obj = await self.repository.update_one(data, *args, **kwargs)
@@ -409,6 +422,7 @@ class GenericPartialUpdateAPIView(
 
     def partial_update(self, pk: PK, partial_update_schema: BaseModel) -> Any:
         args, kwargs = self.get_primary_key(pk, action="partial_update")
+        self.authorize_object(*args, **kwargs)
         data = partial_update_schema.model_dump(exclude_unset=True)
         self.before_partial_update(data)
         obj = self.repository.update_one(data, *args, **kwargs)
@@ -439,6 +453,7 @@ class AsyncGenericDestroyAPIView(
 
     async def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
+        await self.authorize_object(*args, **kwargs)
         await self.repository.delete_one(*args, **kwargs)
 
 
@@ -451,6 +466,7 @@ class GenericDestroyAPIView(
 
     def destroy(self, pk: PK) -> Any:
         args, kwargs = self.get_primary_key(pk, action="destroy")
+        self.authorize_object(*args, **kwargs)
         self.repository.delete_one(*args, **kwargs)
 
 

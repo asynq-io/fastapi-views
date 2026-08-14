@@ -10,6 +10,7 @@ from typing import (
     Concatenate,
     Generic,
     TypeVar,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
@@ -25,8 +26,17 @@ from fastapi_views.exceptions import (
     APIError,
     BadRequest,
     Conflict,
+    Forbidden,
     NotFound,
+    Unauthorized,
 )
+from fastapi_views.permissions.abc import (
+    BasePermission,
+    app_auth_security,
+    get_app_auth_or_none,
+    permission_denied,
+)
+from fastapi_views.permissions.builtin import AllowAny
 from fastapi_views.types import (
     Action,
     AnyTypeAdapter,
@@ -112,10 +122,25 @@ class View(DependencyMixin, ABC):
     from_attributes: bool | None = None
     validate_response: bool = True
     _serializers: ClassVar[TypeAdapterMap] = {}
+    #: Current action name, set by the endpoint wrapper before checks run.
+    action: str | None = None
 
     def __init__(self, request: Request, response: Response) -> None:
         self.request = request
         self.response = response
+        scope = getattr(request, "scope", None)
+        self.principal: Any = scope.get("principal") if scope is not None else None
+
+    def check_permissions(self) -> None:
+        """No-op on the base ``View``; :class:`APIView` enforces permissions."""
+
+    def check_object_permissions(self, obj: Any) -> None:
+        """No-op on the base ``View``; :class:`APIView` enforces permissions."""
+
+    def _authorize(self, action: str | None) -> None:
+        """Set the current action and run view-level permission checks."""
+        self.action = action
+        self.check_permissions()
 
     def _set_default_media_type(self, media_type: str) -> None:
         if self.response.media_type is None:
@@ -211,10 +236,12 @@ class View(DependencyMixin, ABC):
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(func.__name__)
             res = await func(self, *args, **kwargs)
             return self.get_response(res, status_code=status_code, schema=schema)
 
         def _sync_endpoint(self: View, *args: P.args, **kwargs: P.kwargs) -> Response:
+            self._authorize(func.__name__)
             res = func(self, *args, **kwargs)
             return self.get_response(res, status_code=status_code, schema=schema)
 
@@ -259,6 +286,7 @@ class View(DependencyMixin, ABC):
                 endpoint,
                 prefix=route_prefix,
                 name=f"{endpoint.__name__} {cls.get_name()}",
+                action=cast("Action", endpoint.__name__),
                 **extra,
             )
 
@@ -273,6 +301,7 @@ class View(DependencyMixin, ABC):
         endpoint: Callable,
         prefix: str = "",
         path: str = "",
+        action: Action | None = None,  # noqa: ARG003
         **kwargs: Any,
     ) -> dict[str, Any]:
         kw = getattr(endpoint, "kwargs", {})
@@ -317,12 +346,25 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
     """
 
     response_schema: T | None = None
+    #: Auth this view enforces; ``None`` falls back to the app-wide one.
+    auth: ClassVar[Any] = None
     #: Extra route-level dependencies applied per action, e.g. auth scopes.
     action_dependencies: ClassVar[Mapping[Action, Sequence[params.Depends]]] = {}
+    #: Permissions enforced for every action via :meth:`check_permissions` /
+    #: :meth:`check_object_permissions`. Override :meth:`get_permissions` to
+    #: branch on ``self.action``.
+    permission_classes: ClassVar[Sequence[type[BasePermission] | BasePermission]] = ()
+    #: Per-action permissions; when present for an action they replace
+    #: :attr:`permission_classes` for that action only.
+    action_permission_classes: ClassVar[Mapping[str, Sequence[Any]]] = {}
     default_serializer_options: ClassVar[SerializerOptions] = {
         "by_alias": True,
     }
     default_errors: tuple[type[APIError], ...] = (BadRequest,)
+    #: Permission instances resolved once per (view class, action).
+    _resolved_permissions: ClassVar[
+        dict[tuple[type, str | None], list[BasePermission]]
+    ] = {}
 
     def __init__(self, request: Request, response: Response) -> None:
         self.validation_context = None
@@ -330,16 +372,123 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         super().__init__(request, response)
 
     @classmethod
+    def _permission_classes_for(cls, action: str | None) -> Sequence[Any]:
+        if action is not None and action in cls.action_permission_classes:
+            return cls.action_permission_classes[action]
+        return cls.permission_classes
+
+    @classmethod
+    def _has_dynamic_permissions(cls) -> bool:
+        """Whether :meth:`get_permissions` is overridden anywhere in the MRO.
+
+        Such a view decides its permissions per request, so registration cannot
+        tell whether the route is public. It is treated as protected: the
+        alternative is a route documented as public whose ``principal`` is
+        always ``None``, so every credential is rejected.
+        """
+        return cls.get_permissions is not APIView.get_permissions
+
+    @classmethod
+    def _requires_auth(cls, action: str | None) -> bool:
+        """Whether ``action`` needs the auth dependency wired (non-public)."""
+        if cls._has_dynamic_permissions():
+            return True
+        classes = cls._permission_classes_for(action)
+        if not classes:
+            return False
+        return not all(isinstance(BasePermission.resolve(p), AllowAny) for p in classes)
+
+    @classmethod
+    def _resolve_permissions(cls, action: str | None) -> list[BasePermission]:
+        """Permission instances for ``action``, resolved on first use.
+
+        :attr:`permission_classes` / :attr:`action_permission_classes` are
+        ``ClassVar``s fixed at class definition, so the instances are built once
+        per view class and action instead of on every check.
+        """
+        key = (cls, action)
+        resolved = cls._resolved_permissions.get(key)
+        if resolved is None:
+            resolved = [
+                BasePermission.resolve(p) for p in cls._permission_classes_for(action)
+            ]
+            cls._resolved_permissions[key] = resolved
+        return resolved
+
+    def get_permissions(self) -> list[BasePermission]:
+        """Resolved permission instances for the current action."""
+        return self._resolve_permissions(self.action)
+
+    def check_permissions(self) -> None:
+        """Run ``has_permission`` for each configured permission (view-level)."""
+        for perm in self.get_permissions():
+            if not perm.has_permission(self.principal, self):
+                raise permission_denied(self.principal, self.request)
+
+    def check_object_permissions(self, obj: Any) -> None:
+        """Run ``has_object_permission`` for each configured permission."""
+        for perm in self.get_permissions():
+            if not perm.has_object_permission(self.principal, self, obj):
+                raise permission_denied(self.principal, self.request)
+
+    def _authorize_object(self, obj: Any) -> None:
+        """Run object-level checks unless there is nothing to authorize.
+
+        A view returning ``None`` (a miss tolerated by ``raise_on_none=False``)
+        or a ``Response`` (a short-circuit such as ``304 Not Modified``) yields
+        no object to own, so the checks are skipped rather than denied.
+        """
+        if obj is None or isinstance(obj, Response):
+            return
+        self.check_object_permissions(obj)
+
+    @classmethod
+    def get_required_scopes(cls, action: str | None = None) -> list[str]:
+        """Scopes the OpenAPI bridge advertises for ``action``."""
+        return [
+            scope
+            for perm in cls._permission_classes_for(action)
+            for scope in BasePermission.resolve(perm).required_scopes
+        ]
+
+    @classmethod
+    def get_default_errors(
+        cls, action: str | None = None
+    ) -> tuple[type[APIError], ...]:
+        """``default_errors`` plus ``Unauthorized``/``Forbidden`` when auth applies."""
+        errors_ = cls.default_errors
+        if cls._requires_auth(action):
+            return (*errors_, Unauthorized, Forbidden)
+        return errors_
+
+    @classmethod
+    def get_auth(cls) -> Any:
+        """The auth to enforce with: :attr:`auth`, else the process-wide one.
+
+        ``None`` means neither is set, so the dependency defers to whichever auth
+        ``configure_app(app, auth=auth)`` binds to the app serving the request.
+        """
+        if cls.auth is not None:
+            return cls.auth
+        return get_app_auth_or_none()
+
+    @classmethod
     def get_dependencies(cls, action: Action | None = None) -> list[params.Depends]:
         """Route-level dependencies for ``action``'s endpoint.
 
-        Returns the :attr:`action_dependencies` entry for ``action``, e.g.
-        auth scopes such as ``auth.requires("items:read")``. Override for
-        fully dynamic per-action dependencies.
+        Wires the OpenAPI security bridge — ``Security(auth.resolve_dependency,
+        scopes)`` — for any non-public action, plus :attr:`action_dependencies`.
+        Override for fully dynamic per-action dependencies.
         """
         if action is None:
             return []
-        return list(cls.action_dependencies.get(action, ()))
+        dependencies: list[params.Depends] = []
+        if cls._requires_auth(action):
+            dependencies.append(
+                app_auth_security(cls.get_auth(), cls.get_required_scopes(action)),
+            )
+        dependencies.extend(cls.action_dependencies.get(action, ()))
+        return dependencies
 
     @classmethod
     def get_response_headers(
@@ -435,7 +584,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         )
         kwargs["responses"] = _merge_responses(
             _merge_responses(
-                errors(*extra_errors, *cls.default_errors),
+                errors(*extra_errors, *cls.get_default_errors(action)),
                 extra_responses,
             ),
             kwargs.get("responses") or {},
@@ -498,12 +647,14 @@ class AsyncListAPIView(BaseListAPIView, ABC, Generic[P]):
     @classmethod
     def get_list_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="list")
+        action = cls.list.__name__
 
         async def endpoint(
             self: AsyncListAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             objects = await self.list(*args, **kwargs)
             return self.get_response(objects, status_code=status_code, schema=schema)
 
@@ -521,8 +672,10 @@ class ListAPIView(BaseListAPIView, ABC, Generic[P]):
     @classmethod
     def get_list_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="list")
+        action = cls.list.__name__
 
         def endpoint(self: ListAPIView, *args: P.args, **kwargs: P.kwargs) -> Response:
+            self._authorize(action)
             objects = self.list(*args, **kwargs)
             return self.get_response(objects, status_code=status_code, schema=schema)
 
@@ -561,15 +714,18 @@ class RetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
     @classmethod
     def get_retrieve_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="retrieve")
+        action = cls.retrieve.__name__
 
         def endpoint(
             self: RetrieveAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
+            self._authorize_object(obj)
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.retrieve)
@@ -586,15 +742,18 @@ class AsyncRetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
     @classmethod
     def get_retrieve_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="retrieve")
+        action = cls.retrieve.__name__
 
         async def endpoint(
             self: AsyncRetrieveAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = await self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
+            self._authorize_object(obj)
             return self.get_response(obj, status_code=status_code, schema=schema)
 
         cls._patch_endpoint_signature(endpoint, cls.retrieve)
@@ -636,12 +795,14 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
     @classmethod
     def get_create_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="create")
+        action = cls.create.__name__
 
         def endpoint(
             self: CreateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = self.create(*args, **kwargs)
             location = self.get_location(obj)
             if not self.return_on_create:
@@ -667,12 +828,14 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
     @classmethod
     def get_create_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="create")
+        action = cls.create.__name__
 
         async def endpoint(
             self: AsyncCreateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = await self.create(*args, **kwargs)
             location = self.get_location(obj)
             if not self.return_on_create:
@@ -721,12 +884,14 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
     @classmethod
     def get_update_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="update")
+        action = cls.update.__name__
 
         def endpoint(
             self: UpdateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = self.update(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
@@ -748,12 +913,14 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
     @classmethod
     def get_update_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="update")
+        action = cls.update.__name__
 
         async def endpoint(
             self: AsyncUpdateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = await self.update(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
@@ -799,12 +966,14 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
     @classmethod
     def get_partial_update_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="partial_update")
+        action = cls.partial_update.__name__
 
         def endpoint(
             self: PartialUpdateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = self.partial_update(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
@@ -826,12 +995,14 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
     @classmethod
     def get_partial_update_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="partial_update")
+        action = cls.partial_update.__name__
 
         async def endpoint(
             self: AsyncPartialUpdateAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             obj = await self.partial_update(*args, **kwargs)
             if obj is None and self.raise_on_none:
                 self.raise_not_found_error()
@@ -874,11 +1045,14 @@ class DestroyAPIView(BaseDestroyAPIView, Generic[P]):
 
     @classmethod
     def get_destroy_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.destroy.__name__
+
         def endpoint(
             self: DestroyAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             self.destroy(*args, **kwargs)
             return Response(status_code=status_code)
 
@@ -895,11 +1069,14 @@ class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
 
     @classmethod
     def get_destroy_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.destroy.__name__
+
         async def endpoint(
             self: AsyncDestroyAPIView,
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> Response:
+            self._authorize(action)
             await self.destroy(*args, **kwargs)
             return Response(status_code=status_code)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import AsyncMock
 
@@ -21,7 +22,8 @@ from fastapi_views.auth import (
     TokenAuth,
 )
 from fastapi_views.auth import abc as auth_abc
-from fastapi_views.auth.api_key import APIKeyAuth
+from fastapi_views.auth import api_key as auth_api_key
+from fastapi_views.auth.api_key import APIKeyAuth, ConstAPIKeyAuth
 from fastapi_views.auth.jwt import (
     BearerAccessToken,
     JWTAuth,
@@ -37,9 +39,10 @@ from fastapi_views.auth.scopes import (
 from fastapi_views.exceptions import APIError, Unauthorized
 from fastapi_views.handlers import add_error_handlers
 from fastapi_views.integrations.auth0 import Auth0
+from fastapi_views.permissions import set_app_auth
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
 
 
 def make_config(**kwargs: Any) -> JWTConfig:
@@ -65,6 +68,14 @@ def config() -> JWTConfig:
 @pytest.fixture
 def jwt_auth(config) -> JWTAuth:
     return JWTAuth(config, None)
+
+
+@pytest.fixture
+def app_auth(jwt_auth) -> Generator[JWTAuth, None, None]:
+    """Register ``jwt_auth`` as the app auth for the duration of the test."""
+    set_app_auth(jwt_auth)
+    yield jwt_auth
+    set_app_auth(None)
 
 
 def test_jwt_config_get_key_raises_when_uninitialized():
@@ -406,6 +417,83 @@ async def test_api_key_honors_custom_header_name(app, client):
     assert response.status_code == HTTP_200_OK
 
 
+@pytest.mark.anyio
+async def test_api_key_401_advertises_subclass_challenge(app, client):
+    class CustomAPIKeyAuth(APIKeyAuth):
+        challenge: ClassVar[str] = "CustomScheme"
+
+    auth = CustomAPIKeyAuth()
+
+    @app.get("/protected")
+    async def protected(key=auth.authenticated()):
+        return {"key": key}
+
+    response = await client.get("/protected")
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.headers["WWW-Authenticate"] == "CustomScheme"
+
+
+@pytest.mark.anyio
+async def test_const_api_key_accepts_matching_key(app, client):
+    auth = ConstAPIKeyAuth("the-secret")
+
+    @app.get("/protected")
+    async def protected(key=auth.authenticated()):
+        return {"key": key}
+
+    response = await client.get("/protected", headers={"X-Api-Key": "the-secret"})
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {"key": "the-secret"}
+
+
+@pytest.mark.anyio
+async def test_const_api_key_rejects_wrong_key(app, client):
+    auth = ConstAPIKeyAuth("the-secret")
+
+    @app.get("/protected")
+    async def protected(key=auth.authenticated()):
+        return {"key": key}
+
+    response = await client.get("/protected", headers={"X-Api-Key": "not-the-secret"})
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "Invalid API Key"
+    assert response.headers["WWW-Authenticate"] == "APIKey"
+
+
+@pytest.mark.anyio
+async def test_const_api_key_rejects_missing_header(app, client):
+    auth = ConstAPIKeyAuth("the-secret")
+
+    @app.get("/protected")
+    async def protected(key=auth.authenticated()):
+        return {"key": key}
+
+    response = await client.get("/protected")
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "Invalid API Key"
+
+
+@pytest.mark.anyio
+async def test_const_api_key_compares_digest_once_per_request(app, client, monkeypatch):
+    auth = ConstAPIKeyAuth("the-secret")
+    calls: list[tuple[Any, Any]] = []
+    compare_digest = secrets.compare_digest
+
+    def counting_compare_digest(a: Any, b: Any) -> bool:
+        calls.append((a, b))
+        return compare_digest(a, b)
+
+    monkeypatch.setattr(auth_api_key.secrets, "compare_digest", counting_compare_digest)
+
+    @app.get("/protected")
+    async def protected(key=auth.authenticated()):
+        return {"key": key}
+
+    response = await client.get("/protected", headers={"X-Api-Key": "the-secret"})
+    assert response.status_code == HTTP_200_OK
+    assert len(calls) == 1
+
+
 class _FakeAuthError(BaseAuthError):
     def get_error_code(self) -> str:
         return "invalid_token"
@@ -505,26 +593,23 @@ def test_with_test_user_is_reset_when_body_raises(jwt_auth):
         ("bulk_delete", "delete:items"),
     ],
 )
-def test_auto_scopes_auth_view_maps_action_to_scope(jwt_auth, action, scope):
+def test_auto_scopes_auth_view_maps_action_to_scope(app_auth, action, scope):
     class ItemsView(AutoScopesAuthView):
-        auth = jwt_auth
         resource = "items"
 
     (dependency,) = ItemsView.get_dependencies(action)
     assert list(dependency.scopes) == [scope]
 
 
-def test_auto_scopes_auth_view_returns_no_dependencies_without_action(jwt_auth):
+def test_auto_scopes_auth_view_returns_no_dependencies_without_action(app_auth):
     class ItemsView(AutoScopesAuthView):
-        auth = jwt_auth
         resource = "items"
 
     assert ItemsView.get_dependencies() == []
 
 
-def test_auto_scopes_auth_view_rejects_unknown_action(jwt_auth):
+def test_auto_scopes_auth_view_rejects_unknown_action(app_auth):
     class ItemsView(AutoScopesAuthView):
-        auth = jwt_auth
         resource = "items"
 
     unknown_action: Any = "publish"
@@ -532,11 +617,10 @@ def test_auto_scopes_auth_view_rejects_unknown_action(jwt_auth):
         ItemsView.get_dependencies(unknown_action)
 
 
-def test_auto_scopes_auth_view_merges_action_dependencies(jwt_auth):
+def test_auto_scopes_auth_view_merges_action_dependencies(app_auth):
     marker = Depends(lambda: None)
 
     class ItemsView(AutoScopesAuthView):
-        auth = jwt_auth
         resource = "items"
         action_dependencies: ClassVar = {"retrieve": [marker]}
 

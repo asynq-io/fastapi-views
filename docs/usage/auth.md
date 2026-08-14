@@ -741,7 +741,8 @@ class ItemViewSet(AutoScopesAuthView, AsyncAPIViewSet):
 
 Two class attributes drive it:
 
-- **`auth`** — the `ScopesAuth` instance to enforce with (required)
+- **`auth`** — the `ScopesAuth` instance to enforce with; defaults to `None`, in which
+  case the app-wide auth (`configure_app(app, auth=auth)`) is used
 - **`resource`** — the resource half of the scope; defaults to `None`, in which case
   `get_name()` is used (i.e. `api_component_name`, falling back to the class name)
 
@@ -767,3 +768,25 @@ class ItemViewSet(AutoScopesAuthView, AsyncAPIViewSet):
 `AutoScopesAuthView` also widens `default_errors` to `(BadRequest, Unauthorized, Forbidden)`, so
 `401` and `403` are documented on every generated route. Any `action_dependencies` you declare
 are appended after the generated scope dependency.
+
+---
+
+## Using auth with the permissions system
+
+Auth publishes the resolved principal on `request.scope["principal"]`, which the
+[permissions](permissions.md) layer reads. Configure the app-wide auth before
+registering any permission-protected views:
+
+```python
+from fastapi_views import configure_app
+
+configure_app(app, auth=auth)
+```
+
+Views declare `permission_classes`, not an `auth` attribute. The framework wires
+the app auth automatically, derives OpenAPI scopes from `HasPermissions(...)`, and
+lets permissions choose `401` (anonymous) versus `403` (authenticated but denied).
+
+See [Permissions](permissions.md) for `permission_classes`, `has_permission` /
+`has_object_permission`, boolean composition (`&`, `|`, `~`), and the OpenAPI
+security-scope bridge.
