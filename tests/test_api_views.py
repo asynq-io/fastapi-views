@@ -14,6 +14,7 @@ from starlette.status import (
 
 from fastapi_views.views.api import (
     AnyTypeAdapter,
+    APIView,
     AsyncCreateAPIView,
     AsyncListAPIView,
     AsyncPartialUpdateAPIView,
@@ -21,7 +22,7 @@ from fastapi_views.views.api import (
     AsyncUpdateAPIView,
     View,
 )
-from fastapi_views.views.functools import override
+from fastapi_views.views.functools import get, override, post
 
 from .utils import view_client
 
@@ -257,3 +258,50 @@ def test_base_list_api_view_get_response_schema_non_list_action():
 
     assert MyListView.get_response_schema(action=None) is dict
     assert MyListView.get_response_schema(action="retrieve") is dict
+
+
+def test_custom_get_action_operation_id_is_action_first():
+    class UserView(View):
+        api_component_name = "users"
+
+        @get()
+        def custom_action(self):
+            return None
+
+    actions = list(UserView.get_api_actions())
+    assert actions[0]["operation_id"] == "custom_action_users"
+
+
+def test_custom_post_action_operation_id_is_action_first():
+    class UserView(View):
+        api_component_name = "users"
+
+        @post()
+        def create_something(self):
+            return None
+
+    actions = list(UserView.get_api_actions())
+    assert actions[0]["operation_id"] == "create_something_users"
+
+
+def test_crud_action_operation_id_is_action_first():
+    class UserView(APIView):
+        api_component_name = "users"
+
+        def list_endpoint():
+            return None
+
+    kwargs = UserView.get_api_action(UserView.list_endpoint, action="list")
+    assert kwargs["operation_id"] == "list_users"
+
+
+def test_list_api_view_operation_id_is_action_first():
+    class UserListView(AsyncListAPIView):
+        api_component_name = "users"
+        response_schema = dict
+
+        async def list(self) -> list[dict]:
+            return []
+
+    kwargs = next(UserListView.get_api_actions())
+    assert kwargs["operation_id"] == "list_users"

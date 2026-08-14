@@ -172,9 +172,8 @@ class View(DependencyMixin, ABC):
         kwargs["endpoint"] = endpoint
         kwargs["path"] = prefix + path
         kwargs.setdefault("name", endpoint.__name__)
-        endpoint_name = kwargs["name"]
         kwargs.setdefault("methods", ["GET"])
-        kwargs.setdefault("operation_id", f"{cls.get_slug_name()}_{endpoint_name}")
+        kwargs.setdefault("operation_id", f"{endpoint.__name__}_{cls.get_slug_name()}")
         kwargs["responses"] = {
             e.get_status(): {"model": e.model} for e in cls.errors
         } | kwargs.get("responses", {})

@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException
 
 from .exceptions import APIError, BadRequest, InternalServerError
 from .i18n import translate as _
-from .logging._compat import get_logger
+from .logging._compat import get_logger, is_structlog
 
 logger = get_logger("exceptions.handler")
 
@@ -51,13 +51,15 @@ def request_validation_handler(
 
 
 def exception_handler(request: Request, exc: Exception) -> Response:
-    logger.exception(
-        "unhandled_exception",
-        exc_info=exc,
-        url=request.url,
-        headers=dict(request.headers),
-        query_params=dict(request.query_params),
-    )
+    context = {
+        "url": request.url,
+        "headers": dict(request.headers),
+        "query_params": dict(request.query_params),
+    }
+    if is_structlog:
+        logger.exception("unhandled_exception", exc_info=exc, **context)
+    else:
+        logger.exception("unhandled_exception", exc_info=exc, extra=context)
     return _api_error_to_response(
         InternalServerError(
             "Unhandled server error",
