@@ -217,7 +217,9 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         self, queryset: _Queryset, filter: OrderingFilter, **context: Any
     ) -> _Queryset:
         order_by = self.get_order_by(filter, **context)
-        return queryset.order_by(*order_by)
+        if not order_by:
+            return queryset
+        return queryset.order_by(None).order_by(*order_by)
 
     def apply_pagination_filter(
         self, queryset: _Queryset, filter: BasePaginationFilter, **context: Any
