@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
-from typing import Annotated, Any, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar
 
-from fastapi import Depends, Security
+from fastapi import Depends, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
 from typing_extensions import Never
 
-from fastapi_views.exceptions import Forbidden, Unauthorized
+from fastapi_views.exceptions import APIError, Forbidden, Unauthorized
+from fastapi_views.permissions.abc import (
+    AUTH_CHALLENGE_SCOPE_KEY,
+    AUTH_ERROR_SCOPE_KEY,
+)
 
 from .scopes import (
     All,
@@ -49,13 +55,34 @@ def http_bearer() -> AuthorizationScheme:
 
 
 class AuthBase:
+    """A scheme that extracts a credential and turns it into a principal.
+
+    ``get_dependency`` is the raising FastAPI dependency used by
+    ``authenticated()`` / ``requires()`` (401 on a missing/invalid credential,
+    scope validation for :class:`ScopesAuth`). ``get_resolve_dependency`` is the
+    non-raising one the permission bridge wires so that authorization — not
+    resolution — decides 401 vs 403. Both publish the principal on
+    ``request.scope["principal"]``.
+    """
+
+    #: ``WWW-Authenticate`` scheme advertised on every ``401``; ``None`` for an
+    #: auth that has no challenge to offer.
+    challenge: ClassVar[str | None] = None
+
     def __init__(self, scheme: AuthorizationScheme) -> None:
         self.scheme = scheme
         self.dependency = self.get_dependency()
+        self.resolve_dependency = self.get_resolve_dependency()
         self._test_user: Any = None
 
     def authenticated(self) -> Any:
         return Security(self.dependency)
+
+    def challenge_headers(self) -> dict[str, str]:
+        """``WWW-Authenticate`` headers advertising this scheme, if it has one."""
+        if self.challenge is None:
+            return {}
+        return {"WWW-Authenticate": self.challenge}
 
     def unauthorized(self) -> Never:
         raise Unauthorized("Missing or invalid credentials")
@@ -64,17 +91,64 @@ class AuthBase:
         """Turn a verified credential into the principal handed to the endpoint."""
         return token
 
+    async def _resolve_principal(self, raw: Any) -> Any:
+        """Verify (when applicable) and wrap a credential into the principal.
+
+        Returns ``None`` when the credential is rejected without raising.
+        """
+        return self.wrap_token(raw)
+
+    def _publish_principal(
+        self,
+        request: Request,
+        principal: Any,
+        error: APIError | None = None,
+    ) -> Any:
+        """Publish ``principal`` on the request scope and hand it back.
+
+        The scheme's challenge travels with it, plus the ``APIError`` a rejected
+        credential raised, so whichever site raises the ``401`` later can state
+        the real reason instead of a generic "authentication required".
+        """
+        request.scope["principal"] = principal
+        request.scope[AUTH_CHALLENGE_SCOPE_KEY] = self.challenge_headers()
+        request.scope[AUTH_ERROR_SCOPE_KEY] = error
+        return principal
+
     def get_dependency(self) -> Any:
         async def _dependency(
-            raw: Annotated[str | None, Depends(self.scheme)],
+            request: Request,
+            raw: str | None = Depends(self.scheme),
         ) -> Any:
             if self._test_user is not None:
-                return self._test_user
+                return self._publish_principal(request, self._test_user)
             if raw is None:
                 self.unauthorized()
-            return self.wrap_token(raw)
+            principal = await self._resolve_principal(raw)
+            if principal is None:
+                self.unauthorized()
+            return self._publish_principal(request, principal)
 
         return _dependency
+
+    def get_resolve_dependency(self) -> Any:
+        """Non-raising dependency: resolve the principal (or ``None``) and publish it."""
+
+        async def _resolve(
+            request: Request,
+            raw: str | None = Depends(self.scheme),
+        ) -> Any:
+            if self._test_user is not None:
+                return self._publish_principal(request, self._test_user)
+            if raw is None:
+                return self._publish_principal(request, None)
+            try:
+                principal = await self._resolve_principal(raw)
+            except APIError as exc:
+                return self._publish_principal(request, None, exc)
+            return self._publish_principal(request, principal)
+
+        return _resolve
 
     @contextmanager
     def with_test_user(self, user: Any) -> Generator[Any, None, None]:
@@ -101,7 +175,7 @@ class TokenAuth(AuthBase):
     def unauthorized(self) -> Never:
         raise Unauthorized(
             "Missing or invalid bearer token",
-            headers={"WWW-Authenticate": self.challenge},
+            headers=self.challenge_headers(),
         )
 
     def wrap_token(self, token: Any) -> Any:
@@ -141,19 +215,23 @@ class ScopesAuth(TokenAuth):
     async def verify(self, raw: str) -> dict[str, Any]:
         raise NotImplementedError
 
-    def get_dependency(self) -> Any:
+    async def _resolve_principal(self, raw: Any) -> Any:
+        token = await self.verify(raw)
+        return self.wrap_token(token)
 
+    def get_dependency(self) -> Any:
         async def dependency(
+            request: Request,
             scopes: SecurityScopes,
-            raw: Annotated[str | None, Depends(self.scheme)],
+            raw: str | None = Depends(self.scheme),
         ) -> Any:
             if self._test_user is not None:
-                return self._test_user
+                return self._publish_principal(request, self._test_user)
             if raw is None:
                 self.unauthorized()
             token = await self.verify(raw)
             self.validate_scopes(token, scopes)
-            return self.wrap_token(token)
+            return self._publish_principal(request, self.wrap_token(token))
 
         return dependency
 

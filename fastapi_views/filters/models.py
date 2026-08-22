@@ -208,7 +208,8 @@ class FieldsFilter(BaseFilter):
         super().__pydantic_init_subclass__(**kwargs)
         if cls.fields_from:
             fields = tuple(cls.fields_from.model_fields)
-            cls.model_fields["fields"].annotation = set[Literal[fields]]  # type: ignore[valid-type]
+            annotation: Any = set[Literal[fields]] | None  # type: ignore[valid-type]
+            cls.model_fields["fields"].annotation = annotation
             cls.model_rebuild(force=True, _parent_namespace_depth=0)
 
     def get_fields(self) -> set[str] | None:

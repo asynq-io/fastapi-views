@@ -98,6 +98,7 @@ class AsyncGenericJsonPatchAPIView(
         model = await self.repository.get(*args, **kwargs)
         if model is None:
             self.raise_not_found_error()
+        self._authorize_object(model)
         data = self.apply_patch(model, partial_update_schema)
         if not data:
             return model
@@ -128,6 +129,7 @@ class GenericJsonPatchAPIView(
         model = self.repository.get(*args, **kwargs)
         if model is None:
             self.raise_not_found_error()
+        self._authorize_object(model)
         data = self.apply_patch(model, partial_update_schema)
         if not data:
             return model

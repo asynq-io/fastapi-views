@@ -36,6 +36,7 @@ auth = Auth0(api_client, custom_class=Principal.model_validate)
 
 
 app = FastAPI(title="My API")
+configure_app(app, auth=auth)
 
 
 @app.get("/me")
@@ -89,7 +90,6 @@ class ReportSchema(BaseModel):
 
 
 class ReportViewSet(AutoScopesAuthView, AsyncReadOnlyAPIViewSet):
-    auth = auth
     resource = "reports"
     api_component_name = "Report"
     response_schema = ReportSchema
@@ -110,4 +110,3 @@ reports_router.register_view(ReportViewSet)
 
 app.include_router(router)
 app.include_router(reports_router)
-configure_app(app)

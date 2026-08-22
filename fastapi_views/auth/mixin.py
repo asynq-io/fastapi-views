@@ -4,6 +4,7 @@ from typing import ClassVar
 from fastapi import params
 
 from fastapi_views.exceptions import APIError, BadRequest, Forbidden, Unauthorized
+from fastapi_views.permissions.abc import app_auth_security
 from fastapi_views.types import Action
 from fastapi_views.views import APIView
 
@@ -11,11 +12,17 @@ from .abc import ScopesAuth
 
 
 class AutoScopesAuthView(APIView):
-    auth: ScopesAuth
+    """Derives per-action scopes from :attr:`action_scopes` and enforces them.
+
+    Enforced with :attr:`auth` when the class declares one, else with the
+    app-wide auth (``configure_app(auth=…)`` / ``set_app_auth``).
+    """
+
+    auth: ClassVar[ScopesAuth | None] = None
     resource: str | None = None
     default_errors: tuple[type[APIError], ...] = (BadRequest, Unauthorized, Forbidden)
     #: Scope prefix required per action; extend when registering custom actions.
-    action_scopes: ClassVar[Mapping[Action, str]] = {
+    action_scopes: ClassVar[Mapping[str, str]] = {
         "list": "read",
         "retrieve": "read",
         "events": "read",
@@ -42,4 +49,5 @@ class AutoScopesAuthView(APIView):
             raise LookupError(msg)
         resource_name = cls.resource or cls.get_name()
         scope = f"{cls.action_scopes[action]}:{resource_name}"
-        return [cls.auth.requires(scope), *dependencies]
+        security = app_auth_security(cls.get_auth(), [scope], raising=True)
+        return [security, *dependencies]

@@ -124,10 +124,12 @@ class BulkCreateAPIView(BaseBulkCreateAPIView, Generic[P]):
     @classmethod
     def get_bulk_create_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="bulk_create")
+        action = cls.bulk_create.__name__
 
         def endpoint(
             self: BulkCreateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             objs = self.bulk_create(*args, **kwargs)
             if not self.return_on_create:
                 objs = None
@@ -147,10 +149,12 @@ class AsyncBulkCreateAPIView(BaseBulkCreateAPIView, Generic[P]):
     @classmethod
     def get_bulk_create_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="bulk_create")
+        action = cls.bulk_create.__name__
 
         async def endpoint(
             self: AsyncBulkCreateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             objs = await self.bulk_create(*args, **kwargs)
             if not self.return_on_create:
                 objs = None
@@ -197,9 +201,12 @@ class BulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_bulk_update_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.bulk_update.__name__
+
         def endpoint(
             self: BulkUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             self.bulk_update(*args, **kwargs)
             return Response(status_code=status_code)
 
@@ -216,9 +223,12 @@ class AsyncBulkUpdateAPIView(BaseBulkUpdateAPIView, Generic[P]):
 
     @classmethod
     def get_bulk_update_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.bulk_update.__name__
+
         async def endpoint(
             self: AsyncBulkUpdateAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             await self.bulk_update(*args, **kwargs)
             return Response(status_code=status_code)
 
@@ -271,10 +281,12 @@ class UpdateManyAPIView(BaseUpdateManyAPIView, Generic[P]):
     @classmethod
     def get_update_many_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="update_many")
+        action = cls.update_many.__name__
 
         def endpoint(
             self: UpdateManyAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             objs = self.update_many(*args, **kwargs)
             if not self.return_on_update:
                 objs = None
@@ -294,10 +306,12 @@ class AsyncUpdateManyAPIView(BaseUpdateManyAPIView, Generic[P]):
     @classmethod
     def get_update_many_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="update_many")
+        action = cls.update_many.__name__
 
         async def endpoint(
             self: AsyncUpdateManyAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             objs = await self.update_many(*args, **kwargs)
             if not self.return_on_update:
                 objs = None
@@ -338,9 +352,12 @@ class BulkDestroyAPIView(BaseBulkDestroyAPIView, Generic[P]):
 
     @classmethod
     def get_bulk_delete_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.bulk_delete.__name__
+
         def endpoint(
             self: BulkDestroyAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             self.bulk_delete(*args, **kwargs)
             return Response(status_code=status_code)
 
@@ -357,9 +374,12 @@ class AsyncBulkDestroyAPIView(BaseBulkDestroyAPIView, Generic[P]):
 
     @classmethod
     def get_bulk_delete_endpoint(cls, status_code: int) -> Endpoint:
+        action = cls.bulk_delete.__name__
+
         async def endpoint(
             self: AsyncBulkDestroyAPIView, *args: P.args, **kwargs: P.kwargs
         ) -> Response:
+            self._authorize(action)
             await self.bulk_delete(*args, **kwargs)
             return Response(status_code=status_code)
 
