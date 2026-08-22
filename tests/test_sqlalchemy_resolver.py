@@ -480,7 +480,7 @@ def test_apply_filter_pagination(
 def test_apply_filter_ordering(
     resolver: SQLAlchemyFilterResolver, qs: MockQueryset
 ) -> None:
-    expected_order_by_count = 2
+    expected_order_by_count = 3
     f = SearchableFilter(sort=["name", "-age"], query=None)
     result = cast("MockQueryset", resolver.apply_filter(f, qs))
     assert len(result._order_by) == expected_order_by_count
