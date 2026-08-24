@@ -162,7 +162,9 @@ Subclass it and set `filter_model` to the mapped class the filter's unprefixed f
 | `filter_model` | mapped class used for unprefixed fields |
 | `operators` | operator name → callable mapping |
 | `resolve(operation, **context)` | one operation → SQLAlchemy expression |
-| `resolve_model_field(field, **context)` | `field` or `prefix__field` (split at the first `__`) → column; `context["table"]` overrides the base model, `context[prefix]["table"]` resolves a prefix, otherwise the prefix is looked up in the mapper registry by `__tablename__` |
+| `resolve_model_field(field, **context)` | `field` or `prefix__field` → column; `context["table"]` overrides the base model, then `context[prefix]["table"]`, then a relationship path on the base model (multi-hop), then a mapper-registry lookup by `__tablename__` |
+| `_resolve_related_field(field, **context)` | relationship path → `RelatedField(relationships, column)`, or `None` when the path is not a relationship chain or `context[prefix]["table"]` was supplied |
+| `_exists(relationships, predicate)` | wraps `predicate` in one `EXISTS` per hop — `.any()` for to-many, `.has()` for to-one; a `SortOperation` on such a path raises `NotImplementedError` |
 | `_cache` / `_get_model_cache(registry)` | registry → `{tablename: model}` memo, a `WeakKeyDictionary` created lazily per resolver subclass, so lookups are cached per registry and per class and cannot leak across two bases sharing a `__tablename__` |
 | `get_filters(filter, **context)` | list of `WHERE` expressions |
 | `get_order_by(filter, extra=None, **context)` | list of `ORDER BY` expressions, `extra` appended |

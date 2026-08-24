@@ -132,7 +132,7 @@ class Fruit(Base):
 
 
 class FruitRepository(PaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
 
 
 class FruitId(BaseSchema):

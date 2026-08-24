@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 from contextlib import suppress
 from functools import reduce
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol
 from weakref import WeakKeyDictionary
 
 from typing_extensions import Self
@@ -49,6 +49,13 @@ except ImportError:
 
 def _escape_like_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+class RelatedField(NamedTuple):
+    """A column on a related model, and the relationship chain reaching it."""
+
+    relationships: tuple[Any, ...]
+    column: Any
 
 
 class _Queryset(Protocol):
@@ -129,6 +136,47 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
                 return model_class
         return None
 
+    def _resolve_related_field(self, field: str, **context: Any) -> RelatedField | None:
+        """Walk a `__`-separated path across relationships of the base model.
+
+        Returns `None` when the path is not a relationship chain, or when the
+        caller opted out by supplying `context[prefix]["table"]` -- they joined
+        the related table themselves and want a plain column.
+        """
+        name, _, rest = field.partition("__")
+        if not rest or context.get(name, {}).get("table"):
+            return None
+
+        model = context.get("table", self.filter_model)
+        relationships = []
+        while rest:
+            relationship = self._get_relationship(model, name)
+            if relationship is None:
+                return None
+            relationships.append(getattr(model, name))
+            model = relationship.mapper.class_
+            name, _, rest = rest.partition("__")
+
+        column = getattr(model, name, None)
+        if column is None:
+            return None
+        return RelatedField(tuple(relationships), column)
+
+    def _exists(self, relationships: Sequence[Any], predicate: Any) -> Any:
+        """Wrap `predicate` in one EXISTS per relationship hop, innermost first.
+
+        A semi-join keeps the predicate self-contained: no join to add to the
+        queryset, no duplicate parent rows to `DISTINCT` away, and `LIMIT`
+        still counts parents rather than joined rows.
+        """
+        for relationship in reversed(relationships):
+            predicate = (
+                relationship.any(predicate)
+                if relationship.property.uselist
+                else relationship.has(predicate)
+            )
+        return predicate
+
     def resolve_model_field(
         self,
         field: str,
@@ -140,6 +188,9 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             model_class = context.get(prefix, {}).get("table")
             if model_class:
                 return getattr(model_class, name)
+            related = self._resolve_related_field(field, **context)
+            if related is not None:
+                return related.column
             model_class = self._get_model_cls(prefix)
             return getattr(model_class, name)
         model = context.get("table", self.filter_model)
@@ -151,12 +202,22 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             resolved = [self.resolve(f, **context) for f in operation.values]
             return reduce(fn, resolved)
 
-        column = self.resolve_model_field(operation.field, **context)
+        related = self._resolve_related_field(operation.field, **context)
 
         if isinstance(operation, SortOperation):
+            if related is not None:
+                msg = f"Cannot sort by '{operation.field}': ordering across a relationship needs an explicit join"
+                raise NotImplementedError(msg)
+            column = self.resolve_model_field(operation.field, **context)
             return column.desc() if operation.desc else column
 
         fn = self.operators[operation.operator]
+        if related is not None:
+            return self._exists(
+                related.relationships, fn(related.column, operation.values)
+            )
+
+        column = self.resolve_model_field(operation.field, **context)
         return fn(column, operation.values)
 
     def apply_base_filter(

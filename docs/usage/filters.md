@@ -478,14 +478,31 @@ Helper methods are available if you need the raw clauses instead of a modified q
 
 #### Filtering across joined tables
 
-A `prefix__field` operation — produced by `NestedFilter`, or by a field name such as `post__title__eq` — is resolved in one of two ways:
+A `prefix__field` operation — produced by `NestedFilter`, or by a field name such as `post__title__eq` — is resolved in one of three ways, in order:
 
 1. `context[prefix]["table"]`, if you pass it;
-2. otherwise a lookup in the model registry by `__tablename__ == prefix`, cached per registry **and** per resolver class in a `WeakKeyDictionary` keyed by the registry (so two declarative bases that happen to share a `__tablename__` never collide, and the cache never keeps a registry alive).
+2. otherwise a **relationship path** on the base model, walked hop by hop (`author__publisher__name`), the same namespace `IncludeFilter.related_fields` uses;
+3. otherwise a lookup in the model registry by `__tablename__ == prefix`, cached per registry **and** per resolver class in a `WeakKeyDictionary` keyed by the registry (so two declarative bases that happen to share a `__tablename__` never collide, and the cache never keeps a registry alive).
 
-`resolve_model_field` splits off exactly one prefix, at the *first* `__`: `post__title` is column `title` on `post`. Deeper paths (`company__owner__name`) are kept whole by the filter models but not understood by the default implementation — override `resolve_model_field` to walk them.
+When the path resolves as a relationship, the predicate is wrapped in an `EXISTS` per hop — `.any()` for to-many, `.has()` for to-one — so **no join is needed**:
 
-Because `context` is passed as keyword arguments, the prefix becomes the keyword:
+```python
+class ItemFilter(PaginationFilter, SearchFilter):
+    search_fields: ClassVar[set[str]] = {"tags__name"}
+```
+
+```sql
+SELECT item.name, item.id FROM item
+WHERE EXISTS (SELECT 1 FROM tag, item_tag
+              WHERE item.id = item_tag.item_id AND tag.id = item_tag.tag_id
+                AND lower(tag.name) LIKE lower(?))
+```
+
+A semi-join keeps the predicate self-contained, which matters for paginated list endpoints: there are no duplicate parent rows to `DISTINCT` away, `LIMIT` still counts parents rather than joined rows, and the totals query stays a plain `COUNT`. It also composes with eager loading — a joined `contains_eager` would populate the collection *from the filtered rows*, so an item matching one of its tags would come back missing the others.
+
+Sorting is the exception: `ORDER BY` cannot read a column out of an `EXISTS`, so a `sort` value that resolves to a relationship path raises `NotImplementedError`. Sort across tables by joining the queryset yourself and passing the prefix in `context` (option 1).
+
+Because `context` is passed as keyword arguments, the prefix becomes the keyword. Supplying it opts out of relationship resolution — you joined the table, so you get a plain column:
 
 ```python
 queryset = resolver.apply_filter(
@@ -507,7 +524,7 @@ queryset = resolver.apply_filter(filter, select(PostModel), table=PostModel)
 
 #### Relationship loading
 
-`apply_related_filter` turns `?include` paths into eager loader options. Each hop picks its strategy from the relationship type: `joinedload` for to-one, `selectinload` for to-many (safe with pagination and result counts). Unknown paths are skipped. Loader options never satisfy a `WHERE` clause — filtering on a related column still needs an explicit join (see above).
+`apply_related_filter` turns `?include` paths into eager loader options. Each hop picks its strategy from the relationship type: `joinedload` for to-one, `selectinload` for to-many (safe with pagination and result counts). Unknown paths are skipped. Loader options never satisfy a `WHERE` clause; filtering on a related column is handled separately, by relationship-path resolution (see above).
 
 #### Cursor pagination
 

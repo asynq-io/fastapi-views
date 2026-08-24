@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
+from uuid import UUID  # noqa: TC003  # resolved at runtime by sqlalchemy/pydantic
 
 import pytest
 from sqlalchemy import ForeignKey
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.pool import StaticPool
-from sqlargon import Base, Database, set_default_database
+from sqlargon import Base, Database, SQLAlchemyRepository, set_default_database
+from sqlargon.mixins import UUIDModelMixin
 from sqlargon.pagination import CursorPage, TotalNumberedPage, TotalOffsetPage
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
@@ -18,7 +20,9 @@ from fastapi_views.filters.models import (
     IncludeFilter,
     ModelFilter,
     OffsetLimitFilter,
+    OrderingFilter,
     PaginationFilter,
+    SearchFilter,
 )
 from fastapi_views.integrations.sqlargon import (
     CursorPaginatedRepository,
@@ -53,15 +57,15 @@ class Basket(Base):
 
 
 class FruitRepository(PaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
 
 
 class FruitOffsetRepository(OffsetPaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
 
 
 class FruitCursorRepository(CursorPaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
 
 
 if TYPE_CHECKING:
@@ -360,17 +364,17 @@ async def test_bulk_viewset_end_to_end():
 
 
 class FruitWithBasketRepository(PaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
     select_related = ("basket",)
 
 
 class FruitPerOpRepository(PaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
     select_related: ClassVar[dict[str, tuple[str, ...]]] = {"get": ("basket",)}
 
 
 class BasketRepository(PaginatedRepository[Basket]):
-    default_order_by = Basket.__table__.c.id
+    default_order_by = Basket.id.asc()
     select_related = ("fruits",)
 
 
@@ -507,3 +511,194 @@ async def test_generic_list_view_returns_nested_relation():
             {"id": 1, "name": "apple", "basket": {"id": 1, "name": "red"}},
             {"id": 2, "name": "banana", "basket": {"id": 1, "name": "red"}},
         ]
+
+
+class ItemModel(UUIDModelMixin, Base):
+    name: Mapped[str]
+    tags: Mapped[list[TagModel]] = relationship(
+        secondary="item_tag_model", back_populates="items"
+    )
+
+
+class ItemTagModel(Base):
+    item_id: Mapped[UUID] = mapped_column(ForeignKey("item_model.id"), primary_key=True)
+    tag_id: Mapped[UUID] = mapped_column(ForeignKey("tag_model.id"), primary_key=True)
+
+
+class TagModel(UUIDModelMixin, Base):
+    name: Mapped[str]
+    items: Mapped[list[ItemModel]] = relationship(
+        secondary="item_tag_model", back_populates="tags"
+    )
+
+
+class ItemRepository(PaginatedRepository[ItemModel]):
+    """Generic over ItemModel; tags are reached by relationship path alone."""
+
+    default_order_by = ItemModel.name.asc()
+    select_related = ("tags",)
+
+
+class TagRepository(SQLAlchemyRepository[TagModel]):
+    pass
+
+
+class ItemTagRepository(SQLAlchemyRepository[ItemTagModel]):
+    pass
+
+
+class ItemSearchFilter(PaginationFilter, SearchFilter):
+    search_fields: ClassVar[set[str]] = {"tags__name"}
+
+
+class ItemSortByTagFilter(PaginationFilter, OrderingFilter):
+    ordering_fields: ClassVar[set[str]] = {"tags__name"}
+
+
+class TagSchema(BaseSchema):
+    name: str
+
+
+class ItemSchema(BaseSchema):
+    name: str
+    tags: list[TagSchema]
+
+
+ITEM_TAGS = {
+    "desk": ("furniture",),
+    "laptop": ("electronics", "portable"),
+    "phone": ("electronics",),
+    "rock": (),
+}
+
+
+@pytest.fixture
+async def seeded_tagged_db(db: Database) -> Database:
+    tag_repo = TagRepository()
+    tags = {
+        name: await tag_repo.create(name=name)
+        for name in ("electronics", "furniture", "portable")
+    }
+    item_repo = ItemRepository()
+    link_repo = ItemTagRepository()
+    for item_name, tag_names in ITEM_TAGS.items():
+        item = await item_repo.create(name=item_name)
+        assert item is not None
+        for tag_name in tag_names:
+            tag = tags[tag_name]
+            assert tag is not None
+            await link_repo.create(item_id=item.id, tag_id=tag.id)
+    return db
+
+
+def test_related_column_is_resolved_through_the_relationship():
+    assert ItemRepository().resolve_model_field("tags__name") is TagModel.name
+
+
+def test_related_predicate_compiles_to_exists_without_a_join():
+    (clause,) = ItemRepository().get_filters(ItemSearchFilter(query="a"))
+    sql = str(clause)
+    assert "EXISTS" in sql
+    assert "JOIN" not in sql
+
+
+def test_sorting_across_a_relationship_is_rejected():
+    with pytest.raises(NotImplementedError, match="needs an explicit join"):
+        ItemRepository().get_order_by(ItemSortByTagFilter(sort=["tags__name"]))
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_search_filter_matches_items_by_related_tag_name():
+    page = await ItemRepository().get_filtered_page(
+        ItemSearchFilter(query="electronics", page=1, page_size=10)
+    )
+    assert [item.name for item in page.items] == ["laptop", "phone"]
+    assert page.total_items == 2
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_search_filter_returns_item_once_when_several_tags_match():
+    page = await ItemRepository().get_filtered_page(
+        ItemSearchFilter(query="o", page=1, page_size=10)
+    )
+    assert [item.name for item in page.items] == ["laptop", "phone"]
+    assert page.total_items == 2
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_search_filter_pages_by_item_not_by_joined_row():
+    page = await ItemRepository().get_filtered_page(
+        ItemSearchFilter(query="o", page=1, page_size=2)
+    )
+    assert [item.name for item in page.items] == ["laptop", "phone"]
+    assert not page.has_more
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_search_filter_without_query_keeps_untagged_items():
+    page = await ItemRepository().get_filtered_page(
+        ItemSearchFilter(query=None, page=1, page_size=10)
+    )
+    assert [item.name for item in page.items] == ["desk", "laptop", "phone", "rock"]
+    assert page.total_items == 4
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_matching_item_still_carries_its_non_matching_tags():
+    page = await ItemRepository().get_filtered_page(
+        ItemSearchFilter(query="portable", page=1, page_size=10)
+    )
+    (item,) = page.items
+    assert "tags" not in sa_inspect(item).unloaded
+    assert sorted(tag.name for tag in item.tags) == ["electronics", "portable"]
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_tagged_db")
+async def test_generic_list_view_searches_by_related_tag_name():
+    class ItemListView(AsyncGenericListAPIView):
+        response_schema = ItemSchema
+        filter = ItemSearchFilter
+        repository = ItemRepository()
+
+    async with view_client(ItemListView) as client:
+        response = await client.get("/test", params={"q": "portable"})
+        assert response.status_code == HTTP_200_OK
+        data = response.json()
+        (item,) = data["items"]
+        assert item["name"] == "laptop"
+        assert sorted(tag["name"] for tag in item["tags"]) == [
+            "electronics",
+            "portable",
+        ]
+        assert data["total_items"] == 1
+
+
+class FruitByBasketFilter(PaginationFilter, ModelFilter):
+    basket__name__eq: str | None = None
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_to_one_relationship_filters_without_a_join():
+    (clause,) = FruitRepository().get_filters(
+        FruitByBasketFilter(basket__name__eq="red")
+    )
+    assert "JOIN" not in str(clause)
+
+    page = await FruitRepository().get_filtered_page(
+        FruitByBasketFilter(basket__name__eq="red", page=1, page_size=10)
+    )
+    assert [fruit.name for fruit in page.items] == ["apple", "banana"]
+
+
+def test_explicit_table_context_still_yields_a_plain_column():
+    resolved = FruitRepository().resolve_model_field(
+        "basket__name", basket={"table": Basket}
+    )
+    assert resolved is Basket.name
