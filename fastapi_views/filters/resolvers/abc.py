@@ -7,6 +7,7 @@ from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
     FieldsFilter,
+    IncludeFilter,
     OrderingFilter,
 )
 
@@ -38,11 +39,18 @@ class FilterResolver(ABC, Generic[Queryset]):
     ) -> Queryset:
         raise NotImplementedError
 
+    @abstractmethod
+    def apply_related_filter(
+        self, queryset: Queryset, filter: IncludeFilter, **context: Any
+    ) -> Queryset:
+        raise NotImplementedError
+
     def apply_filter(
         self,
         filter: BaseFilter,
         queryset: Queryset,
-        exclude: set[Literal["filter", "fields", "sort", "paginate"]] | None = None,
+        exclude: set[Literal["filter", "fields", "sort", "paginate", "related"]]
+        | None = None,
         **context: Any,
     ) -> Queryset:
         excluded = exclude or set()
@@ -50,6 +58,8 @@ class FilterResolver(ABC, Generic[Queryset]):
             queryset = self.apply_base_filter(queryset, filter, **context)
         if "fields" not in excluded and isinstance(filter, FieldsFilter):
             queryset = self.apply_fields_filter(queryset, filter, **context)
+        if "related" not in excluded and isinstance(filter, IncludeFilter):
+            queryset = self.apply_related_filter(queryset, filter, **context)
         if "sort" not in excluded and isinstance(filter, OrderingFilter):
             queryset = self.apply_ordering_filter(queryset, filter, **context)
         if "paginate" not in excluded and isinstance(filter, BasePaginationFilter):

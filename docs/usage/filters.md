@@ -40,6 +40,7 @@ from fastapi_views.filters.resolvers.sqlalchemy import SQLAlchemyFilterResolver
 | `OrderingFilter` | `?sort` (repeatable) | `None` |
 | `SearchFilter` | `?q` | `None` |
 | `FieldsFilter` | `?fields` (repeatable) | `None` |
+| `IncludeFilter` | `?include` (repeatable) | `None` |
 | `PaginationFilter` | `?page`, `?page_size` | `1`, `100` |
 | `OffsetLimitFilter` | `?offset`, `?limit` | `0`, `100` |
 | `CursorPaginationFilter` | `?cursor`, `?page_size` | `None`, `100` |
@@ -178,7 +179,23 @@ class ItemFieldsFilter(FieldsFilter):
 
 `?fields=id&fields=name` yields `{"id", "name"}` (`fields` is a set, so repeat the parameter — it is not comma-separated).
 
-Projection is *not* part of `get_filters()`; it is applied either by a resolver (`apply_fields_filter`) or, in [generic views](generics.md), by the serializer, which restricts the response to the requested fields.
+Projection is *not* part of `get_filters()`; it is applied either by a resolver (`apply_fields_filter`) or, in [generic views](generics.md), by the serializer, which restricts the response to the requested fields. Nested names (`?fields=author__name`) become nested serializer includes, and the SQLAlchemy resolver eager loads the relationships they traverse.
+
+### `IncludeFilter`
+
+Adds a repeatable `?include` query parameter letting clients opt into loading related resources, exposed through `get_related()` (returns `set[str] | None`). Accepted values must be whitelisted in `related_fields` — anything else is rejected with a 422 — and the whitelist is rendered into the parameter's OpenAPI description. Values are relationship paths, using `__` for nesting:
+
+```python
+from typing import ClassVar
+
+from fastapi_views.filters import IncludeFilter
+
+
+class BookIncludeFilter(IncludeFilter):
+    related_fields: ClassVar[set[str]] = {"author", "author__publisher"}
+```
+
+`?include=author` eager loads `Book.author` on top of whatever the repository loads by default — see [relationship preloading](sqlargon.md#relationship-preloading). Like projection, inclusion is not part of `get_filters()`; it is applied by a resolver (`apply_related_filter`). `IncludeFilter` is not part of the combined `Filter` class — compose it explicitly where relationships exist.
 
 ### `Filter` — all-in-one
 
@@ -372,7 +389,7 @@ Operations are plain dataclasses in `fastapi_views.filters.operations`:
 
 ## Resolvers
 
-A resolver translates a filter into a backend query. All resolvers subclass `FilterResolver[Queryset]` from `fastapi_views.filters.resolvers.abc`, which defines the four steps and the public entry point:
+A resolver translates a filter into a backend query. All resolvers subclass `FilterResolver[Queryset]` from `fastapi_views.filters.resolvers.abc`, which defines the five steps and the public entry point:
 
 ```python
 queryset = resolver.apply_filter(filter, queryset, exclude=None, **context)
@@ -384,6 +401,7 @@ queryset = resolver.apply_filter(filter, queryset, exclude=None, **context)
 |------|--------|-----------|
 | `"filter"` | `apply_base_filter` | always |
 | `"fields"` | `apply_fields_filter` | filter is a `FieldsFilter` |
+| `"related"` | `apply_related_filter` | filter is an `IncludeFilter` |
 | `"sort"` | `apply_ordering_filter` | filter is an `OrderingFilter` |
 | `"paginate"` | `apply_pagination_filter` | filter is a `BasePaginationFilter` |
 
@@ -485,7 +503,11 @@ queryset = resolver.apply_filter(filter, select(PostModel), table=PostModel)
 
 #### Field projection
 
-`apply_fields_filter` turns `?fields` into loader options rather than a column list: top-level names become a single `load_only(...)`, and `relation__field` (or `a__b__field`) names become chained `defaultload(...).load_only(...)` options. Relationship names are resolved by inspecting the mapper; unknown paths are skipped.
+`apply_fields_filter` turns `?fields` into loader options rather than a column list: top-level names become a single `load_only(...)`, and `relation__field` (or `a__b__field`) names become chained eager loaders ending in `.load_only(...)` — so requesting a nested field also loads the relationship it belongs to. Relationship names are resolved by inspecting the mapper; unknown paths are skipped.
+
+#### Relationship loading
+
+`apply_related_filter` turns `?include` paths into eager loader options. Each hop picks its strategy from the relationship type: `joinedload` for to-one, `selectinload` for to-many (safe with pagination and result counts). Unknown paths are skipped. Loader options never satisfy a `WHERE` clause — filtering on a related column still needs an explicit join (see above).
 
 #### Cursor pagination
 
@@ -516,7 +538,7 @@ This is exactly what the sqlargon integration does: `FilterableRepository.with_f
 
 ### Custom resolvers
 
-Implement the four abstract methods to support another backend; `apply_filter` and the `exclude` handling come for free.
+Implement the five abstract methods to support another backend; `apply_filter` and the `exclude` handling come for free.
 
 ```python
 from typing import Any

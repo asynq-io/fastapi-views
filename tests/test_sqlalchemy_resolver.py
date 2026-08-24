@@ -9,6 +9,7 @@ import pytest
 from fastapi_views.filters.models import (
     CursorPaginationFilter,
     FieldsFilter,
+    IncludeFilter,
     ModelFilter,
     OrderingFilter,
     PaginationFilter,
@@ -145,6 +146,7 @@ class MockQueryset:
         self._order_by: list[Any] = []
         self._offset_val: int | None = None
         self._limit_val: int | None = None
+        self._options: list[Any] = []
 
     def filter(self, *args: object) -> MockQueryset:
         self._filters.extend(args)
@@ -163,6 +165,7 @@ class MockQueryset:
         return self
 
     def options(self, *args: object) -> MockQueryset:
+        self._options.extend(args)
         return self
 
 
@@ -581,7 +584,9 @@ def test_apply_fields_filter_nested_single_level(
     class ModelWithRel:
         user = MockColumn("user")
 
-    rel_property = SimpleNamespace(mapper=SimpleNamespace(class_=RelatedModel))
+    rel_property = SimpleNamespace(
+        mapper=SimpleNamespace(class_=RelatedModel), uselist=False
+    )
     inspector = SimpleNamespace(
         relationships=SimpleNamespace(
             get=lambda name: rel_property if name == "user" else None
@@ -594,8 +599,8 @@ def test_apply_fields_filter_nested_single_level(
     with (
         patch("fastapi_views.filters.resolvers.sqlalchemy.load_only") as mock_load_only,
         patch(
-            "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
-        ) as mock_defaultload,
+            "fastapi_views.filters.resolvers.sqlalchemy.joinedload"
+        ) as mock_joinedload,
         patch(
             "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
             return_value=inspector,
@@ -603,8 +608,8 @@ def test_apply_fields_filter_nested_single_level(
     ):
         resolver.apply_fields_filter(qs, f)
 
-    mock_defaultload.assert_called_once_with(ModelWithRel.user)
-    mock_defaultload.return_value.load_only.assert_called_once_with(RelatedModel.id)
+    mock_joinedload.assert_called_once_with(ModelWithRel.user)
+    mock_joinedload.return_value.load_only.assert_called_once_with(RelatedModel.id)
     mock_load_only.assert_not_called()
 
 
@@ -620,8 +625,8 @@ def test_apply_fields_filter_nested_multi_level(
     class ModelWithRel:
         user = MockColumn("user")
 
-    post_rel = SimpleNamespace(mapper=SimpleNamespace(class_=PostModel))
-    user_rel = SimpleNamespace(mapper=SimpleNamespace(class_=UserModel))
+    post_rel = SimpleNamespace(mapper=SimpleNamespace(class_=PostModel), uselist=True)
+    user_rel = SimpleNamespace(mapper=SimpleNamespace(class_=UserModel), uselist=False)
 
     def mock_inspect(model: type) -> SimpleNamespace | None:
         if model is ModelWithRel:
@@ -644,8 +649,8 @@ def test_apply_fields_filter_nested_multi_level(
     with (
         patch("fastapi_views.filters.resolvers.sqlalchemy.load_only") as mock_load_only,
         patch(
-            "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
-        ) as mock_defaultload,
+            "fastapi_views.filters.resolvers.sqlalchemy.joinedload"
+        ) as mock_joinedload,
         patch(
             "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
             side_effect=mock_inspect,
@@ -653,9 +658,9 @@ def test_apply_fields_filter_nested_multi_level(
     ):
         resolver.apply_fields_filter(qs, f)
 
-    mock_defaultload.assert_called_once_with(ModelWithRel.user)
-    mock_defaultload.return_value.defaultload.assert_called_once_with(UserModel.post)
-    mock_defaultload.return_value.defaultload.return_value.load_only.assert_called_once_with(
+    mock_joinedload.assert_called_once_with(ModelWithRel.user)
+    mock_joinedload.return_value.selectinload.assert_called_once_with(UserModel.post)
+    mock_joinedload.return_value.selectinload.return_value.load_only.assert_called_once_with(
         PostModel.id
     )
     mock_load_only.assert_not_called()
@@ -667,7 +672,9 @@ def test_apply_fields_filter_nested_mixed(
     class RelatedModel:
         id = MockColumn("id")
 
-    rel_property = SimpleNamespace(mapper=SimpleNamespace(class_=RelatedModel))
+    rel_property = SimpleNamespace(
+        mapper=SimpleNamespace(class_=RelatedModel), uselist=True
+    )
     inspector = SimpleNamespace(
         relationships=SimpleNamespace(
             get=lambda name: rel_property if name == "user" else None
@@ -686,8 +693,8 @@ def test_apply_fields_filter_nested_mixed(
                 "fastapi_views.filters.resolvers.sqlalchemy.load_only"
             ) as mock_load_only,
             patch(
-                "fastapi_views.filters.resolvers.sqlalchemy.defaultload"
-            ) as mock_defaultload,
+                "fastapi_views.filters.resolvers.sqlalchemy.selectinload"
+            ) as mock_selectinload,
             patch(
                 "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
                 return_value=inspector,
@@ -698,5 +705,166 @@ def test_apply_fields_filter_nested_mixed(
         del MockFilterModel.user  # type: ignore[attr-defined]
 
     mock_load_only.assert_called_once_with(MockFilterModel.name)
-    mock_defaultload.assert_called_once_with(user_col)
-    mock_defaultload.return_value.load_only.assert_called_once_with(RelatedModel.id)
+    mock_selectinload.assert_called_once_with(user_col)
+    mock_selectinload.return_value.load_only.assert_called_once_with(RelatedModel.id)
+
+
+class ItemIncludeFilter(IncludeFilter):
+    related_fields: ClassVar[set[str]] = {"user", "user__post", "unknown"}
+
+
+def test_apply_related_filter_to_one(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class RelatedModel:
+        id = MockColumn("id")
+
+    class ModelWithRel:
+        user = MockColumn("user")
+
+    rel_property = SimpleNamespace(
+        mapper=SimpleNamespace(class_=RelatedModel), uselist=False
+    )
+    inspector = SimpleNamespace(
+        relationships=SimpleNamespace(
+            get=lambda name: rel_property if name == "user" else None
+        )
+    )
+
+    resolver.filter_model = ModelWithRel
+
+    f = ItemIncludeFilter(include={"user"})
+    with (
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.joinedload"
+        ) as mock_joinedload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            return_value=inspector,
+        ),
+    ):
+        result = resolver.apply_related_filter(qs, f)
+
+    mock_joinedload.assert_called_once_with(ModelWithRel.user)
+    assert result is qs
+    assert qs._options == [mock_joinedload.return_value]
+
+
+def test_apply_related_filter_to_many(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class RelatedModel:
+        id = MockColumn("id")
+
+    class ModelWithRel:
+        user = MockColumn("user")
+
+    rel_property = SimpleNamespace(
+        mapper=SimpleNamespace(class_=RelatedModel), uselist=True
+    )
+    inspector = SimpleNamespace(
+        relationships=SimpleNamespace(
+            get=lambda name: rel_property if name == "user" else None
+        )
+    )
+
+    resolver.filter_model = ModelWithRel
+
+    f = ItemIncludeFilter(include={"user"})
+    with (
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.selectinload"
+        ) as mock_selectinload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            return_value=inspector,
+        ),
+    ):
+        result = resolver.apply_related_filter(qs, f)
+
+    mock_selectinload.assert_called_once_with(ModelWithRel.user)
+    assert result is qs
+    assert qs._options == [mock_selectinload.return_value]
+
+
+def test_apply_related_filter_multi_hop(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    class PostModel:
+        id = MockColumn("post_id")
+
+    class UserModel:
+        post = MockColumn("post")
+
+    class ModelWithRel:
+        user = MockColumn("user")
+
+    post_rel = SimpleNamespace(mapper=SimpleNamespace(class_=PostModel), uselist=True)
+    user_rel = SimpleNamespace(mapper=SimpleNamespace(class_=UserModel), uselist=False)
+
+    def mock_inspect(model: type) -> SimpleNamespace | None:
+        if model is ModelWithRel:
+            return SimpleNamespace(
+                relationships=SimpleNamespace(
+                    get=lambda name: user_rel if name == "user" else None
+                )
+            )
+        if model is UserModel:
+            return SimpleNamespace(
+                relationships=SimpleNamespace(
+                    get=lambda name: post_rel if name == "post" else None
+                )
+            )
+        return None
+
+    resolver.filter_model = ModelWithRel
+
+    f = ItemIncludeFilter(include={"user__post"})
+    with (
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.joinedload"
+        ) as mock_joinedload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            side_effect=mock_inspect,
+        ),
+    ):
+        result = resolver.apply_related_filter(qs, f)
+
+    mock_joinedload.assert_called_once_with(ModelWithRel.user)
+    mock_joinedload.return_value.selectinload.assert_called_once_with(UserModel.post)
+    assert result is qs
+    assert qs._options == [mock_joinedload.return_value.selectinload.return_value]
+
+
+def test_apply_related_filter_unknown_path_is_skipped(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    inspector = SimpleNamespace(relationships=SimpleNamespace(get=lambda _: None))
+
+    f = ItemIncludeFilter(include={"unknown"})
+    with (
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.joinedload"
+        ) as mock_joinedload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.selectinload"
+        ) as mock_selectinload,
+        patch(
+            "fastapi_views.filters.resolvers.sqlalchemy.sa_inspect",
+            return_value=inspector,
+        ),
+    ):
+        result = resolver.apply_related_filter(qs, f)
+
+    mock_joinedload.assert_not_called()
+    mock_selectinload.assert_not_called()
+    assert result is qs
+    assert qs._options == []
+
+
+def test_apply_related_filter_without_include_returns_queryset(
+    resolver: SQLAlchemyFilterResolver, qs: MockQueryset
+) -> None:
+    assert resolver.apply_related_filter(qs, ItemIncludeFilter(include=None)) is qs
+    assert qs._options == []

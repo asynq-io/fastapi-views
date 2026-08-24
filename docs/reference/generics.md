@@ -28,6 +28,8 @@ Override points:
 | `resolve_filter(filter)` | Turns a non-paginating filter into `list()` arguments |
 | `get_pagination_kwargs()` | Extra keyword arguments for `get_filtered_page` |
 | `get_fields_key()` | Where sparse-fieldset projection is applied when serializing |
+| `before_list` / `after_list` | Around `list`; receive the resolved filter and the returned sequence or page |
+| `before_retrieve` / `after_retrieve` | Around `retrieve`; receive the primary key and the object (or `None`) |
 | `before_create` / `after_create` | Around `create` (likewise for update and partial update) |
 
 For a complete walkthrough see [Generic views](../usage/generics.md), and [sqlargon](../usage/sqlargon.md) for ready-made repositories.

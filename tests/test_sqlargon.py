@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.pool import StaticPool
 from sqlargon import Base, Database, set_default_database
 from sqlargon.pagination import CursorPage, TotalNumberedPage, TotalOffsetPage
@@ -12,6 +14,8 @@ from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from fastapi_views.filters.models import (
     BaseFilter,
     CursorPaginationFilter,
+    FieldsFilter,
+    IncludeFilter,
     ModelFilter,
     OffsetLimitFilter,
     PaginationFilter,
@@ -38,6 +42,14 @@ if TYPE_CHECKING:
 class Fruit(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
+    basket_id: Mapped[int | None] = mapped_column(ForeignKey("basket.id"))
+    basket: Mapped[Basket | None] = relationship(back_populates="fruits")
+
+
+class Basket(Base):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    fruits: Mapped[list[Fruit]] = relationship(back_populates="basket")
 
 
 class FruitRepository(PaginatedRepository[Fruit]):
@@ -345,3 +357,153 @@ async def test_bulk_viewset_end_to_end():
         deleted = await client.delete("/test/bulk", params={"name": "apricot"})
         assert deleted.status_code == HTTP_204_NO_CONTENT
         assert await FruitRepository().count() == 1
+
+
+class FruitWithBasketRepository(PaginatedRepository[Fruit]):
+    default_order_by = Fruit.__table__.c.id
+    select_related = ("basket",)
+
+
+class FruitPerOpRepository(PaginatedRepository[Fruit]):
+    default_order_by = Fruit.__table__.c.id
+    select_related: ClassVar[dict[str, tuple[str, ...]]] = {"get": ("basket",)}
+
+
+class BasketRepository(PaginatedRepository[Basket]):
+    default_order_by = Basket.__table__.c.id
+    select_related = ("fruits",)
+
+
+class FruitIncludeFilter(PaginationFilter, IncludeFilter):
+    related_fields: ClassVar[set[str]] = {"basket"}
+
+
+class FruitFieldsFilter(FieldsFilter):
+    pass
+
+
+class BasketSchema(BaseSchema):
+    id: int
+    name: str
+
+
+class FruitWithBasketSchema(BaseSchema):
+    id: int
+    name: str
+    basket: BasketSchema | None = None
+
+
+BASKET_IDS = {1: 1, 2: 1, 3: 2}
+
+
+@pytest.fixture
+async def seeded_related_db(db: Database) -> Database:
+    basket_repo = BasketRepository()
+    await basket_repo.create(id=1, name="red")
+    await basket_repo.create(id=2, name="green")
+    fruit_repo = FruitRepository()
+    for pk, name in enumerate(NAMES, start=1):
+        await fruit_repo.create(id=pk, name=name, basket_id=BASKET_IDS.get(pk))
+    return db
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_select_related_loads_relation_on_get():
+    fruit = await FruitWithBasketRepository().get(id=1)
+    assert fruit is not None
+    assert "basket" not in sa_inspect(fruit).unloaded
+    assert fruit.basket is not None
+    assert fruit.basket.name == "red"
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_relation_stays_lazy_without_select_related():
+    fruit = await FruitRepository().get(id=1)
+    assert fruit is not None
+    assert "basket" in sa_inspect(fruit).unloaded
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_select_related_loads_relation_on_list():
+    fruits = await FruitWithBasketRepository().list()
+    assert [fruit.name for fruit in fruits] == NAMES
+    assert all("basket" not in sa_inspect(fruit).unloaded for fruit in fruits)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_select_related_mapping_applies_per_operation():
+    fruit = await FruitPerOpRepository().get(id=1)
+    assert fruit is not None
+    assert "basket" not in sa_inspect(fruit).unloaded
+
+    fruits = await FruitPerOpRepository().list()
+    assert all("basket" in sa_inspect(fruit).unloaded for fruit in fruits)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_select_related_loads_to_many_relation():
+    basket = await BasketRepository().get(id=1)
+    assert basket is not None
+    assert "fruits" not in sa_inspect(basket).unloaded
+    assert [fruit.name for fruit in basket.fruits] == ["apple", "banana"]
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_select_related_applies_to_filtered_page():
+    page = await FruitWithBasketRepository().get_filtered_page(
+        PaginationFilter(page=1, page_size=2)
+    )
+    assert page.total_items == 5
+    assert all("basket" not in sa_inspect(fruit).unloaded for fruit in page.items)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_include_filter_loads_requested_relation():
+    page = await FruitRepository().get_filtered_page(
+        FruitIncludeFilter(include={"basket"}, page=1, page_size=10)
+    )
+    assert all("basket" not in sa_inspect(fruit).unloaded for fruit in page.items)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_include_filter_defaults_to_lazy():
+    page = await FruitRepository().get_filtered_page(
+        FruitIncludeFilter(include=None, page=1, page_size=10)
+    )
+    assert all("basket" in sa_inspect(fruit).unloaded for fruit in page.items)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_fields_filter_nested_field_loads_relation():
+    repo = FruitRepository().with_filter(
+        FruitFieldsFilter(fields={"name", "basket__name"})
+    )
+    fruits = await repo.all()
+    assert all("basket" not in sa_inspect(fruit).unloaded for fruit in fruits)
+
+
+@pytest.mark.anyio
+@pytest.mark.usefixtures("seeded_related_db")
+async def test_generic_list_view_returns_nested_relation():
+    class FruitListView(AsyncGenericListAPIView):
+        response_schema = FruitWithBasketSchema
+        filter = FruitFilter
+        repository = FruitWithBasketRepository()
+
+    async with view_client(FruitListView) as client:
+        response = await client.get("/test", params={"page": 1, "page_size": 2})
+        assert response.status_code == HTTP_200_OK
+        data = response.json()
+        assert data["items"] == [
+            {"id": 1, "name": "apple", "basket": {"id": 1, "name": "red"}},
+            {"id": 2, "name": "banana", "basket": {"id": 1, "name": "red"}},
+        ]

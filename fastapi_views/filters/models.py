@@ -13,7 +13,14 @@ from pydantic import (
 from fastapi_views.pagination import Cursor, PageNumber, PageSize
 
 from .operations import FilterOperation, LogicalOperation, SortOperation
-from .types import AnyFields, SearchQuery, Sort, set_query_param, unwrap_query_params
+from .types import (
+    AnyFields,
+    Includes,
+    SearchQuery,
+    Sort,
+    set_query_param,
+    unwrap_query_params,
+)
 
 
 class BaseFilter(BaseModel):
@@ -195,8 +202,6 @@ class SearchFilter(BaseFilter):
         return filters
 
 
-# consider implementing projection at queryset level using new OperationType
-# but this will require importing sqlalchemy load_only or leaving abstractmethod
 class FieldsFilter(BaseFilter):
     special_fields = {"fields"}
     fields_from: ClassVar[type[BaseModel] | None] = None
@@ -215,12 +220,49 @@ class FieldsFilter(BaseFilter):
         return self.fields
 
 
+class IncludeFilter(BaseFilter):
+    """Filter allowing clients to opt into loading related resources."""
+
+    special_fields = {"include"}
+    related_fields: ClassVar[set[str]] = set()
+
+    include: Includes
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        field = cls.model_fields.get("include")
+        if field is not None and cls.related_fields:
+            set_query_param(
+                field,
+                Query(
+                    description=f"List of related resources to include in response. \
+                Available values: {', '.join(cls.related_fields)}",
+                ),
+            )
+
+    @field_validator("include", mode="after")
+    @classmethod
+    def validate_include(cls, value: set[str] | None) -> set[str] | None:
+        if value is None:
+            return None
+        for field in value:
+            if field not in cls.related_fields:
+                msg = f"Unknown include value '{field}'. Allowed values: {', '.join(cls.related_fields)}"
+                raise ValueError(msg)
+        return value
+
+    def get_related(self) -> set[str] | None:
+        return self.include
+
+
 class Filter(
     PaginationFilter,
     OrderingFilter,
     SearchFilter,
-    FieldsFilter,
     ModelFilter,
+    FieldsFilter,
+    IncludeFilter,
 ):
     """Main filter class that implements all the functionalities:
     pagination, ordering, search, fields and custom attributes filter

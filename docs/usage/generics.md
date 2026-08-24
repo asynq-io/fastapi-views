@@ -268,13 +268,13 @@ class ItemViewSet(AsyncGenericViewSet):
         return {"owner": {"table": OwnerModel}}
 ```
 
-When the filter is a `FieldsFilter` and the request carries `?fields=...`, the requested field set is written to `serializer_options["include"]` under `get_fields_key()`, so only those fields are serialized. Override `get_fields_key` if you wrap responses in a custom container whose payload does not live under `items`.
+When the filter is a `FieldsFilter` and the request carries `?fields=...`, the requested field set is converted to a nested include mapping (`author__name` becomes `{"author": {"name": True}}`) and written to `serializer_options["include"]` under `get_fields_key()`, so only those fields are serialized. Override `get_fields_key` if you wrap responses in a custom container whose payload does not live under `items`.
 
 ---
 
 ## Lifecycle hooks
 
-The create and update actions have `before_*` and `after_*` hooks so you can add custom logic without overriding the whole action. The `before_*` hook receives the mutable data dict — anything you put in it is sent to the repository; the `after_*` hook receives the object the repository returned (which may be `None`):
+The list, retrieve, create and update actions have `before_*` and `after_*` hooks so you can add custom logic without overriding the whole action. For the write actions the `before_*` hook receives the mutable data dict — anything you put in it is sent to the repository; the `after_*` hook receives the object the repository returned (which may be `None`). `before_list` receives the resolved filter, `after_list` the sequence or page the repository returned, `before_retrieve` the parsed primary key and `after_retrieve` the object (or `None`, before the `404` is raised):
 
 ```python
 class ItemViewSet(AsyncGenericViewSet):
@@ -286,6 +286,22 @@ class ItemViewSet(AsyncGenericViewSet):
     partial_update_schema = CreateItem
     filter = None
     repository = ItemRepository()
+
+    async def before_list(self, filter: BaseFilter) -> None:
+        # Runs before the repository call; when the view declares a `filter`,
+        # mutating it here scopes the query
+        await audit_listing(filter)
+
+    async def after_list(self, objs: Sequence[Item] | Page[Item]) -> None:
+        # Runs after the repository call, before the response is built
+        await track_listing(objs)
+
+    async def before_retrieve(self, pk: ItemId) -> None:
+        await audit_access(pk.id)
+
+    async def after_retrieve(self, obj: Item | None) -> None:
+        # Runs even when nothing was found, before the 404 is raised
+        await audit_result(obj)
 
     async def before_create(self, data: dict[str, Any]) -> None:
         # Runs after schema validation and after get_kwargs("create") is merged in,
@@ -310,7 +326,7 @@ class ItemViewSet(AsyncGenericViewSet):
         await invalidate_cache(obj.id)
 ```
 
-The hooks are `async` on the async views and plain methods on the sync ones. The list, retrieve and destroy actions have no hooks — override the action itself, or use `get_kwargs`.
+The hooks are `async` on the async views and plain methods on the sync ones. The destroy action has no hooks — override the action itself, or use `get_kwargs`.
 
 ---
 

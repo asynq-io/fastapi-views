@@ -36,7 +36,7 @@ from .api import (
 M_co = TypeVar("M_co", covariant=True)
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from fastapi_views.types import Action
 
@@ -128,6 +128,24 @@ class _NoFilter(BaseFilter):
     pass
 
 
+def _nested_include(fields: Iterable[str]) -> dict[str, Any]:
+    include: dict[str, Any] = {}
+    for field in fields:
+        *path, leaf = field.split("__")
+        node = include
+        for part in path:
+            child = node.get(part)
+            if child is True:
+                break
+            if not isinstance(child, dict):
+                child = {}
+                node[part] = child
+            node = child
+        else:
+            node[leaf] = True
+    return include
+
+
 class BaseGenericListAPIView(GenericView):
     filter: type[BaseModel] | None
 
@@ -155,14 +173,17 @@ class BaseGenericListAPIView(GenericView):
                     FilterDepends(filter_),  # type: ignore[type-var, unused-ignore]
                 ]
             }
-        return {}
+        return super().get_extra_annotations(action)
 
     def _apply_fields_filter(self, filter: BaseFilter) -> None:
         if isinstance(filter, FieldsFilter):
             if not (fields := filter.get_fields()):
                 return
+            include: dict[str, Any] = _nested_include(fields)
             key = self.get_fields_key()
-            self.serializer_options["include"] = {key: fields}
+            if key != "__all__":
+                include = {"__all__": include}
+            self.serializer_options["include"] = {key: include}
 
     def get_fields_key(self) -> str:
         response_schema = self.get_response_schema("list")
@@ -185,32 +206,51 @@ class AsyncGenericListAPIView(
     """AsyncGenericListAPIView"""
 
     async def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
-        if type(filter) is _NoFilter:
-            return await self.repository.list(**self.get_kwargs())
         self._apply_fields_filter(filter)
         filter.with_kwargs(**self.get_kwargs())
+
+        await self.before_list(filter)
         if isinstance(filter, BasePaginationFilter):
-            return await self.repository.get_filtered_page(
+            objects: Page[M] | Sequence[M] = await self.repository.get_filtered_page(
                 filter, **self.get_pagination_kwargs()
             )
-        args, kwargs = self.resolve_filter(filter)
-        return await self.repository.list(*args, **kwargs)
+        else:
+            args, kwargs = self.resolve_filter(filter)
+            objects = await self.repository.list(*args, **kwargs)
+        await self.after_list(objects)
+
+        return objects
+
+    async def before_list(self, filter: BaseFilter) -> None:
+        pass
+
+    async def after_list(self, objs: Sequence[M] | Page[M]) -> None:
+        pass
 
 
 class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
-        if type(filter) is _NoFilter:
-            return self.repository.list(**self.get_kwargs())
         self._apply_fields_filter(filter)
         filter.with_kwargs(**self.get_kwargs())
+        self.before_list(filter)
+
         if isinstance(filter, BasePaginationFilter):
-            return self.repository.get_filtered_page(
+            objects: Page[M] | Sequence[M] = self.repository.get_filtered_page(
                 filter, **self.get_pagination_kwargs()
             )
-        args, kwargs = self.resolve_filter(filter)
-        return self.repository.list(*args, **kwargs)
+        else:
+            args, kwargs = self.resolve_filter(filter)
+            objects = self.repository.list(*args, **kwargs)
+        self.after_list(objects)
+        return objects
+
+    def before_list(self, filter: BaseFilter) -> None:
+        pass
+
+    def after_list(self, objs: Sequence[M] | Page[M]) -> None:
+        pass
 
 
 class BaseGenericCreateAPIView(GenericView):
@@ -296,7 +336,16 @@ class AsyncGenericRetrieveAPIView(
 
     async def retrieve(self, pk: PK) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="retrieve")
-        return await self.repository.get(*args, **kwargs)
+        await self.before_retrieve(pk)
+        obj = await self.repository.get(*args, **kwargs)
+        await self.after_retrieve(obj)
+        return obj
+
+    async def before_retrieve(self, pk: PK) -> None:
+        pass
+
+    async def after_retrieve(self, obj: M | None) -> None:
+        pass
 
 
 class GenericRetrieveAPIView(
@@ -308,7 +357,16 @@ class GenericRetrieveAPIView(
 
     def retrieve(self, pk: PK) -> M | None:
         args, kwargs = self.get_primary_key(pk, action="retrieve")
-        return self.repository.get(*args, **kwargs)
+        self.before_retrieve(pk)
+        obj = self.repository.get(*args, **kwargs)
+        self.after_retrieve(obj)
+        return obj
+
+    def before_retrieve(self, pk: PK) -> None:
+        pass
+
+    def after_retrieve(self, obj: M | None) -> None:
+        pass
 
 
 class BaseGenericUpdateAPIView(DetailGenericView[PK]):

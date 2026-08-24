@@ -63,3 +63,9 @@ Fields = Annotated[
     QueryParam(Query(description="List of fields to include in response")),
 ]
 AnyFields = Fields[str]
+
+Includes = Annotated[
+    set[str] | None,
+    Field(None),
+    QueryParam(Query(description="List of related resources to include in response")),
+]

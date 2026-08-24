@@ -12,7 +12,7 @@ For a complete walkthrough including resolver usage see [Filters](../usage/filte
 |------|------|
 | `BaseFilter`, `ModelFilter`, `Filter` | filter models |
 | `BasePaginationFilter`, `PaginationFilter`, `OffsetLimitFilter`, `CursorPaginationFilter` | pagination filters |
-| `OrderingFilter`, `SearchFilter`, `FieldsFilter` | sorting / search / projection filters |
+| `OrderingFilter`, `SearchFilter`, `FieldsFilter`, `IncludeFilter` | sorting / search / projection / relationship-inclusion filters |
 | `FilterDepends`, `NestedFilter` | FastAPI dependency factories |
 
 Three modules are **not** re-exported and must be imported from their submodule:
@@ -32,13 +32,14 @@ Three modules are **not** re-exported and must be imported from their submodule:
 | `OrderingFilter` | `ordering_fields`, `order_by` / `get_order_by()` | `sort` (repeatable) | `None` |
 | `SearchFilter` | `search_fields` | `q` (field name `query`) | `None` |
 | `FieldsFilter` | `fields_from`, `get_fields()` | `fields` (repeatable set) | `None` |
+| `IncludeFilter` | `related_fields`, `get_related()` | `include` (repeatable set) | `None` |
 | `BasePaginationFilter` | `pagination_fields`, `get_pagination()` | — | — |
 | `PaginationFilter` | — | `page`, `page_size` | `1`, `100` |
 | `OffsetLimitFilter` | — | `offset`, `limit` | `0`, `100` |
 | `CursorPaginationFilter` | — | `cursor`, `page_size` | `None`, `100` |
 | `Filter` | all of the above | `page`, `page_size`, `sort`, `q`, `fields` + own fields | — |
 
-`Filter` inherits from `PaginationFilter`, `OrderingFilter`, `SearchFilter`, `FieldsFilter` and `ModelFilter`, in that order.
+`Filter` inherits from `PaginationFilter`, `OrderingFilter`, `SearchFilter`, `FieldsFilter` and `ModelFilter`, in that order. `IncludeFilter` is not part of it — compose it explicitly, whitelisting relationship paths in `related_fields` (invalid values yield a 422, like `ordering_fields`).
 
 `ModelFilter` derives an operation's operator from the segment after the **last** `__` in the field name (`user__name__gt` → field `user__name`, operator `gt`) and uses `eq` only for names without any `__`, so a nested equality lookup must be written `user__name__eq`. `BaseFilter.__pydantic_init_subclass__` unwraps the `QueryParam` metadata of every field, which is what makes query-backed fields ordinary `None`-defaulted pydantic fields. `FieldsFilter.fields_from` narrows the annotation on the declaring subclass only.
 
@@ -88,6 +89,7 @@ Annotated aliases that make a Pydantic field behave as a FastAPI query parameter
 | `Sort` | `list[str] \| None` |
 | `Fields[T]` | `set[T] \| None` |
 | `AnyFields` | `Fields[str]` |
+| `Includes` | `set[str] \| None` |
 
 `set_query_param` replaces an existing `QueryParam` / `Query` in a field's metadata — `OrderingFilter` uses it to give each subclass its own `sort` description without touching the base class.
 
@@ -115,7 +117,7 @@ Annotated aliases that make a Pydantic field behave as a FastAPI query parameter
 
 ## Resolvers
 
-A resolver translates a filter into a data-layer query. `apply_filter(filter, queryset, exclude=None, **context)` is the entry point; it runs `apply_base_filter`, then `apply_fields_filter`, `apply_ordering_filter` and `apply_pagination_filter` for the filter bases that apply, skipping any step named in `exclude` (`"filter"`, `"fields"`, `"sort"`, `"paginate"`) and forwarding `context` to each step. Note the abstract steps take `(queryset, filter)` while `apply_filter` takes `(filter, queryset)`.
+A resolver translates a filter into a data-layer query. `apply_filter(filter, queryset, exclude=None, **context)` is the entry point; it runs `apply_base_filter`, then `apply_fields_filter`, `apply_related_filter`, `apply_ordering_filter` and `apply_pagination_filter` for the filter bases that apply, skipping any step named in `exclude` (`"filter"`, `"fields"`, `"related"`, `"sort"`, `"paginate"`) and forwarding `context` to each step. Note the abstract steps take `(queryset, filter)` while `apply_filter` takes `(filter, queryset)`.
 
 Operator support per resolver:
 
@@ -164,7 +166,8 @@ Subclass it and set `filter_model` to the mapped class the filter's unprefixed f
 | `_cache` / `_get_model_cache(registry)` | registry → `{tablename: model}` memo, a `WeakKeyDictionary` created lazily per resolver subclass, so lookups are cached per registry and per class and cannot leak across two bases sharing a `__tablename__` |
 | `get_filters(filter, **context)` | list of `WHERE` expressions |
 | `get_order_by(filter, extra=None, **context)` | list of `ORDER BY` expressions, `extra` appended |
-| `apply_fields_filter` | `load_only()` for top-level fields, chained `defaultload(...).load_only(...)` for `relation__field` paths |
+| `apply_fields_filter` | `load_only()` for top-level fields; `relation__field` paths become chained eager loaders ending in `.load_only(...)` |
+| `apply_related_filter` | `?include` paths become eager loader options: `joinedload` per to-one hop, `selectinload` per to-many hop; unknown paths are skipped |
 | `apply_cursor_pagination(queryset, page, page_size, **context)` | raises `NotImplementedError`; override for keyset pagination, keeping `**context` — `apply_pagination_filter` forwards the resolver context |
 
 `Column` and `_Queryset` are typing protocols. `Column` documents the SQLAlchemy column methods the resolver calls — its unbound methods are used as the `in`, `not_in`, `is_null`, `like` and `ilike` implementations, with the real column passed as `self`. `_Queryset` is the minimal queryset surface: `filter()`, `options()`, `order_by()`, `offset()`, `limit()`.
