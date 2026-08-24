@@ -111,6 +111,15 @@ class GenericView(APIView):
 
 class DetailGenericView(GenericView, Generic[PK]):
     primary_key: type[PK]
+    detail_response_schema: type[BaseModel] | None = None
+
+    @classmethod
+    def get_response_schema(
+        cls, action: Action | None = None
+    ) -> type[BaseModel] | None:
+        if action == "retrieve" and cls.detail_response_schema is not None:
+            return cls.detail_response_schema
+        return super().get_response_schema(action)
 
     @classmethod
     def _pk_annotation(cls) -> Any:
@@ -143,7 +152,7 @@ class BaseGenericListAPIView(GenericView):
                 elif issubclass(cls.filter, CursorPaginationFilter):
                     container_cls = CursorPage
             return container_cls[cls.response_schema]
-        return cls.response_schema
+        return super().get_response_schema(action)
 
     @classmethod
     def get_extra_annotations(cls, action: str) -> dict[str, Any]:
@@ -180,7 +189,7 @@ class BaseGenericListAPIView(GenericView):
 class AsyncGenericListAPIView(
     BaseGenericListAPIView,
     AsyncListAPIView,
-    WithAsyncRepositoryMixin,
+    WithAsyncRepositoryMixin[M],
 ):
     """AsyncGenericListAPIView"""
 
@@ -197,7 +206,7 @@ class AsyncGenericListAPIView(
         return await self.repository.list(*args, **kwargs)
 
 
-class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin):
+class GenericListAPIView(BaseGenericListAPIView, ListAPIView, WithRepositoryMixin[M]):
     """GenericListAPIView"""
 
     def list(self, filter: BaseFilter) -> Sequence[M] | Page[M]:
@@ -433,7 +442,7 @@ class BaseGenericDestroyAPIView(DetailGenericView[PK]):
 class AsyncGenericDestroyAPIView(
     BaseGenericDestroyAPIView[PK],
     AsyncDestroyAPIView,
-    WithAsyncRepositoryMixin,
+    WithAsyncRepositoryMixin[M],
 ):
     """AsyncGenericDestroyAPIView"""
 
@@ -445,7 +454,7 @@ class AsyncGenericDestroyAPIView(
 class GenericDestroyAPIView(
     BaseGenericDestroyAPIView[PK],
     DestroyAPIView,
-    WithRepositoryMixin,
+    WithRepositoryMixin[M],
 ):
     """GenericDestroyAPIView"""
 
@@ -461,6 +470,7 @@ class AsyncGenericViewSet(
     AsyncGenericUpdateAPIView,
     AsyncGenericPartialUpdateAPIView,
     AsyncGenericDestroyAPIView,
+    Generic[M, PK],
 ):
     """AsyncGenericViewSet"""
 
@@ -472,5 +482,6 @@ class GenericViewSet(
     GenericUpdateAPIView,
     GenericPartialUpdateAPIView,
     GenericDestroyAPIView,
+    Generic[M, PK],
 ):
     """GenericViewSet"""

@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from collections.abc import AsyncIterator, Generator
-from typing import Any, ClassVar, Generic
+from typing import Any, ClassVar
 
 from fastapi.responses import StreamingResponse
 from starlette.status import HTTP_200_OK
@@ -8,11 +8,11 @@ from starlette.status import HTTP_200_OK
 from fastapi_views.models import AnyServerSentEvent
 from fastapi_views.types import ServerSentEventType
 
-from .api import APIView, Endpoint, P
+from .api import APIView, Endpoint
 from .functools import serialize_sse, sse_data_annotation, sse_openapi_content
 
 
-class ServerSentEventsAPIView(APIView, Generic[P]):
+class ServerSentEventsAPIView(APIView):
     """API view streaming Server-Sent Events yielded by the `events` action."""
 
     sse_headers: ClassVar[dict[str, str]] = {
@@ -43,8 +43,8 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
     def get_events_endpoint(cls, status_code: int = HTTP_200_OK) -> Endpoint:
         async def endpoint(
             self: ServerSentEventsAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> StreamingResponse:
             return StreamingResponse(
                 self._serialized_events(*args, **kwargs),
@@ -58,8 +58,8 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
 
     async def _serialized_events(
         self,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         event_schema = self.get_response_schema("events") or AnyServerSentEvent
         serializer = self.get_serializer(sse_data_annotation(event_schema))
@@ -71,7 +71,5 @@ class ServerSentEventsAPIView(APIView, Generic[P]):
             yield serialize_sse(sse.id, sse.event, data, sse.retry)
 
     @abstractmethod
-    def events(
-        self, *args: P.args, **kwargs: P.kwargs
-    ) -> AsyncIterator[ServerSentEventType]:
+    def events(self, *args: Any, **kwargs: Any) -> AsyncIterator[ServerSentEventType]:
         raise NotImplementedError
