@@ -7,9 +7,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    Concatenate,
-    Generic,
-    TypeVar,
     get_args,
     get_origin,
     get_type_hints,
@@ -19,7 +16,6 @@ from fastapi import Request, Response
 from fastapi.utils import is_body_allowed_for_status_code
 from pydantic.type_adapter import TypeAdapter
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from typing_extensions import ParamSpec
 
 from fastapi_views.exceptions import (
     APIError,
@@ -44,9 +40,6 @@ if TYPE_CHECKING:
     from fastapi import params
 
     from fastapi_views.models import ResponseHeaders
-
-P = ParamSpec("P")
-T = TypeVar("T")
 
 
 def _contains_response_type(annotation: Any) -> bool:
@@ -200,21 +193,21 @@ class View(DependencyMixin, ABC):
     @classmethod
     def get_custom_endpoint(
         cls,
-        func: Callable[Concatenate[View, P], Any],
-    ) -> Callable[Concatenate[View, P], Any]:
+        func: Callable[..., Any],
+    ) -> Callable[..., Any]:
         options = getattr(func, "kwargs", {})
         status_code = options.get("status_code", HTTP_200_OK)
         schema = options.get("response_model", get_type_hints(func).get("return"))
 
         async def _async_endpoint(
             self: View,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             res = await func(self, *args, **kwargs)
             return self.get_response(res, status_code=status_code, schema=schema)
 
-        def _sync_endpoint(self: View, *args: P.args, **kwargs: P.kwargs) -> Response:
+        def _sync_endpoint(self: View, *args: Any, **kwargs: Any) -> Response:
             res = func(self, *args, **kwargs)
             return self.get_response(res, status_code=status_code, schema=schema)
 
@@ -311,12 +304,12 @@ class View(DependencyMixin, ABC):
         return kwargs
 
 
-class APIView(View, ErrorHandlerMixin, Generic[T]):
+class APIView(View, ErrorHandlerMixin):
     """View with build-in json serialization via
     `serializer` and error handling
     """
 
-    response_schema: T | None = None
+    response_schema: Any = None
     #: Extra route-level dependencies applied per action, e.g. auth scopes.
     action_dependencies: ClassVar[Mapping[Action, Sequence[params.Depends]]] = {}
     default_serializer_options: ClassVar[SerializerOptions] = {
@@ -448,7 +441,7 @@ class APIView(View, ErrorHandlerMixin, Generic[T]):
         return getattr(method, "kwargs", {}).get("status_code", default)
 
     @classmethod
-    def get_response_schema(cls, action: Action | None = None) -> T | None:  # noqa: ARG003
+    def get_response_schema(cls, action: Action | None = None) -> Any:  # noqa: ARG003
         return cls.response_schema
 
     def get_json_content(self, content: Any, serializer: TypeAdapter[Any]) -> bytes:
@@ -472,7 +465,7 @@ class BaseListAPIView(APIView):
     ) -> Any:
         if action == "list" and cls.response_schema_as_list:
             return list[cls.response_schema]  # type: ignore[name-defined]
-        return cls.response_schema
+        return super().get_response_schema(action)
 
     @classmethod
     @abstractmethod
@@ -492,7 +485,7 @@ class BaseListAPIView(APIView):
         yield from super().get_api_actions(prefix)
 
 
-class AsyncListAPIView(BaseListAPIView, ABC, Generic[P]):
+class AsyncListAPIView(BaseListAPIView, ABC):
     """Async list api view"""
 
     @classmethod
@@ -501,8 +494,8 @@ class AsyncListAPIView(BaseListAPIView, ABC, Generic[P]):
 
         async def endpoint(
             self: AsyncListAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             objects = await self.list(*args, **kwargs)
             return self.get_response(objects, status_code=status_code, schema=schema)
@@ -511,18 +504,18 @@ class AsyncListAPIView(BaseListAPIView, ABC, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def list(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    async def list(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class ListAPIView(BaseListAPIView, ABC, Generic[P]):
+class ListAPIView(BaseListAPIView, ABC):
     """Sync list api view"""
 
     @classmethod
     def get_list_endpoint(cls, status_code: int) -> Endpoint:
         schema = cls.get_response_schema(action="list")
 
-        def endpoint(self: ListAPIView, *args: P.args, **kwargs: P.kwargs) -> Response:
+        def endpoint(self: ListAPIView, *args: Any, **kwargs: Any) -> Response:
             objects = self.list(*args, **kwargs)
             return self.get_response(objects, status_code=status_code, schema=schema)
 
@@ -530,7 +523,7 @@ class ListAPIView(BaseListAPIView, ABC, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def list(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def list(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
@@ -555,7 +548,7 @@ class BaseRetrieveAPIView(APIView, DetailViewMixin):
         yield from super().get_api_actions(prefix)
 
 
-class RetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
+class RetrieveAPIView(BaseRetrieveAPIView):
     """Sync retrieve api view"""
 
     @classmethod
@@ -564,8 +557,8 @@ class RetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
 
         def endpoint(
             self: RetrieveAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -576,11 +569,11 @@ class RetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def retrieve(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def retrieve(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class AsyncRetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
+class AsyncRetrieveAPIView(BaseRetrieveAPIView):
     """Async retrieve api view"""
 
     @classmethod
@@ -589,8 +582,8 @@ class AsyncRetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
 
         async def endpoint(
             self: AsyncRetrieveAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = await self.retrieve(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -601,7 +594,7 @@ class AsyncRetrieveAPIView(BaseRetrieveAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def retrieve(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    async def retrieve(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
@@ -630,7 +623,7 @@ class BaseCreateAPIView(APIView):
         yield from super().get_api_actions(prefix)
 
 
-class CreateAPIView(BaseCreateAPIView, Generic[P]):
+class CreateAPIView(BaseCreateAPIView):
     """Sync create api view"""
 
     @classmethod
@@ -639,8 +632,8 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
 
         def endpoint(
             self: CreateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = self.create(*args, **kwargs)
             location = self.get_location(obj)
@@ -657,11 +650,11 @@ class CreateAPIView(BaseCreateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def create(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
+class AsyncCreateAPIView(BaseCreateAPIView):
     """Async create api view"""
 
     @classmethod
@@ -670,8 +663,8 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
 
         async def endpoint(
             self: AsyncCreateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = await self.create(*args, **kwargs)
             location = self.get_location(obj)
@@ -688,7 +681,7 @@ class AsyncCreateAPIView(BaseCreateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def create(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
@@ -715,7 +708,7 @@ class BaseUpdateAPIView(APIView, DetailViewMixin):
         yield from super().get_api_actions(prefix)
 
 
-class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
+class UpdateAPIView(BaseUpdateAPIView):
     """Sync update api view"""
 
     @classmethod
@@ -724,8 +717,8 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
 
         def endpoint(
             self: UpdateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = self.update(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -738,11 +731,11 @@ class UpdateAPIView(BaseUpdateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def update(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def update(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
+class AsyncUpdateAPIView(BaseUpdateAPIView):
     """Async update api view"""
 
     @classmethod
@@ -751,8 +744,8 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
 
         async def endpoint(
             self: AsyncUpdateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = await self.update(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -765,7 +758,7 @@ class AsyncUpdateAPIView(BaseUpdateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def update(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    async def update(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
@@ -793,7 +786,7 @@ class BasePartialUpdateAPIView(APIView, DetailViewMixin):
         raise NotImplementedError
 
 
-class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
+class PartialUpdateAPIView(BasePartialUpdateAPIView):
     """Sync partial update api view"""
 
     @classmethod
@@ -802,8 +795,8 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
 
         def endpoint(
             self: PartialUpdateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = self.partial_update(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -816,11 +809,11 @@ class PartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def partial_update(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    def partial_update(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
+class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView):
     """Async partial update api view"""
 
     @classmethod
@@ -829,8 +822,8 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
 
         async def endpoint(
             self: AsyncPartialUpdateAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             obj = await self.partial_update(*args, **kwargs)
             if obj is None and self.raise_on_none:
@@ -843,7 +836,7 @@ class AsyncPartialUpdateAPIView(BasePartialUpdateAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def partial_update(self, *args: P.args, **kwargs: P.kwargs) -> Any:
+    async def partial_update(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
@@ -869,15 +862,15 @@ class BaseDestroyAPIView(APIView, DetailViewMixin):
         raise NotImplementedError
 
 
-class DestroyAPIView(BaseDestroyAPIView, Generic[P]):
+class DestroyAPIView(BaseDestroyAPIView):
     """Sync destroy api view"""
 
     @classmethod
     def get_destroy_endpoint(cls, status_code: int) -> Endpoint:
         def endpoint(
             self: DestroyAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             self.destroy(*args, **kwargs)
             return Response(status_code=status_code)
@@ -886,19 +879,19 @@ class DestroyAPIView(BaseDestroyAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    def destroy(self, *args: P.args, **kwargs: P.kwargs) -> None:
+    def destroy(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError
 
 
-class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
+class AsyncDestroyAPIView(BaseDestroyAPIView):
     """Async destroy api view"""
 
     @classmethod
     def get_destroy_endpoint(cls, status_code: int) -> Endpoint:
         async def endpoint(
             self: AsyncDestroyAPIView,
-            *args: P.args,
-            **kwargs: P.kwargs,
+            *args: Any,
+            **kwargs: Any,
         ) -> Response:
             await self.destroy(*args, **kwargs)
             return Response(status_code=status_code)
@@ -907,5 +900,5 @@ class AsyncDestroyAPIView(BaseDestroyAPIView, Generic[P]):
         return endpoint
 
     @abstractmethod
-    async def destroy(self, *args: P.args, **kwargs: P.kwargs) -> None:
+    async def destroy(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError
