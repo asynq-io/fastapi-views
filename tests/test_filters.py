@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, params
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 
@@ -14,6 +14,7 @@ from fastapi_views.filters.models import (
     BaseFilter,
     FieldsFilter,
     Filter,
+    IncludeFilter,
     ModelFilter,
     OrderingFilter,
     PaginationFilter,
@@ -165,6 +166,49 @@ def test_fields_filter_with_fields_from():
 def test_fields_filter_get_fields_none():
     f = FieldsFilter(fields=None)
     assert f.get_fields() is None
+
+
+def test_include_filter_valid_values():
+    class MyIncludeFilter(IncludeFilter):
+        related_fields: ClassVar[set[str]] = {"author", "author__publisher"}
+
+    f = MyIncludeFilter(include={"author", "author__publisher"})
+    assert f.get_related() == {"author", "author__publisher"}
+
+
+def test_include_filter_invalid_value():
+    class MyIncludeFilter(IncludeFilter):
+        related_fields: ClassVar[set[str]] = {"author"}
+
+    with pytest.raises(ValidationError, match="Unknown include value"):
+        MyIncludeFilter(include={"publisher"})
+
+
+def test_include_filter_get_related_none():
+    f = IncludeFilter(include=None)
+    assert f.get_related() is None
+
+
+def test_include_filter_excluded_from_kwargs():
+    class MyIncludeFilter(IncludeFilter):
+        related_fields: ClassVar[set[str]] = {"author"}
+
+        name: str | None = None
+
+    f = MyIncludeFilter(include={"author"}, name="x")
+    assert f.as_kwargs() == {"name": "x"}
+
+
+def test_include_filter_description_lists_related_fields():
+    class MyIncludeFilter(IncludeFilter):
+        related_fields: ClassVar[set[str]] = {"author"}
+
+    query = next(
+        meta
+        for meta in MyIncludeFilter.model_fields["include"].metadata
+        if isinstance(meta, params.Query)
+    )
+    assert "author" in (query.description or "")
 
 
 def test_filter_depends_validation_error():
@@ -347,7 +391,16 @@ def test_query_parameters_of_a_full_filter():
     operation = app.openapi()["paths"]["/users"]["get"]
     assert "requestBody" not in operation
     params = {param["name"]: param for param in operation["parameters"]}
-    assert set(params) == {"fields", "q", "sort", "page", "page_size", "name", "age"}
+    assert set(params) == {
+        "fields",
+        "include",
+        "q",
+        "sort",
+        "page",
+        "page_size",
+        "name",
+        "age",
+    }
     assert params["q"]["schema"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
     assert params["fields"]["schema"]["anyOf"][0]["uniqueItems"] is True
     assert "default" not in params["sort"]["schema"]

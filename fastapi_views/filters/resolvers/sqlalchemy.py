@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 from contextlib import suppress
 from functools import reduce
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol
 from weakref import WeakKeyDictionary
 
 from typing_extensions import Self
@@ -13,6 +13,7 @@ from fastapi_views.filters.models import (
     BasePaginationFilter,
     CursorPaginationFilter,
     FieldsFilter,
+    IncludeFilter,
     OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
@@ -30,13 +31,16 @@ if TYPE_CHECKING:
 
 try:
     from sqlalchemy import inspect as sa_inspect
-    from sqlalchemy.orm import defaultload, load_only
+    from sqlalchemy.orm import joinedload, load_only, selectinload
 except ImportError:
 
     def load_only(*_: Any, raiseload: bool = False) -> Any:
         raise NotImplementedError
 
-    def defaultload(*_: Any) -> Any:
+    def joinedload(*_: Any, **__: Any) -> Any:
+        raise NotImplementedError
+
+    def selectinload(*_: Any, **__: Any) -> Any:
         raise NotImplementedError
 
     def sa_inspect(subject: Any, *, raiseerr: bool = True) -> Any:  # type: ignore[no-redef]
@@ -45,6 +49,13 @@ except ImportError:
 
 def _escape_like_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+class RelatedField(NamedTuple):
+    """A column on a related model, and the relationship chain reaching it."""
+
+    relationships: tuple[Any, ...]
+    column: Any
 
 
 class _Queryset(Protocol):
@@ -125,6 +136,47 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
                 return model_class
         return None
 
+    def _resolve_related_field(self, field: str, **context: Any) -> RelatedField | None:
+        """Walk a `__`-separated path across relationships of the base model.
+
+        Returns `None` when the path is not a relationship chain, or when the
+        caller opted out by supplying `context[prefix]["table"]` -- they joined
+        the related table themselves and want a plain column.
+        """
+        name, _, rest = field.partition("__")
+        if not rest or context.get(name, {}).get("table"):
+            return None
+
+        model = context.get("table", self.filter_model)
+        relationships = []
+        while rest:
+            relationship = self._get_relationship(model, name)
+            if relationship is None:
+                return None
+            relationships.append(getattr(model, name))
+            model = relationship.mapper.class_
+            name, _, rest = rest.partition("__")
+
+        column = getattr(model, name, None)
+        if column is None:
+            return None
+        return RelatedField(tuple(relationships), column)
+
+    def _exists(self, relationships: Sequence[Any], predicate: Any) -> Any:
+        """Wrap `predicate` in one EXISTS per relationship hop, innermost first.
+
+        A semi-join keeps the predicate self-contained: no join to add to the
+        queryset, no duplicate parent rows to `DISTINCT` away, and `LIMIT`
+        still counts parents rather than joined rows.
+        """
+        for relationship in reversed(relationships):
+            predicate = (
+                relationship.any(predicate)
+                if relationship.property.uselist
+                else relationship.has(predicate)
+            )
+        return predicate
+
     def resolve_model_field(
         self,
         field: str,
@@ -136,6 +188,9 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             model_class = context.get(prefix, {}).get("table")
             if model_class:
                 return getattr(model_class, name)
+            related = self._resolve_related_field(field, **context)
+            if related is not None:
+                return related.column
             model_class = self._get_model_cls(prefix)
             return getattr(model_class, name)
         model = context.get("table", self.filter_model)
@@ -147,12 +202,22 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             resolved = [self.resolve(f, **context) for f in operation.values]
             return reduce(fn, resolved)
 
-        column = self.resolve_model_field(operation.field, **context)
+        related = self._resolve_related_field(operation.field, **context)
 
         if isinstance(operation, SortOperation):
+            if related is not None:
+                msg = f"Cannot sort by '{operation.field}': ordering across a relationship needs an explicit join"
+                raise NotImplementedError(msg)
+            column = self.resolve_model_field(operation.field, **context)
             return column.desc() if operation.desc else column
 
         fn = self.operators[operation.operator]
+        if related is not None:
+            return self._exists(
+                related.relationships, fn(related.column, operation.values)
+            )
+
+        column = self.resolve_model_field(operation.field, **context)
         return fn(column, operation.values)
 
     def apply_base_filter(
@@ -161,13 +226,45 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
         filters = self.get_filters(filter, **context)
         return queryset.filter(*filters)
 
-    def _get_related_model_cls(self, model: Any, rel_name: str) -> Any:
+    def _get_relationship(self, model: Any, rel_name: str) -> Any:
         with suppress(Exception):
-            mapper = sa_inspect(model)
-            rel = mapper.relationships.get(rel_name)
-            if rel is not None:
-                return rel.mapper.class_
+            return sa_inspect(model).relationships.get(rel_name)
         return None
+
+    def _get_related_model_cls(self, model: Any, rel_name: str) -> Any:
+        rel = self._get_relationship(model, rel_name)
+        if rel is not None:
+            return rel.mapper.class_
+        return None
+
+    def _relationship_loader(self, model: Any, path: Sequence[str]) -> tuple[Any, Any]:
+        """Build a relationship loader option for `__`-separated path parts.
+
+        To-one relationships use `joinedload`, to-many use `selectinload`.
+        Returns the loader and the target model, or `(None, None)` when the
+        path is not a relationship chain.
+        """
+        loader = None
+        current_model = model
+        for rel_name in path:
+            rel = self._get_relationship(current_model, rel_name)
+            if rel is None:
+                return None, None
+            rel_attr = getattr(current_model, rel_name)
+            if rel.uselist:
+                loader = (
+                    selectinload(rel_attr)
+                    if loader is None
+                    else loader.selectinload(rel_attr)
+                )
+            else:
+                loader = (
+                    joinedload(rel_attr)
+                    if loader is None
+                    else loader.joinedload(rel_attr)
+                )
+            current_model = rel.mapper.class_
+        return loader, current_model
 
     def apply_fields_filter(
         self, queryset: _Queryset, filter: FieldsFilter, **context: Any
@@ -194,23 +291,29 @@ class SQLAlchemyFilterResolver(FilterResolver[_Queryset]):
             options_list.append(load_only(*[getattr(model, f) for f in top_level]))
 
         for path, rel_fields in nested.items():
-            current_model = model
-            loader = None
-            for rel_name in path:
-                rel_attr = getattr(current_model, rel_name)
-                loader = (
-                    defaultload(rel_attr)
-                    if loader is None
-                    else loader.defaultload(rel_attr)
-                )
-                current_model = self._get_related_model_cls(current_model, rel_name)
-                if current_model is None:
-                    loader = None
-                    break
+            loader, related_model = self._relationship_loader(model, path)
             if loader is not None:
-                rel_columns = [getattr(current_model, f) for f in rel_fields]
+                rel_columns = [getattr(related_model, f) for f in rel_fields]
                 options_list.append(loader.load_only(*rel_columns))
 
+        return queryset.options(*options_list)
+
+    def apply_related_filter(
+        self, queryset: _Queryset, filter: IncludeFilter, **context: Any
+    ) -> _Queryset:
+        related = filter.get_related()
+        if not related:
+            return queryset
+
+        model = context.get("table", self.filter_model)
+        options_list = []
+        for path in related:
+            loader, _ = self._relationship_loader(model, path.split("__"))
+            if loader is not None:
+                options_list.append(loader)
+
+        if not options_list:
+            return queryset
         return queryset.options(*options_list)
 
     def apply_ordering_filter(

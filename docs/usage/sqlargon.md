@@ -70,6 +70,47 @@ Three subclasses implement `get_filtered_page` with a matching pagination strate
 
 ---
 
+## Relationship preloading
+
+Responses are serialized eagerly, so any relationship your `response_schema` touches must be loaded before the session closes — a lazy relationship raises `MissingGreenlet` at serialization time. Declare the relationships to eager load on the **repository** with `select_related`; views know nothing about loading:
+
+```python
+class BookRepository(PaginatedRepository[Book]):
+    select_related = ("author",)
+```
+
+Paths use `__` for nesting (`author__publisher`). Loader strategy is picked per hop from the relationship type: `joinedload` for to-one, `selectinload` for to-many — collections stay pagination-safe and totals stay correct.
+
+When retrieve should load more than list, use a mapping keyed by repository operation instead of a sequence:
+
+```python
+class BookRepository(PaginatedRepository[Book]):
+    select_related: ClassVar[dict[str, tuple[str, ...]]] = {
+        "get": ("author", "reviews"),
+        "list": ("author",),
+    }
+```
+
+`get` covers `retrieve`; `list` covers both `list` and `get_filtered_page`. For one-off cases, `with_related` returns a repository copy with extra loader options:
+
+```python
+book = await BookRepository().with_related("reviews").get(id=1)
+```
+
+Two related but distinct mechanisms compose with this default:
+
+- an [`IncludeFilter`](filters.md#includefilter) on the view lets API clients opt into extra relationships per request (`?include=author`), and
+- a `FieldsFilter` with nested fields (`?fields=author__name`) eager loads the relationships it projects.
+
+Both are additive on top of `select_related`.
+
+!!! note
+    Eager loading is independent of filtering. Loader options never satisfy a
+    `WHERE` clause — filtering on a related column still requires an explicit
+    `.join(...)` on the repository query, exactly as before.
+
+---
+
 ## Wiring it into a generic view
 
 Set `filter` to the matching filter class and `repository` to an instance. Nothing else is needed — the view derives the page container from the filter:
@@ -91,7 +132,7 @@ class Fruit(Base):
 
 
 class FruitRepository(PaginatedRepository[Fruit]):
-    default_order_by = Fruit.__table__.c.id
+    default_order_by = Fruit.id.asc()
 
 
 class FruitId(BaseSchema):

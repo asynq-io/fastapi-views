@@ -9,6 +9,7 @@ from fastapi_views.filters.models import (
     BaseFilter,
     BasePaginationFilter,
     FieldsFilter,
+    IncludeFilter,
     OffsetLimitFilter,
     OrderingFilter,
     PaginationFilter,
@@ -102,6 +103,14 @@ class ObjectFilterResolver(FilterResolver[Objects]):
         for order_by in filter.order_by:
             resolved = self.resolve(order_by, **context)
             queryset = sorted(queryset, **resolved)
+        return queryset
+
+    def apply_related_filter(
+        self,
+        queryset: Objects,
+        filter: IncludeFilter,  # noqa: ARG002
+        **_: Any,
+    ) -> Objects:
         return queryset
 
     def apply_pagination_filter(

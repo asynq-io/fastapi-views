@@ -26,11 +26,13 @@ from fastapi_views.views.generics import (
     AsyncGenericCreateAPIView,
     AsyncGenericListAPIView,
     AsyncGenericPartialUpdateAPIView,
+    AsyncGenericRetrieveAPIView,
     AsyncGenericUpdateAPIView,
     AsyncGenericViewSet,
     BaseGenericListAPIView,
     GenericCreateAPIView,
     GenericListAPIView,
+    GenericRetrieveAPIView,
     Page,
 )
 
@@ -285,7 +287,39 @@ def test_apply_fields_filter_sets_serializer_options_with_page_schema():
     view = FieldsFilterView.__new__(FieldsFilterView)
     view.serializer_options = {}
     view._apply_fields_filter(FieldsFilter(fields={"name", "age"}))
-    assert view.serializer_options.get("include") == {"items": {"name", "age"}}
+    assert view.serializer_options.get("include") == {
+        "items": {"__all__": {"name": True, "age": True}}
+    }
+
+
+def test_apply_fields_filter_nested_include():
+    class FieldsFilterView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = None
+
+        async def list(self, _filter):
+            return []
+
+    view = FieldsFilterView.__new__(FieldsFilterView)
+    view.serializer_options = {}
+    view._apply_fields_filter(FieldsFilter(fields={"id", "author__name"}))
+    assert view.serializer_options.get("include") == {
+        "__all__": {"id": True, "author": {"name": True}}
+    }
+
+
+def test_apply_fields_filter_whole_relation_wins_over_nested():
+    class FieldsFilterView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = None
+
+        async def list(self, _filter):
+            return []
+
+    view = FieldsFilterView.__new__(FieldsFilterView)
+    view.serializer_options = {}
+    view._apply_fields_filter(FieldsFilter(fields={"author", "author__name"}))
+    assert view.serializer_options.get("include") == {"__all__": {"author": True}}
 
 
 def test_apply_fields_filter_no_fields():
@@ -456,3 +490,177 @@ def test_sync_generic_list_with_plain_filter():
     f = NameFilter(name="alice")
     result = GenericListAPIView.list(view, f)
     assert result == []
+
+
+@pytest.mark.anyio
+async def test_async_generic_list_hooks():
+    calls: list[tuple[str, Any]] = []
+
+    class NameFilter(BaseFilter):
+        name: str | None = None
+
+    class MockRepo:
+        async def list(self, **kwargs) -> list[Any]:
+            return [{"name": kwargs.get("name")}]
+
+    class HookedListView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = NameFilter
+        repository = MockRepo()
+
+        async def before_list(self, filter: NameFilter) -> None:  # type: ignore[override]
+            calls.append(("before_list", filter.name))
+
+        async def after_list(self, objs) -> None:
+            calls.append(("after_list", list(objs)))
+
+    async with view_client(HookedListView) as c:
+        response = await c.get("/test", params={"name": "alice"})
+        assert response.status_code == HTTP_200_OK
+
+    assert calls == [
+        ("before_list", "alice"),
+        ("after_list", [{"name": "alice"}]),
+    ]
+
+
+@pytest.mark.anyio
+async def test_async_generic_list_hooks_without_filter():
+    calls: list[str] = []
+
+    class MockRepo:
+        async def list(self, **_kwargs) -> list[Any]:
+            return []
+
+    class HookedListView(AsyncGenericListAPIView):
+        response_schema = dict
+        filter = None
+        repository = MockRepo()
+
+        async def before_list(self, filter: BaseFilter) -> None:
+            calls.append("before_list")
+
+        async def after_list(self, objs) -> None:
+            calls.append("after_list")
+
+    async with view_client(HookedListView) as c:
+        response = await c.get("/test")
+        assert response.status_code == HTTP_200_OK
+
+    assert calls == ["before_list", "after_list"]
+
+
+@pytest.mark.anyio
+async def test_sync_generic_list_hooks():
+    calls: list[tuple[str, Any]] = []
+
+    class NameFilter(BaseFilter):
+        name: str | None = None
+
+    class MockRepo:
+        def list(self, **kwargs) -> list[Any]:
+            return [{"name": kwargs.get("name")}]
+
+    class HookedListView(GenericListAPIView):
+        response_schema = dict
+        filter = NameFilter
+        repository = MockRepo()
+
+        def before_list(self, filter: NameFilter) -> None:  # type: ignore[override]
+            calls.append(("before_list", filter.name))
+
+        def after_list(self, objs) -> None:
+            calls.append(("after_list", list(objs)))
+
+    async with view_client(HookedListView) as c:
+        response = await c.get("/test", params={"name": "alice"})
+        assert response.status_code == HTTP_200_OK
+
+    assert calls == [
+        ("before_list", "alice"),
+        ("after_list", [{"name": "alice"}]),
+    ]
+
+
+@pytest.mark.anyio
+async def test_async_generic_retrieve_hooks():
+    calls: list[tuple[str, Any]] = []
+
+    class IntId(BaseModel):
+        id: int
+
+    class MockRepo:
+        async def get(self, **kwargs) -> dict[str, Any]:
+            return {"id": kwargs["id"]}
+
+    class HookedRetrieveView(AsyncGenericRetrieveAPIView):
+        response_schema = dict
+        primary_key = IntId
+        repository = MockRepo()
+
+        async def before_retrieve(self, pk: IntId) -> None:
+            calls.append(("before_retrieve", pk.id))
+
+        async def after_retrieve(self, obj) -> None:
+            calls.append(("after_retrieve", obj))
+
+    async with view_client(HookedRetrieveView) as c:
+        response = await c.get("/test/1")
+        assert response.status_code == HTTP_200_OK
+
+    assert calls == [("before_retrieve", 1), ("after_retrieve", {"id": 1})]
+
+
+@pytest.mark.anyio
+async def test_async_generic_retrieve_hooks_receive_none():
+    calls: list[tuple[str, Any]] = []
+
+    class IntId(BaseModel):
+        id: int
+
+    class MockRepo:
+        async def get(self, **_kwargs) -> None:
+            return None
+
+    class HookedRetrieveView(AsyncGenericRetrieveAPIView):
+        response_schema = dict
+        primary_key = IntId
+        repository = MockRepo()
+
+        async def after_retrieve(self, obj) -> None:
+            calls.append(("after_retrieve", obj))
+
+    async with view_client(HookedRetrieveView, error_handlers=True) as c:
+        response = await c.get("/test/1")
+        assert response.status_code == HTTP_404_NOT_FOUND
+
+    assert calls == [("after_retrieve", None)]
+
+
+@pytest.mark.anyio
+async def test_sync_generic_retrieve_hooks():
+    calls: list[tuple[str, Any]] = []
+
+    class IntId(BaseModel):
+        id: int
+
+    class MockRepo:
+        def get(self, **kwargs) -> dict[str, Any]:
+            return {"id": kwargs["id"]}
+
+    class HookedRetrieveView(GenericRetrieveAPIView):
+        response_schema = dict
+        primary_key = IntId
+        repository = MockRepo()
+
+        def before_retrieve(self, pk: IntId) -> None:
+            calls.append(("before_retrieve", pk.id))
+
+        def after_retrieve(self, obj) -> None:
+            calls.append(("after_retrieve", obj))
+
+    async with view_client(HookedRetrieveView) as c:
+        response = await c.get("/test/1")
+        assert response.status_code == HTTP_200_OK
+
+    assert calls == [("before_retrieve", 1), ("after_retrieve", {"id": 1})]
