@@ -1,0 +1,2564 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="FastAPI Class Views and other utils">
+      
+      
+      
+      
+        <link rel="prev" href="../jsonpatch/">
+      
+      
+        <link rel="next" href="../cache/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Filters - FastAPI Views</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#filters" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FastAPI Views" class="md-header__button md-logo" aria-label="FastAPI Views" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastAPI Views
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Filters
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6m0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4M7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/asynq-io/fastapi-views" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    asynq-io/fastapi-views
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FastAPI Views" class="md-nav__button md-logo" aria-label="FastAPI Views" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FastAPI Views
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/asynq-io/fastapi-views" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    asynq-io/fastapi-views
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastAPI Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../viewset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Viewset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sqlargon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQLArgon repositories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bulk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bulk actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jsonpatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#query-parameters-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query parameters at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filter classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basefilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BaseFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modelfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ModelFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orderingfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OrderingFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#searchfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SearchFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pagination-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pagination filters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fieldsfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FieldsFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-all-in-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter — all-in-one
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lookup-suffixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lookup suffixes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lookup suffixes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-valued-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List-valued fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composing-custom-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composing custom filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nested-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-filterdepends-in-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using FilterDepends in views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a filter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading a filter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolvers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resolvers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#objectfilterresolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ObjectFilterResolver
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlalchemyfilterresolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLAlchemyFilterResolver
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SQLAlchemyFilterResolver">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filtering-across-joined-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering across joined tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#field-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field projection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cursor-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cursor pagination
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skipping-stages-with-exclude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skipping stages with exclude
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-resolvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom resolvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-sqlalchemy-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full SQLAlchemy example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../opentelemetry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server Side Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../websockets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WebSockets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i18n/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internationalization (i18n)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/viewsets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ViewSets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generic Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/bulk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bulk Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/jsonpatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pagination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pagination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/decorators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decorators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/sse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server-Sent Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/websockets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WebSockets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#query-parameters-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query parameters at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filter classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basefilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BaseFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modelfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ModelFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orderingfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OrderingFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#searchfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SearchFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pagination-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pagination filters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fieldsfilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FieldsFilter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-all-in-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter — all-in-one
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lookup-suffixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lookup suffixes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lookup suffixes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-valued-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List-valued fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#composing-custom-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composing custom filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nested-filters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested filters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-filterdepends-in-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using FilterDepends in views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a filter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading a filter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolvers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resolvers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#objectfilterresolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ObjectFilterResolver
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlalchemyfilterresolver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLAlchemyFilterResolver
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SQLAlchemyFilterResolver">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filtering-across-joined-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering across joined tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#field-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field projection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cursor-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cursor pagination
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skipping-stages-with-exclude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skipping stages with exclude
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-resolvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom resolvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-sqlalchemy-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full SQLAlchemy example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="filters">Filters</h1>
+<p>FastAPI Views ships a Django REST Framework-inspired filter system that handles filtering, sorting, searching, pagination, and field projection. Filters are ordinary Pydantic models, so they integrate naturally with FastAPI's dependency injection and appear correctly in the OpenAPI spec.</p>
+<p>A filter never touches your data layer directly. It turns query parameters into a list of small, declarative <em>operations</em>, and a <strong>resolver</strong> translates those operations into a query for a specific backend (SQLAlchemy, plain Python objects, …).</p>
+<p>Everything in the public API is re-exported from the package root:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">BaseFilter</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">BasePaginationFilter</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">CursorPaginationFilter</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">FieldsFilter</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">Filter</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">FilterDepends</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">ModelFilter</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">NestedFilter</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">OffsetLimitFilter</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">OrderingFilter</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">PaginationFilter</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">SearchFilter</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+</code></pre></div>
+<p>Resolvers are <strong>not</strong> re-exported — the <code>resolvers</code> package is empty, so importing filters never pulls in SQLAlchemy. Import them from their submodule:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.objects</span><span class="w"> </span><span class="kn">import</span> <span class="n">ObjectFilterResolver</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLAlchemyFilterResolver</span>
+</code></pre></div>
+<hr />
+<h2 id="query-parameters-at-a-glance">Query parameters at a glance</h2>
+<table>
+<thead>
+<tr>
+<th>Filter class</th>
+<th>Query parameters</th>
+<th>Defaults</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ModelFilter</code></td>
+<td>one parameter per declared field</td>
+<td>per field</td>
+</tr>
+<tr>
+<td><code>OrderingFilter</code></td>
+<td><code>?sort</code> (repeatable)</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>SearchFilter</code></td>
+<td><code>?q</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>FieldsFilter</code></td>
+<td><code>?fields</code> (repeatable)</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>PaginationFilter</code></td>
+<td><code>?page</code>, <code>?page_size</code></td>
+<td><code>1</code>, <code>100</code></td>
+</tr>
+<tr>
+<td><code>OffsetLimitFilter</code></td>
+<td><code>?offset</code>, <code>?limit</code></td>
+<td><code>0</code>, <code>100</code></td>
+</tr>
+<tr>
+<td><code>CursorPaginationFilter</code></td>
+<td><code>?cursor</code>, <code>?page_size</code></td>
+<td><code>None</code>, <code>100</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>page_size</code> is capped at <code>MAX_PAGE_SIZE</code> (default <code>500</code>, read from the <code>MAX_PAGE_SIZE</code> environment variable at import time).</p>
+<hr />
+<h2 id="filter-classes">Filter classes</h2>
+<h3 id="basefilter"><code>BaseFilter</code></h3>
+<p>The root of the hierarchy — a Pydantic <code>BaseModel</code> plus two building blocks:</p>
+<ul>
+<li><code>special_fields: ClassVar[set[str]]</code> — names that are <em>not</em> data filters (pagination, sorting, search, projection). They are collected from the whole MRO in <code>__init_subclass__</code>, and excluded from <code>as_kwargs()</code>.</li>
+<li><code>get_filters()</code> — returns the list of operations for this filter; the <code>filters</code> property is a shortcut for it. <code>BaseFilter.get_filters()</code> returns an empty list, subclasses extend it.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseFilter</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.operations</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilterOperation</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">StatusFilter</span><span class="p">(</span><span class="n">BaseFilter</span><span class="p">):</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_filters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">filters</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_filters</span><span class="p">()</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>            <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>                <span class="n">FilterOperation</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="n">operator</span><span class="o">=</span><span class="s2">&quot;eq&quot;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">)</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>            <span class="p">)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="k">return</span> <span class="n">filters</span>
+</code></pre></div>
+<h3 id="modelfilter"><code>ModelFilter</code></h3>
+<p>Extends <code>BaseFilter</code> and builds the operations automatically from its own fields, so you rarely need to write <code>get_filters()</code> yourself. A field name may carry a lookup suffix after the <strong>last</strong> double underscore (<code>field__operator</code>); a name with no <code>__</code> at all gets the operator <code>eq</code>. <code>None</code> values are skipped, so every filter field is opt-in.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelFilter</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemFilter</span><span class="p">(</span><span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>          <span class="c1"># name = ?</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">status__ne</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>    <span class="c1"># status != ?</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">price__lt</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>     <span class="c1"># price &lt; ?</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">price__ge</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>     <span class="c1"># price &gt;= ?</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">stock__is_null</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># stock IS NULL / IS NOT NULL</span>
+</code></pre></div>
+<p><code>field_names</code> is the set of fields <code>ModelFilter</code> builds operations from (all model fields minus <code>special_fields</code>). Values added with <code>with_kwargs()</code> are appended as operations too.</p>
+<p>Everything before the last <code>__</code> is kept as the operation's <code>field</code>, which is how lookups reach a related table (see <a href="#nested-filters">Nested filters</a> and <a href="#filtering-across-joined-tables">Filtering across joined tables</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemFilter</span><span class="p">(</span><span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">user__name__eq</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>   <span class="c1"># field=&quot;user__name&quot;, operator=&quot;eq&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">user__name__gt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>   <span class="c1"># field=&quot;user__name&quot;, operator=&quot;gt&quot;</span>
+</code></pre></div>
+<p>A nested <strong>equality</strong> lookup therefore has to spell the operator out: <code>user__name</code> alone parses as field <code>user</code> with operator <code>name</code>, which no resolver knows.</p>
+<h3 id="orderingfilter"><code>OrderingFilter</code></h3>
+<p>Adds a repeatable <code>?sort</code> query parameter. Prefix a field with <code>-</code> for descending (<code>+</code> is also accepted and stripped). <code>ordering_fields</code> whitelists the sortable fields: unknown values fail validation with <code>422</code>, and the allowed values are listed in the parameter's OpenAPI description.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderingFilter</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemOrderingFilter</span><span class="p">(</span><span class="n">OrderingFilter</span><span class="p">):</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">ordering_fields</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;price&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>?sort=name</code> — ascending by <code>name</code></li>
+<li><code>?sort=-created_at</code> — descending by <code>created_at</code></li>
+<li><code>?sort=price&amp;sort=-name</code> — multi-column sort</li>
+</ul>
+<p><code>get_order_by()</code> (or the <code>order_by</code> property) returns a list of <code>SortOperation</code>s. Sorting is kept separate from <code>get_filters()</code> — resolvers apply it in a separate step.</p>
+<p><code>ordering_fields</code> defaults to an empty set, in which case <em>every</em> <code>?sort</code> value is rejected — always declare it on the subclass.</p>
+<h3 id="searchfilter"><code>SearchFilter</code></h3>
+<p>Adds a <code>?q</code> query parameter (the model field is named <code>query</code>, the query parameter is aliased to <code>q</code>) and appends a single <code>LogicalOperation(operator="or", ...)</code> containing one <code>ilike</code> operation per entry in <code>search_fields</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">SearchFilter</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemSearchFilter</span><span class="p">(</span><span class="n">SearchFilter</span><span class="p">):</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">search_fields</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">}</span>
+</code></pre></div>
+<p><code>?q=widget</code> produces <code>name ILIKE '%widget%' OR description ILIKE '%widget%'</code>.</p>
+<h3 id="pagination-filters">Pagination filters</h3>
+<p><code>BasePaginationFilter</code> declares <code>pagination_fields: ClassVar[set[str]]</code>, which is automatically merged into <code>special_fields</code> (so pagination parameters never leak into <code>as_kwargs()</code>), and <code>get_pagination(**kwargs)</code>, which dumps just those fields — exactly the keyword arguments a paginating repository expects. Extra keyword arguments are forwarded to <code>model_dump</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Fields</th>
+<th>Defaults</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PaginationFilter</code></td>
+<td><code>page: PageNumber</code>, <code>page_size: PageSize</code></td>
+<td><code>1</code>, <code>100</code></td>
+</tr>
+<tr>
+<td><code>OffsetLimitFilter</code></td>
+<td><code>offset: NonNegativeInt</code>, <code>limit: PositiveInt</code></td>
+<td><code>0</code>, <code>100</code></td>
+</tr>
+<tr>
+<td><code>CursorPaginationFilter</code></td>
+<td><code>cursor: Cursor \| None</code>, <code>page_size: PageSize</code></td>
+<td><code>None</code>, <code>100</code></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">PaginationFilter</span><span class="p">(</span><span class="n">page</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">page_size</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span><span class="o">.</span><span class="n">get_pagination</span><span class="p">()</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">{</span><span class="s1">&#39;page&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;page_size&#39;</span><span class="p">:</span> <span class="mi">20</span><span class="p">}</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">OffsetLimitFilter</span><span class="p">()</span><span class="o">.</span><span class="n">get_pagination</span><span class="p">()</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">{</span><span class="s1">&#39;offset&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;limit&#39;</span><span class="p">:</span> <span class="mi">100</span><span class="p">}</span>
+</code></pre></div>
+<p><code>Cursor</code> values are base64-decoded on the way in and re-encoded on JSON serialization, so clients only ever see opaque tokens. See <a href="../../reference/pagination/">Pagination</a> for the matching page containers.</p>
+<h3 id="fieldsfilter"><code>FieldsFilter</code></h3>
+<p>Adds a repeatable <code>?fields</code> query parameter for sparse fieldsets, exposed through <code>get_fields()</code> (returns <code>set[str] | None</code>). Set <code>fields_from</code> to a Pydantic model and the accepted values are narrowed to that model's field names, which also renders as an <code>enum</code> in the OpenAPI schema. The narrowing applies to that subclass only — plain <code>FieldsFilter</code>s and other subclasses elsewhere in the app keep accepting any string.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">FieldsFilter</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemSchema</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">price</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemFieldsFilter</span><span class="p">(</span><span class="n">FieldsFilter</span><span class="p">):</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">fields_from</span> <span class="o">=</span> <span class="n">ItemSchema</span>
+</code></pre></div>
+<p><code>?fields=id&amp;fields=name</code> yields <code>{"id", "name"}</code> (<code>fields</code> is a set, so repeat the parameter — it is not comma-separated).</p>
+<p>Projection is <em>not</em> part of <code>get_filters()</code>; it is applied either by a resolver (<code>apply_fields_filter</code>) or, in <a href="../generics/">generic views</a>, by the serializer, which restricts the response to the requested fields.</p>
+<h3 id="filter-all-in-one"><code>Filter</code> — all-in-one</h3>
+<p><code>Filter</code> inherits from <code>PaginationFilter</code>, <code>OrderingFilter</code>, <code>SearchFilter</code>, <code>FieldsFilter</code> and <code>ModelFilter</code>. Use it when you want the full feature set without composing anything manually.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">Filter</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">ordering_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;price&quot;</span><span class="p">}</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="n">search_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">}</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">fields_from</span> <span class="o">=</span> <span class="n">ItemSchema</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="n">price__lt</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+<hr />
+<h2 id="lookup-suffixes">Lookup suffixes</h2>
+<p>The suffix after <code>__</code> becomes the operation's <code>operator</code>; each resolver maps operator names to backend expressions.</p>
+<table>
+<thead>
+<tr>
+<th>Suffix</th>
+<th>Meaning</th>
+<th><code>SQLAlchemyFilterResolver</code></th>
+<th><code>ObjectFilterResolver</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>(none)</em> / <code>__eq</code></td>
+<td><code>==</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>__ne</code></td>
+<td><code>!=</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>__lt</code>, <code>__le</code>, <code>__gt</code>, <code>__ge</code></td>
+<td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>__in</code></td>
+<td><code>IN (...)</code></td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>__not_in</code></td>
+<td><code>NOT IN (...)</code></td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>__is_null</code></td>
+<td><code>IS NULL</code> when <code>True</code>, <code>IS NOT NULL</code> when <code>False</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>__like</code></td>
+<td><code>LIKE '%value%'</code></td>
+<td>yes</td>
+<td>case-sensitive substring</td>
+</tr>
+<tr>
+<td><code>__ilike</code></td>
+<td><code>ILIKE '%value%'</code></td>
+<td>yes</td>
+<td>case-insensitive substring</td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ul>
+<li>Use <code>le</code> / <code>ge</code>, not <code>lte</code> / <code>gte</code>.</li>
+<li>The SQLAlchemy resolver wraps <code>like</code> / <code>ilike</code> values in <code>%…%</code> and escapes <code>\</code>, <code>%</code> and <code>_</code>, so user input cannot inject wildcards.</li>
+<li><code>ObjectFilterResolver</code> implements <code>is_null</code>, <code>like</code> and <code>ilike</code> explicitly and falls back to <code>getattr(operator, name)</code> for everything else — which is why <code>in</code> and <code>not_in</code> (no such functions in the stdlib <code>operator</code> module) are unsupported there and raise <code>AttributeError</code>.</li>
+<li><code>and</code> / <code>or</code> are the operators of <code>LogicalOperation</code>, used for grouping (as in <code>SearchFilter</code>), not as field suffixes.</li>
+</ul>
+<h3 id="list-valued-fields">List-valued fields</h3>
+<p>A filter field whose type is a list (e.g. for <code>__in</code>) has to be declared with <code>QueryField</code> — a bare <code>list[int] | None = None</code> makes FastAPI infer a request body instead of a query parameter:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelFilter</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">QueryField</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemFilter</span><span class="p">(</span><span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="n">id__in</span><span class="p">:</span> <span class="n">QueryField</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span>        <span class="c1"># ?id__in=1&amp;id__in=2</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="n">tag__not_in</span><span class="p">:</span> <span class="n">QueryField</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span>   <span class="c1"># ?tag__not_in=a&amp;tag__not_in=b</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">active</span><span class="p">:</span> <span class="n">QueryField</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>      <span class="c1"># an explicit `= None` is harmless</span>
+</code></pre></div>
+<p>Each <code>QueryField</code> becomes its own, independent query parameter — declare as many as you like in one filter.</p>
+<p><code>QueryField[T]</code> is <code>Annotated[T | None, Field(None), QueryParam(Query())]</code>. The pydantic default is a plain <code>None</code> and the <code>fastapi.Query</code> travels in the annotation metadata, wrapped in <code>QueryParam</code> so pydantic does not absorb it; <code>BaseFilter.__pydantic_init_subclass__</code> unwraps it once the field is built, which is what FastAPI then sees. Re-declaring the default (<code>= None</code>) is therefore harmless — it neither discards the query parameter nor changes the generated OpenAPI.</p>
+<p>Because the default is a real <code>None</code>, query-backed fields (<code>QueryField</code>, <code>sort</code>, <code>q</code>, <code>fields</code>) also behave sensibly when a filter is constructed by hand rather than by FastAPI — handy in tests, where a filter can be built with no arguments at all:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">ItemFilter</span><span class="p">()</span><span class="o">.</span><span class="n">id__in</span> <span class="ow">is</span> <span class="kc">None</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kc">True</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">ItemFilter</span><span class="p">()</span><span class="o">.</span><span class="n">filters</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="p">[]</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">OrderingFilter</span><span class="p">()</span><span class="o">.</span><span class="n">sort</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">,</span> <span class="n">OrderingFilter</span><span class="p">()</span><span class="o">.</span><span class="n">order_by</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="p">[])</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">FieldsFilter</span><span class="p">()</span><span class="o">.</span><span class="n">get_fields</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">,</span> <span class="n">SearchFilter</span><span class="p">()</span><span class="o">.</span><span class="n">query</span> <span class="ow">is</span> <span class="kc">None</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="composing-custom-filters">Composing custom filters</h2>
+<p>Combine filter classes with multiple inheritance and pick only the behaviour you need:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">ModelFilter</span><span class="p">,</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">OffsetLimitFilter</span><span class="p">,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">OrderingFilter</span><span class="p">,</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="n">SearchFilter</span><span class="p">,</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="p">)</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilter</span><span class="p">(</span><span class="n">OffsetLimitFilter</span><span class="p">,</span> <span class="n">OrderingFilter</span><span class="p">,</span> <span class="n">SearchFilter</span><span class="p">,</span> <span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>    <span class="n">ordering_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;created_at&quot;</span><span class="p">}</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    <span class="n">search_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">}</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>    <span class="n">is_active</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+<hr />
+<h2 id="nested-filters">Nested filters</h2>
+<p><code>NestedFilter</code> embeds one filter inside another. The nested filter's operations are prefixed with the field name (<code>prefix__field</code>) via <code>set_prefix</code>, and the <code>prefix</code> argument additionally rewrites the <em>query parameter</em> names through a Pydantic alias generator:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ModelFilter</span><span class="p">,</span> <span class="n">NestedFilter</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostFilter</span><span class="p">(</span><span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>    <span class="c1"># ?post__title=hello -&gt; FilterOperation(field=&quot;post__title&quot;, operator=&quot;eq&quot;)</span>
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>    <span class="n">post</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">PostFilter</span><span class="p">]</span> <span class="o">=</span> <span class="n">NestedFilter</span><span class="p">(</span><span class="n">PostFilter</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;post&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Called without a prefix, <code>NestedFilter(model)</code> is equivalent to <code>FilterDepends(model)</code> — the nested parameters keep their plain names.</p>
+<p>How a <code>prefix__field</code> operation is resolved is up to the resolver; see <a href="#filtering-across-joined-tables">Filtering across joined tables</a>.</p>
+<hr />
+<h2 id="using-filterdepends-in-views">Using <code>FilterDepends</code> in views</h2>
+<p><code>FilterDepends</code> wraps a filter class as a FastAPI dependency and converts Pydantic <code>ValidationError</code> into <code>RequestValidationError</code>, so invalid input produces a regular <code>422 Unprocessable Entity</code> response instead of a <code>500</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilterDepends</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.views.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncListAPIView</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserListView</span><span class="p">(</span><span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="n">response_schema</span> <span class="o">=</span> <span class="n">UserSchema</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">filter</span><span class="p">:</span> <span class="n">UserFilter</span> <span class="o">=</span> <span class="n">FilterDepends</span><span class="p">(</span><span class="n">UserFilter</span><span class="p">)):</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">repository</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="o">**</span><span class="nb">filter</span><span class="o">.</span><span class="n">as_kwargs</span><span class="p">())</span>
+</code></pre></div>
+<p>In <a href="../generics/">generic views</a>, set the <code>filter</code> class attribute and <code>FilterDepends</code> is applied automatically; the list response container is derived from the filter's pagination base (<code>PaginationFilter</code> → <code>NumberedPage</code>, <code>OffsetLimitFilter</code> → <code>OffsetPage</code>, <code>CursorPaginationFilter</code> → <code>CursorPage</code>, no filter → plain <code>list</code>).</p>
+<hr />
+<h2 id="reading-a-filter">Reading a filter</h2>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>filters</code> / <code>get_filters()</code></td>
+<td><code>list[FilterOperation \| LogicalOperation]</code></td>
+</tr>
+<tr>
+<td><code>order_by</code> / <code>get_order_by()</code></td>
+<td><code>list[SortOperation]</code> (<code>OrderingFilter</code>)</td>
+</tr>
+<tr>
+<td><code>get_fields()</code></td>
+<td><code>set[str] \| None</code> (<code>FieldsFilter</code>)</td>
+</tr>
+<tr>
+<td><code>get_pagination(**kwargs)</code></td>
+<td><code>dict</code> of the pagination fields only (<code>BasePaginationFilter</code>)</td>
+</tr>
+<tr>
+<td><code>as_kwargs()</code></td>
+<td>non-<code>None</code> fields except <code>special_fields</code>, plus <code>with_kwargs()</code> values</td>
+</tr>
+<tr>
+<td><code>with_kwargs(**kwargs)</code></td>
+<td>injects extra values (server-side, not client-controlled)</td>
+</tr>
+</tbody>
+</table>
+<p><code>as_kwargs()</code> is the escape hatch for repositories that take plain keyword arguments rather than a queryset, and it is what generic views use when a filter has no pagination base. <code>with_kwargs()</code> is how a view injects values the client must not control — a tenant id, the current user — and those values are honoured by both <code>as_kwargs()</code> and <code>ModelFilter.get_filters()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">UserFilter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Alice&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span><span class="o">.</span><span class="n">as_kwargs</span><span class="p">()</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;Alice&#39;</span><span class="p">}</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span><span class="o">.</span><span class="n">with_kwargs</span><span class="p">(</span><span class="n">tenant_id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span><span class="o">.</span><span class="n">as_kwargs</span><span class="p">()</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;Alice&#39;</span><span class="p">,</span> <span class="s1">&#39;tenant_id&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">f</span><span class="o">.</span><span class="n">filters</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="p">[</span><span class="n">FilterOperation</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">operator</span><span class="o">=</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="s1">&#39;Alice&#39;</span><span class="p">),</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a> <span class="n">FilterOperation</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s1">&#39;tenant_id&#39;</span><span class="p">,</span> <span class="n">operator</span><span class="o">=</span><span class="s1">&#39;eq&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="mi">1</span><span class="p">)]</span>
+</code></pre></div>
+<h3 id="operations">Operations</h3>
+<p>Operations are plain dataclasses in <code>fastapi_views.filters.operations</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FieldOperation</code></td>
+<td><code>field</code> — base class, provides <code>set_prefix(prefix)</code></td>
+</tr>
+<tr>
+<td><code>FilterOperation</code></td>
+<td><code>field</code>, <code>operator</code>, <code>values</code></td>
+</tr>
+<tr>
+<td><code>SortOperation</code></td>
+<td><code>field</code>, <code>desc: bool = False</code></td>
+</tr>
+<tr>
+<td><code>LogicalOperation</code></td>
+<td><code>operator</code> (<code>"and"</code> / <code>"or"</code>), <code>values</code> — a list of operations</td>
+</tr>
+</tbody>
+</table>
+<p><code>Operation</code> is the union of the three concrete types.</p>
+<hr />
+<h2 id="resolvers">Resolvers</h2>
+<p>A resolver translates a filter into a backend query. All resolvers subclass <code>FilterResolver[Queryset]</code> from <code>fastapi_views.filters.resolvers.abc</code>, which defines the four steps and the public entry point:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="nb">filter</span><span class="p">,</span> <span class="n">queryset</span><span class="p">,</span> <span class="n">exclude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">)</span>
+</code></pre></div>
+<p><code>apply_filter</code> takes the <strong>filter first</strong>, then the queryset, and runs the applicable steps in order:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Method</th>
+<th>Runs when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"filter"</code></td>
+<td><code>apply_base_filter</code></td>
+<td>always</td>
+</tr>
+<tr>
+<td><code>"fields"</code></td>
+<td><code>apply_fields_filter</code></td>
+<td>filter is a <code>FieldsFilter</code></td>
+</tr>
+<tr>
+<td><code>"sort"</code></td>
+<td><code>apply_ordering_filter</code></td>
+<td>filter is an <code>OrderingFilter</code></td>
+</tr>
+<tr>
+<td><code>"paginate"</code></td>
+<td><code>apply_pagination_filter</code></td>
+<td>filter is a <code>BasePaginationFilter</code></td>
+</tr>
+</tbody>
+</table>
+<p>Pass step names in <code>exclude</code> to skip them, and any remaining keyword arguments are forwarded to every step as <code>context</code>.</p>
+<h3 id="objectfilterresolver"><code>ObjectFilterResolver</code></h3>
+<p>Filters a plain <code>list</code> in memory — handy for tests, fixtures, and non-SQL sources. It reads values through a <em>getter factory</em>, <code>operator.attrgetter</code> by default:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.objects</span><span class="w"> </span><span class="kn">import</span> <span class="n">ObjectFilterResolver</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">:</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="n">users</span> <span class="o">=</span> <span class="p">[</span><span class="n">User</span><span class="p">(</span><span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="mi">25</span><span class="p">),</span> <span class="n">User</span><span class="p">(</span><span class="s2">&quot;Jane&quot;</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="n">User</span><span class="p">(</span><span class="s2">&quot;Alice&quot;</span><span class="p">,</span> <span class="mi">35</span><span class="p">)]</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="n">resolver</span> <span class="o">=</span> <span class="n">ObjectFilterResolver</span><span class="p">()</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="n">result</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="n">my_filter</span><span class="p">,</span> <span class="n">users</span><span class="p">)</span>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a><span class="c1"># for lists of dicts, swap the getter</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a><span class="n">dict_resolver</span> <span class="o">=</span> <span class="n">ObjectFilterResolver</span><span class="p">(</span><span class="n">getter</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">)</span>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a><span class="n">result</span> <span class="o">=</span> <span class="n">dict_resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="n">my_filter</span><span class="p">,</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;John&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">25</span><span class="p">}])</span>
+</code></pre></div>
+<ul>
+<li>Ordering is applied with <code>sorted()</code>, one pass per <code>SortOperation</code>.</li>
+<li><code>PaginationFilter</code> and <code>OffsetLimitFilter</code> are applied by slicing the list; <code>CursorPaginationFilter</code> raises <code>NotImplementedError</code>.</li>
+<li><code>apply_fields_filter</code> projects each object down to <strong>only</strong> the attributes named in <code>?fields</code>, returning a new list of shallow copies — the input objects are left untouched. Mappings are projected into new dicts, and objects without a <code>__dict__</code> (tuples, <code>__slots__</code> classes) are passed through unchanged. With no <code>?fields</code> the queryset is returned as-is. Sparse fieldsets are normally handled at the serialization layer instead — see <a href="../generics/">generic views</a>.</li>
+</ul>
+<h3 id="sqlalchemyfilterresolver"><code>SQLAlchemyFilterResolver</code></h3>
+<p>Translates operations into SQLAlchemy <code>WHERE</code>, <code>ORDER BY</code>, <code>LIMIT</code>/<code>OFFSET</code> clauses and loader options. SQLAlchemy is an optional dependency: the module imports without it, but every method that needs it raises <code>NotImplementedError</code>.</p>
+<p>Subclass it and point <code>filter_model</code> at the model the filter fields belong to. Since the class needs no constructor arguments, it can be injected with a bare <code>Depends()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSession</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilterDepends</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLAlchemyFilterResolver</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.views.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncListAPIView</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilterResolver</span><span class="p">(</span><span class="n">SQLAlchemyFilterResolver</span><span class="p">):</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>    <span class="n">filter_model</span> <span class="o">=</span> <span class="n">UserModel</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserListView</span><span class="p">(</span><span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>    <span class="n">response_schema</span> <span class="o">=</span> <span class="n">UserSchema</span>
+<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>
+<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span>
+<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>        <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>        <span class="nb">filter</span><span class="p">:</span> <span class="n">UserFilter</span> <span class="o">=</span> <span class="n">FilterDepends</span><span class="p">(</span><span class="n">UserFilter</span><span class="p">),</span>
+<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>        <span class="n">resolver</span><span class="p">:</span> <span class="n">UserFilterResolver</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(),</span>
+<a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a>        <span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session</span><span class="p">),</span>  <span class="c1"># your own session dependency</span>
+<a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>    <span class="p">):</span>
+<a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a>        <span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="nb">filter</span><span class="p">,</span> <span class="n">select</span><span class="p">(</span><span class="n">UserModel</span><span class="p">))</span>
+<a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a>        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">queryset</span><span class="p">)</span>
+<a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a>        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+<p>The queryset only has to satisfy the <code>_Queryset</code> protocol — <code>filter()</code>, <code>options()</code>, <code>order_by()</code>, <code>offset()</code>, <code>limit()</code> — which both <code>Select</code> and ORM <code>Query</code> objects do.</p>
+<p>Helper methods are available if you need the raw clauses instead of a modified queryset: <code>get_filters(filter, **context)</code> returns the <code>WHERE</code> expressions, and <code>get_order_by(filter, extra=None, **context)</code> returns the <code>ORDER BY</code> expressions with optional extras appended (useful to add a deterministic tie-breaker column).</p>
+<h4 id="filtering-across-joined-tables">Filtering across joined tables</h4>
+<p>A <code>prefix__field</code> operation — produced by <code>NestedFilter</code>, or by a field name such as <code>post__title__eq</code> — is resolved in one of two ways:</p>
+<ol>
+<li><code>context[prefix]["table"]</code>, if you pass it;</li>
+<li>otherwise a lookup in the model registry by <code>__tablename__ == prefix</code>, cached per registry <strong>and</strong> per resolver class in a <code>WeakKeyDictionary</code> keyed by the registry (so two declarative bases that happen to share a <code>__tablename__</code> never collide, and the cache never keeps a registry alive).</li>
+</ol>
+<p><code>resolve_model_field</code> splits off exactly one prefix, at the <em>first</em> <code>__</code>: <code>post__title</code> is column <code>title</code> on <code>post</code>. Deeper paths (<code>company__owner__name</code>) are kept whole by the filter models but not understood by the default implementation — override <code>resolve_model_field</code> to walk them.</p>
+<p>Because <code>context</code> is passed as keyword arguments, the prefix becomes the keyword:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="nb">filter</span><span class="p">,</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">select</span><span class="p">(</span><span class="n">UserModel</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">PostModel</span><span class="p">),</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">post</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;table&quot;</span><span class="p">:</span> <span class="n">PostModel</span><span class="p">},</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="p">)</span>
+</code></pre></div>
+<p>The reserved <code>table</code> key overrides the base model for unprefixed fields:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="nb">filter</span><span class="p">,</span> <span class="n">select</span><span class="p">(</span><span class="n">PostModel</span><span class="p">),</span> <span class="n">table</span><span class="o">=</span><span class="n">PostModel</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="field-projection">Field projection</h4>
+<p><code>apply_fields_filter</code> turns <code>?fields</code> into loader options rather than a column list: top-level names become a single <code>load_only(...)</code>, and <code>relation__field</code> (or <code>a__b__field</code>) names become chained <code>defaultload(...).load_only(...)</code> options. Relationship names are resolved by inspecting the mapper; unknown paths are skipped.</p>
+<h4 id="cursor-pagination">Cursor pagination</h4>
+<p><code>apply_cursor_pagination(queryset, page, page_size, **context)</code> raises <code>NotImplementedError</code> — SQLAlchemy has no built-in keyset pagination. Override it (for example on top of <a href="https://github.com/djrobstep/sqlakeyset">sqlakeyset</a>), or use a repository that implements it, such as <code>CursorPaginatedRepository</code> from the <a href="../sqlargon/">sqlargon integration</a>. Accept <code>**context</code> in your override: <code>apply_pagination_filter</code> forwards the resolver context to it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilterResolver</span><span class="p">(</span><span class="n">SQLAlchemyFilterResolver</span><span class="p">):</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">filter_model</span> <span class="o">=</span> <span class="n">UserModel</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply_cursor_pagination</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queryset</span><span class="p">,</span> <span class="n">page</span><span class="p">,</span> <span class="n">page_size</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">):</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>        <span class="k">return</span> <span class="n">my_keyset_paginate</span><span class="p">(</span><span class="n">queryset</span><span class="p">,</span> <span class="n">page</span><span class="p">,</span> <span class="n">page_size</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="skipping-stages-with-exclude">Skipping stages with <code>exclude</code></h4>
+<p><code>exclude</code> lets you take over individual stages — most often pagination, when you need a <code>COUNT(*)</code> over the filtered set first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span><span class="p">,</span> <span class="n">select</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># filter is an OffsetLimitFilter here</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span><span class="nb">filter</span><span class="p">,</span> <span class="n">select</span><span class="p">(</span><span class="n">UserModel</span><span class="p">),</span> <span class="n">exclude</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;paginate&quot;</span><span class="p">})</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">total</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">select</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">count</span><span class="p">())</span><span class="o">.</span><span class="n">select_from</span><span class="p">(</span><span class="n">queryset</span><span class="o">.</span><span class="n">subquery</span><span class="p">()))</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">queryset</span> <span class="o">=</span> <span class="n">queryset</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="nb">filter</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="nb">filter</span><span class="o">.</span><span class="n">limit</span><span class="p">)</span>
+</code></pre></div>
+<p>This is exactly what the sqlargon integration does: <code>FilterableRepository.with_filter(filter, exclude={"paginate"})</code> followed by <code>paginate(**filter.get_pagination())</code>.</p>
+<h3 id="custom-resolvers">Custom resolvers</h3>
+<p>Implement the four abstract methods to support another backend; <code>apply_filter</code> and the <code>exclude</code> handling come for free.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilterResolver</span>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">MongoFilterResolver</span><span class="p">(</span><span class="n">FilterResolver</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply_base_filter</span><span class="p">(</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">queryset</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">filter</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">:</span> <span class="n">Any</span>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>        <span class="o">...</span>
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply_fields_filter</span><span class="p">(</span>
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">queryset</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">filter</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">:</span> <span class="n">Any</span>
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>        <span class="o">...</span>
+<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>
+<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply_ordering_filter</span><span class="p">(</span>
+<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">queryset</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">filter</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">:</span> <span class="n">Any</span>
+<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>        <span class="o">...</span>
+<a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a>
+<a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply_pagination_filter</span><span class="p">(</span>
+<a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>        <span class="bp">self</span><span class="p">,</span> <span class="n">queryset</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="nb">filter</span><span class="p">,</span> <span class="o">**</span><span class="n">context</span><span class="p">:</span> <span class="n">Any</span>
+<a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a>        <span class="o">...</span>
+</code></pre></div>
+<p>Note that the abstract methods take <code>(queryset, filter)</code>, while the public <code>apply_filter</code> takes <code>(filter, queryset)</code>.</p>
+<hr />
+<h2 id="full-sqlalchemy-example">Full SQLAlchemy example</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Optional</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sa</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Depends</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSession</span>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeclarativeBase</span><span class="p">,</span> <span class="n">Mapped</span><span class="p">,</span> <span class="n">mapped_column</span><span class="p">,</span> <span class="n">relationship</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterDepends</span><span class="p">,</span> <span class="n">ModelFilter</span><span class="p">,</span> <span class="n">NestedFilter</span>
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.resolvers.sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLAlchemyFilterResolver</span>
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.filters.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">QueryField</span>
+<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.views.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncListAPIView</span>
+<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>
+<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>
+<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="k">class</span><span class="w"> </span><span class="nc">Base</span><span class="p">(</span><span class="n">DeclarativeBase</span><span class="p">):</span>
+<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>    <span class="k">pass</span>
+<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>
+<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>
+<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserModel</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;user&quot;</span>
+<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>
+<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Integer</span><span class="p">(),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">String</span><span class="p">())</span>
+<a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>    <span class="n">email</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a>    <span class="n">posts</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="s2">&quot;PostModel&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;user&quot;</span><span class="p">)</span>
+<a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a>
+<a id="__codelineno-24-27" name="__codelineno-24-27" href="#__codelineno-24-27"></a>
+<a id="__codelineno-24-28" name="__codelineno-24-28" href="#__codelineno-24-28"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostModel</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-24-29" name="__codelineno-24-29" href="#__codelineno-24-29"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;post&quot;</span>
+<a id="__codelineno-24-30" name="__codelineno-24-30" href="#__codelineno-24-30"></a>
+<a id="__codelineno-24-31" name="__codelineno-24-31" href="#__codelineno-24-31"></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Integer</span><span class="p">(),</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-24-32" name="__codelineno-24-32" href="#__codelineno-24-32"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">String</span><span class="p">())</span>
+<a id="__codelineno-24-33" name="__codelineno-24-33" href="#__codelineno-24-33"></a>    <span class="n">user_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">Integer</span><span class="p">(),</span> <span class="n">sa</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;user.id&quot;</span><span class="p">))</span>
+<a id="__codelineno-24-34" name="__codelineno-24-34" href="#__codelineno-24-34"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;UserModel&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;posts&quot;</span><span class="p">)</span>
+<a id="__codelineno-24-35" name="__codelineno-24-35" href="#__codelineno-24-35"></a>
+<a id="__codelineno-24-36" name="__codelineno-24-36" href="#__codelineno-24-36"></a>
+<a id="__codelineno-24-37" name="__codelineno-24-37" href="#__codelineno-24-37"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostFilter</span><span class="p">(</span><span class="n">ModelFilter</span><span class="p">):</span>
+<a id="__codelineno-24-38" name="__codelineno-24-38" href="#__codelineno-24-38"></a>    <span class="n">title</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-24-39" name="__codelineno-24-39" href="#__codelineno-24-39"></a>
+<a id="__codelineno-24-40" name="__codelineno-24-40" href="#__codelineno-24-40"></a>
+<a id="__codelineno-24-41" name="__codelineno-24-41" href="#__codelineno-24-41"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<a id="__codelineno-24-42" name="__codelineno-24-42" href="#__codelineno-24-42"></a>    <span class="n">ordering_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">}</span>
+<a id="__codelineno-24-43" name="__codelineno-24-43" href="#__codelineno-24-43"></a>    <span class="n">search_fields</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;email&quot;</span><span class="p">}</span>
+<a id="__codelineno-24-44" name="__codelineno-24-44" href="#__codelineno-24-44"></a>
+<a id="__codelineno-24-45" name="__codelineno-24-45" href="#__codelineno-24-45"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-24-46" name="__codelineno-24-46" href="#__codelineno-24-46"></a>    <span class="n">id__in</span><span class="p">:</span> <span class="n">QueryField</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span>
+<a id="__codelineno-24-47" name="__codelineno-24-47" href="#__codelineno-24-47"></a>    <span class="n">email__is_null</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-24-48" name="__codelineno-24-48" href="#__codelineno-24-48"></a>    <span class="n">post</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">PostFilter</span><span class="p">]</span> <span class="o">=</span> <span class="n">NestedFilter</span><span class="p">(</span><span class="n">PostFilter</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;post&quot;</span><span class="p">)</span>
+<a id="__codelineno-24-49" name="__codelineno-24-49" href="#__codelineno-24-49"></a>
+<a id="__codelineno-24-50" name="__codelineno-24-50" href="#__codelineno-24-50"></a>
+<a id="__codelineno-24-51" name="__codelineno-24-51" href="#__codelineno-24-51"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserFilterResolver</span><span class="p">(</span><span class="n">SQLAlchemyFilterResolver</span><span class="p">):</span>
+<a id="__codelineno-24-52" name="__codelineno-24-52" href="#__codelineno-24-52"></a>    <span class="n">filter_model</span> <span class="o">=</span> <span class="n">UserModel</span>
+<a id="__codelineno-24-53" name="__codelineno-24-53" href="#__codelineno-24-53"></a>
+<a id="__codelineno-24-54" name="__codelineno-24-54" href="#__codelineno-24-54"></a>
+<a id="__codelineno-24-55" name="__codelineno-24-55" href="#__codelineno-24-55"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserListView</span><span class="p">(</span><span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-24-56" name="__codelineno-24-56" href="#__codelineno-24-56"></a>    <span class="n">response_schema</span> <span class="o">=</span> <span class="n">UserSchema</span>  <span class="c1"># your response schema</span>
+<a id="__codelineno-24-57" name="__codelineno-24-57" href="#__codelineno-24-57"></a>
+<a id="__codelineno-24-58" name="__codelineno-24-58" href="#__codelineno-24-58"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span>
+<a id="__codelineno-24-59" name="__codelineno-24-59" href="#__codelineno-24-59"></a>        <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-24-60" name="__codelineno-24-60" href="#__codelineno-24-60"></a>        <span class="nb">filter</span><span class="p">:</span> <span class="n">UserFilter</span> <span class="o">=</span> <span class="n">FilterDepends</span><span class="p">(</span><span class="n">UserFilter</span><span class="p">),</span>
+<a id="__codelineno-24-61" name="__codelineno-24-61" href="#__codelineno-24-61"></a>        <span class="n">resolver</span><span class="p">:</span> <span class="n">UserFilterResolver</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(),</span>
+<a id="__codelineno-24-62" name="__codelineno-24-62" href="#__codelineno-24-62"></a>        <span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session</span><span class="p">),</span>  <span class="c1"># your own session dependency</span>
+<a id="__codelineno-24-63" name="__codelineno-24-63" href="#__codelineno-24-63"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<a id="__codelineno-24-64" name="__codelineno-24-64" href="#__codelineno-24-64"></a>        <span class="c1"># applies WHERE, ORDER BY, LIMIT and OFFSET</span>
+<a id="__codelineno-24-65" name="__codelineno-24-65" href="#__codelineno-24-65"></a>        <span class="n">queryset</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">apply_filter</span><span class="p">(</span>
+<a id="__codelineno-24-66" name="__codelineno-24-66" href="#__codelineno-24-66"></a>            <span class="nb">filter</span><span class="p">,</span>
+<a id="__codelineno-24-67" name="__codelineno-24-67" href="#__codelineno-24-67"></a>            <span class="n">select</span><span class="p">(</span><span class="n">UserModel</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">PostModel</span><span class="p">),</span>
+<a id="__codelineno-24-68" name="__codelineno-24-68" href="#__codelineno-24-68"></a>            <span class="n">post</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;table&quot;</span><span class="p">:</span> <span class="n">PostModel</span><span class="p">},</span>
+<a id="__codelineno-24-69" name="__codelineno-24-69" href="#__codelineno-24-69"></a>        <span class="p">)</span>
+<a id="__codelineno-24-70" name="__codelineno-24-70" href="#__codelineno-24-70"></a>        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">queryset</span><span class="p">)</span>
+<a id="__codelineno-24-71" name="__codelineno-24-71" href="#__codelineno-24-71"></a>        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+<p>A request to
+<code>?post__title=hello&amp;q=al&amp;sort=-name&amp;id__in=1&amp;id__in=2&amp;page=2&amp;page_size=5</code>
+produces:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">email</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="k">FROM</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">post</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">post</span><span class="p">.</span><span class="n">user_id</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">post</span><span class="p">.</span><span class="n">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;hello&#39;</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="p">(</span><span class="k">lower</span><span class="p">(</span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">email</span><span class="p">)</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="k">lower</span><span class="p">(</span><span class="s1">&#39;%al%&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">ESCAPE</span><span class="w"> </span><span class="s1">&#39;\&#39;</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">       </span><span class="k">OR</span><span class="w"> </span><span class="k">lower</span><span class="p">(</span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="k">lower</span><span class="p">(</span><span class="s1">&#39;%al%&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">ESCAPE</span><span class="w"> </span><span class="s1">&#39;\&#39;</span><span class="p">)</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="ss">&quot;user&quot;</span><span class="p">.</span><span class="n">name</span><span class="w"> </span><span class="k">DESC</span>
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">5</span><span class="w"> </span><span class="k">OFFSET</span><span class="w"> </span><span class="mi">5</span>
+</code></pre></div>
+<p><code>field_names</code> and <code>search_fields</code> are sets, so the order of the <code>AND</code>/<code>OR</code> terms is not guaranteed — only their content is.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["search.suggest", "search.highlight", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2254 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="FastAPI Class Views and other utils">
+      
+      
+      
+      
+        <link rel="prev" href="../filters/">
+      
+      
+        <link rel="next" href="../opentelemetry/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Caching - FastAPI Views</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#caching-conditional-requests" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FastAPI Views" class="md-header__button md-logo" aria-label="FastAPI Views" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastAPI Views
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Caching
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6m0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4M7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/asynq-io/fastapi-views" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    asynq-io/fastapi-views
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FastAPI Views" class="md-nav__button md-logo" aria-label="FastAPI Views" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    FastAPI Views
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/asynq-io/fastapi-views" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    asynq-io/fastapi-views
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastAPI Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../viewset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Viewset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sqlargon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQLArgon repositories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bulk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bulk actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jsonpatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caching
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#installing-the-backend-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing the backend later
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-with-use_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching with @use_cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Caching with @use_cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vary-and-shared-caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vary and shared caches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-control-directives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache-Control directives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-any-async-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching any async function
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Caching any async function">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serialization-of-the-cached-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization of the cached value
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-and-invalidating-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading and invalidating entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditional-requests-with-conditionalmixin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional requests with ConditionalMixin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Conditional requests with ConditionalMixin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-cheap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual (cheap)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matching-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matching rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safe-vs-unsafe-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safe vs unsafe methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lower-level-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lower-level helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combining-both" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining both
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combining both">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-revalidating-client-warms-the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A revalidating client warms the cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openapi-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAPI documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../opentelemetry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server Side Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../websockets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WebSockets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../i18n/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internationalization (i18n)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/viewsets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ViewSets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generic Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/bulk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bulk Views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/jsonpatch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON Patch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pagination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pagination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/decorators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decorators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/sse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server-Sent Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/websockets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WebSockets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#installing-the-backend-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing the backend later
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-with-use_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching with @use_cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Caching with @use_cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vary-and-shared-caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vary and shared caches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-control-directives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache-Control directives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-any-async-function" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching any async function
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Caching any async function">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serialization-of-the-cached-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization of the cached value
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-and-invalidating-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading and invalidating entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conditional-requests-with-conditionalmixin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional requests with ConditionalMixin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Conditional requests with ConditionalMixin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-cheap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual (cheap)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matching-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matching rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safe-vs-unsafe-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safe vs unsafe methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lower-level-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lower-level helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combining-both" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining both
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combining both">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-revalidating-client-warms-the-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A revalidating client warms the cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openapi-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAPI documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="caching-conditional-requests">Caching &amp; Conditional Requests</h1>
+<p>FastAPI Views ships two <strong>independent</strong> HTTP mechanisms that compose cleanly:</p>
+<ul>
+<li><strong>Server-side caching</strong> — store a serialized response and serve it again without re-running the view (<code>CachedAPIView</code> + <code>@use_cache</code>), or cache the result of any async function (<code>@cache</code>).</li>
+<li><strong>Conditional requests</strong> — let a client that already has a copy revalidate cheaply and receive <code>304 Not Modified</code> instead of the body (<code>ConditionalMixin</code>).</li>
+</ul>
+<p>They are orthogonal: you can use either alone, or both together via <code>ConditionalCachedAPIView</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Want</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Revalidation (<code>ETag</code> / <code>Last-Modified</code> / <code>304</code>), no server cache</td>
+<td><code>ConditionalMixin</code> + a view</td>
+</tr>
+<tr>
+<td>Server cache (<code>X-Cache</code>, <code>Cache-Control</code>), no revalidation</td>
+<td><code>CachedAPIView</code></td>
+</tr>
+<tr>
+<td>Both</td>
+<td><code>ConditionalCachedAPIView</code></td>
+</tr>
+<tr>
+<td>Cache a plain async function's return value</td>
+<td><code>@cache("key", ttl=...)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Everything is exported from <code>fastapi_views.cache</code>: <code>Cache</code>, <code>cache</code>, <code>CacheControl</code>, <code>CacheHeaders</code>, <code>CacheMiddleware</code>, <code>CachedAPIView</code>, <code>ConditionalCachedAPIView</code>, <code>use_cache</code>.</p>
+<hr />
+<h2 id="setup">Setup</h2>
+<p>Caching needs a backend, installed once at the app level with <code>CacheMiddleware</code>. Every cached view shares it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">CacheMiddleware</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache.backends.memory</span><span class="w"> </span><span class="kn">import</span> <span class="n">InMemoryCache</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">()</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">CacheMiddleware</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">InMemoryCache</span><span class="p">())</span>
+</code></pre></div>
+<p><code>InMemoryCache(default_ttl=None)</code> keeps entries in a process-local dict (with per-key expiry); <code>default_ttl</code> applies whenever a write passes no <code>ttl</code>. It is fine for tests and single-process apps.</p>
+<p>For production use the Redis backend — <code>pip install "fastapi-views[cache]"</code>, which pulls in <code>redis</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">redis.asyncio</span><span class="w"> </span><span class="kn">import</span> <span class="n">Redis</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache.backends.redis</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedisCache</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">CacheMiddleware</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">RedisCache</span><span class="p">(</span><span class="n">Redis</span><span class="o">.</span><span class="n">from_url</span><span class="p">(</span><span class="s2">&quot;redis://localhost&quot;</span><span class="p">)))</span>
+</code></pre></div>
+<p><code>RedisCache(client)</code> takes an already-configured <code>redis.asyncio.Redis</code> client (so pooling, TLS and auth stay yours to configure); <code>ttl</code> is passed through as Redis' <code>ex</code>, and <code>pop</code> uses <code>GETDEL</code>.</p>
+<p>A backend implements the <code>CacheBackend</code> interface (<code>get</code> / <code>set</code> / <code>delete</code> / <code>pop</code>, with keys and values being <code>str | bytes</code>), so you can plug in your own.</p>
+<h3 id="installing-the-backend-later">Installing the backend later</h3>
+<p><code>backend</code> on <code>CacheMiddleware</code> is optional; passing it simply registers it on the shared <code>cache</code> singleton. Omit it when the client is only created at startup and register the backend yourself:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">asynccontextmanager</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nd">@asynccontextmanager</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">):</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">Redis</span><span class="o">.</span><span class="n">from_url</span><span class="p">(</span><span class="s2">&quot;redis://localhost&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">cache</span><span class="o">.</span><span class="n">init_backend</span><span class="p">(</span><span class="n">RedisCache</span><span class="p">(</span><span class="n">client</span><span class="p">))</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="k">yield</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">aclose</span><span class="p">()</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">(</span><span class="n">lifespan</span><span class="o">=</span><span class="n">lifespan</span><span class="p">)</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">CacheMiddleware</span><span class="p">)</span>
+</code></pre></div>
+<p>The middleware itself is still required for <code>@use_cache</code> views: it injects the cache headers and writes the response body to the backend. Using <code>cache</code> as a <a href="#caching-any-async-function">function decorator</a> or calling it directly needs only a backend.</p>
+<blockquote>
+<p><code>ConditionalMixin</code> on its own needs <strong>no</strong> middleware or backend — it works purely from request/response headers.</p>
+</blockquote>
+<hr />
+<h2 id="caching-with-use_cache">Caching with <code>@use_cache</code></h2>
+<p>Subclass <code>CachedAPIView</code> and decorate an endpoint with <code>@use_cache</code>. On a miss the view runs and its serialized body is stored; on a hit the stored body is returned without running the view. Responses carry <code>X-Cache: HIT|MISS</code> and, when a <code>ttl</code> is set, <code>Cache-Control: max-age=&lt;ttl&gt;</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">use_cache</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.views.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncListAPIView</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">response_schema</span> <span class="o">=</span> <span class="n">ItemSchema</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nd">@use_cache</span><span class="p">(</span><span class="n">ttl</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+<p><code>@use_cache(ttl=None, *, cache_control=None)</code> — <code>ttl</code> is the backend expiry in seconds (<code>None</code> means "until the backend evicts it"); <code>cache_control</code> overrides the header (a raw string or a <code>CacheControl</code>, see below).</p>
+<p>Nothing is stored unless the response is worth storing: a view returning <code>None</code> (a <code>404</code>, or an empty body) is skipped, and the middleware only writes bodies whose status code is below <code>300</code> — so errors never poison the cache. (The single exception is the conditional <code>304</code> <a href="#a-revalidating-client-warms-the-cache">described below</a>, where the <em>successful</em> body built before the downgrade is what gets written.)</p>
+<h3 id="cache-key">Cache key</h3>
+<p><code>build_key()</code> derives the key from the request path and the <strong>sorted</strong> query string (so ordering is irrelevant), hashed to a short digest. Path parameters are therefore part of the key already — <code>/items/1</code> and <code>/items/2</code> never collide. To vary it per header (e.g. a tenant), list the header names in <code>cache_key_headers</code>; headers absent from the request are simply left out:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">cache_key_headers</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;X-Tenant-Id&quot;</span><span class="p">,)</span>
+</code></pre></div>
+<p>Override <code>build_key()</code> for a fully custom scheme — it takes no arguments and reads <code>self.request</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">build_key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;items:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">query_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;page&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;1&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="vary-and-shared-caches"><code>Vary</code> and shared caches</h3>
+<p><code>cache_key_headers</code> keys the <strong>server-side</strong> cache. Downstream caches (the browser, a shared CDN/proxy) need to key on the same headers, or one client could be served another's response. So every cached response automatically emits a <code>Vary</code> header built from <code>cache_key_headers</code>, plus any extra request headers you declare in <code>vary</code> (headers the server doesn't key on but the response still depends on):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">cache_key_headers</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;X-Tenant-Id&quot;</span><span class="p">,)</span>   <span class="c1"># also emitted as Vary</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">vary</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;Accept-Encoding&quot;</span><span class="p">,)</span>            <span class="c1"># extra, beyond the key</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="c1"># -&gt; Vary: X-Tenant-Id, Accept-Encoding</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>For per-user or per-tenant data behind a <strong>shared</strong> cache, also mark the
+response <code>private</code> (see below) so shared caches don't store it at all —
+<code>Vary</code> alone keeps separate copies, <code>private</code> keeps it browser-only.</p>
+</div>
+<h3 id="cache-control-directives">Cache-Control directives</h3>
+<p>For anything beyond <code>max-age</code> (which <code>ttl</code> sets by default), pass a <code>CacheControl</code> to compose directives safely instead of hand-writing the string:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">CacheControl</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncListAPIView</span><span class="p">):</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="nd">@use_cache</span><span class="p">(</span><span class="n">ttl</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">cache_control</span><span class="o">=</span><span class="n">CacheControl</span><span class="p">(</span><span class="n">private</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stale_while_revalidate</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="o">...</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="c1"># -&gt; Cache-Control: private, max-age=300, stale-while-revalidate=10</span>
+</code></pre></div>
+<p><code>ttl</code> fills in <code>max-age</code> when the <code>CacheControl</code> doesn't set it, so <code>ttl</code> (server storage) and the client freshness stay in sync by default; set <code>max_age</code> explicitly to decouple them. Supported fields: <code>max_age</code>, <code>s_maxage</code>, <code>public</code>, <code>private</code>, <code>no_store</code>, <code>no_cache</code>, <code>must_revalidate</code>, <code>immutable</code>, <code>stale_while_revalidate</code>, <code>stale_if_error</code>. A raw string still works as an escape hatch (<code>cache_control="no-store"</code>).</p>
+<p><code>CacheControl</code> is a frozen dataclass and <code>render()</code> returns the header value in field-declaration order, so you can build one up front and reuse it. Bool fields render as bare directives (<code>no-store</code>), int fields as <code>name=value</code> (<code>max-age=30</code>); <code>False</code> / <code>None</code> are omitted.</p>
+<hr />
+<h2 id="caching-any-async-function">Caching any async function</h2>
+<p>Not everything worth caching is a whole response. <code>cache</code> — the shared <code>Cache</code> instance — is also a decorator for any async function; the return value is stored as JSON and validated back on a hit, so callers keep getting real objects rather than raw bytes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nd">@cache</span><span class="p">(</span><span class="s2">&quot;items:all&quot;</span><span class="p">,</span> <span class="n">ttl</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_items</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="k">return</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</code></pre></div>
+<p><code>cache(key, ttl=None)</code>:</p>
+<ul>
+<li><strong><code>key</code></strong> — a <code>str</code> / <code>bytes</code> key, a <strong>format template</strong>, or a callable.</li>
+<li><strong><code>ttl</code></strong> — expiry in seconds, passed straight to the backend.</li>
+</ul>
+<p>A template is expanded with the wrapped call's own arguments — <code>"{name}"</code> from a keyword argument, <code>"{0}"</code> from a positional one:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@cache</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{tenant}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ttl</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_for</span><span class="p">(</span><span class="n">tenant</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span> <span class="o">...</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">await</span> <span class="n">load_for</span><span class="p">(</span><span class="n">tenant</span><span class="o">=</span><span class="s2">&quot;acme&quot;</span><span class="p">)</span>  <span class="c1"># cached under &quot;acme&quot;</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Templating only kicks in when the key <strong>starts</strong> with a <code>{placeholder}</code>:
+<code>"{tenant}"</code> and <code>"{0}:{1}"</code> are expanded, but <code>"items:{tenant}"</code> is stored
+verbatim — braces and all — so every tenant would share one entry.</p>
+</div>
+<p>Use a callable for anything a leading placeholder can't express, such as a prefixed key. It receives exactly the arguments the wrapped function was called with (so on a method, <code>self</code> is the first one):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nd">@cache</span><span class="p">(</span><span class="k">lambda</span> <span class="n">tenant</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;items:</span><span class="si">{</span><span class="n">tenant</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ttl</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_for</span><span class="p">(</span><span class="n">tenant</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span> <span class="o">...</span>
+</code></pre></div>
+<h3 id="serialization-of-the-cached-value">Serialization of the cached value</h3>
+<p>The stored value is serialized with a <code>pydantic.TypeAdapter</code> built from the function's <strong>return annotation</strong>, so keep that type JSON-serializable. An annotation that cannot be resolved — a forward reference to a missing name, or no annotation at all — degrades to <code>Any</code>, which round-trips any JSON-compatible value safely.</p>
+<p>Annotating is still worth it, because the annotation is what <strong>reconstructs</strong> the object on a hit: with <code>-&gt; ItemSchema</code> a hit returns an <code>ItemSchema</code>, while under the <code>Any</code> fallback the same function returns the plain <code>dict</code> the JSON decoded to. An explicit <code>-&gt; None</code> is honoured literally as <code>NoneType</code>, so <code>@cache</code> on a function that really returns something else is a genuine mis-annotation (the value is written on the miss and fails validation on the next hit), not a trap you fall into by omission.</p>
+<p>Adapters are memoised in a bounded 512-entry cache keyed by the annotation, so repeated decoration of the same type is cheap; an unhashable annotation (e.g. <code>Annotated[int, {"exotic": True}]</code>) simply gets a fresh, uncached adapter.</p>
+<hr />
+<h2 id="reading-and-invalidating-entries">Reading and invalidating entries</h2>
+<p><code>Cache</code> is a thin async façade over the backend, and the same methods are available on the shared <code>cache</code> singleton or, inside a view, as <code>self.cache</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>await cache.get(key)</code></td>
+<td>stored value (<code>str</code> or <code>bytes</code>) or <code>None</code></td>
+</tr>
+<tr>
+<td><code>await cache.set(key, value, ttl=None)</code></td>
+<td>store a value</td>
+</tr>
+<tr>
+<td><code>await cache.delete(key)</code></td>
+<td>drop an entry</td>
+</tr>
+<tr>
+<td><code>await cache.pop(key)</code></td>
+<td>read <strong>and</strong> drop it atomically</td>
+</tr>
+<tr>
+<td><code>cache.init_backend(backend)</code></td>
+<td>install/replace the backend</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>delete</code> to invalidate on writes — for the function decorator, rebuild the key the same way the decorator does:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">CachedAPIView</span><span class="p">,</span> <span class="n">AsyncAPIViewSet</span><span class="p">):</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">item</span><span class="p">:</span> <span class="n">ItemSchema</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span><span class="p">:</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="n">saved</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;items:all&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>        <span class="k">return</span> <span class="n">saved</span>
+</code></pre></div>
+<p>There is no namespace/prefix or bulk-invalidation helper: keys are exactly what <code>build_key()</code> or your key template produced, so pick a scheme you can reconstruct (or lean on short <code>ttl</code>s). Reading <code>cache.backend</code> before a backend is installed raises <code>ValueError("Cache backend not set")</code>.</p>
+<hr />
+<h2 id="conditional-requests-with-conditionalmixin">Conditional requests with <code>ConditionalMixin</code></h2>
+<p><code>ConditionalMixin</code> adds <code>ETag</code> / <code>Last-Modified</code> validators and <code>304 Not Modified</code> handling. There are two ways to opt in.</p>
+<h3 id="automatic">Automatic</h3>
+<p>Set <code>etag = True</code> (a strong ETag is hashed from the serialized body) and/or <code>last_modified = True</code> together with a <code>get_last_modified()</code> override. The body is built, then downgraded to <code>304</code> if the client's validator still matches.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">ConditionalMixin</span><span class="p">,</span> <span class="n">AsyncRetrieveAPIView</span><span class="p">):</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">etag</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># ETag hashed from the response body</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span><span class="p">:</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+</code></pre></div>
+<p><code>last_modified = True</code> is the same opt-in for the date validator, but it has nothing to send until you supply the timestamp:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">ConditionalMixin</span><span class="p">,</span> <span class="n">AsyncRetrieveAPIView</span><span class="p">):</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">last_modified</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_last_modified</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>        <span class="k">return</span> <span class="n">repo</span><span class="o">.</span><span class="n">last_change</span><span class="p">()</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span><span class="p">:</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The <code>get_last_modified()</code> override is <strong>mandatory</strong> with <code>last_modified = True</code>.
+The default returns <code>None</code>, so the flag documents the header in OpenAPI but the
+response carries no <code>Last-Modified</code> and never downgrades to <code>304</code> — silently,
+with no error. <code>get_last_modified()</code> is called once per response, after the body
+is built, and may consult <code>self.request</code> / the view's state.</p>
+</div>
+<h3 id="manual-cheap">Manual (cheap)</h3>
+<p>Hashing the body still requires serializing it. If you already have a cheap validator — a <code>version</code> column or <code>updated_at</code> — compare it <strong>before</strong> building the body and short-circuit. This skips serialization entirely when the client is current.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">ConditionalMixin</span><span class="p">,</span> <span class="n">AsyncRetrieveAPIView</span><span class="p">):</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="n">conditional_requests</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># document the 304 in OpenAPI (see below)</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span> <span class="o">|</span> <span class="n">Response</span><span class="p">:</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>        <span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_last_modified</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">updated_at</span><span class="p">)</span> <span class="ow">or</span> <span class="n">item</span>
+</code></pre></div>
+<p><code>check_last_modified(dt)</code> returns a <code>304</code> when the client's copy is current, otherwise stamps <code>Last-Modified</code> on the upcoming <code>200</code> and returns <code>None</code> — so <code>return self.check_last_modified(dt) or item</code> reads naturally. <code>check_etag(tag)</code> is the <code>ETag</code> counterpart for versioned models:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span> <span class="o">|</span> <span class="n">Response</span><span class="p">:</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_etag</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">version</span><span class="p">))</span> <span class="ow">or</span> <span class="n">item</span>
+</code></pre></div>
+<p>A raw value like <code>str(item.version)</code> is automatically quoted to a valid entity-tag (<code>"7"</code>); pass <code>W/"..."</code> for a weak validator.</p>
+<h3 id="matching-rules">Matching rules</h3>
+<p>How a request's validators are compared, for both opt-ins:</p>
+<ul>
+<li><strong><code>If-None-Match</code> wins over <code>If-Modified-Since</code></strong> (<a href="https://datatracker.ietf.org/doc/html/rfc7232#section-3.3">RFC 7232</a>). When a request carries both, the date is ignored entirely: a non-matching ETag yields <code>200</code> even if the client's date is newer, and a matching ETag yields <code>304</code> even if the client's date is older.</li>
+<li><code>*</code> in <code>If-None-Match</code> always matches; comma-separated lists are supported; <code>W/"x"</code> and <code>"x"</code> compare equal (the weak prefix is stripped before comparing).</li>
+<li>An unparseable <code>If-Modified-Since</code> is treated as absent, so the client gets the full <code>200</code>.</li>
+<li><strong>Naive datetimes are accepted</strong> by <code>check_last_modified()</code>, <code>not_modified()</code> and <code>set_last_modified()</code>: they are assumed to be UTC and truncated to whole seconds, matching the one-second resolution of an HTTP date.</li>
+</ul>
+<h3 id="safe-vs-unsafe-methods">Safe vs unsafe methods</h3>
+<p>Validators are stamped on <strong>any</strong> successful (<code>2xx</code>) response, but only <code>GET</code> and <code>HEAD</code> are ever downgraded to <code>304</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">ConditionalMixin</span><span class="p">,</span> <span class="n">AsyncCreateAPIView</span><span class="p">):</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">etag</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># -&gt; ETag on the 201, never a 304</span>
+</code></pre></div>
+<p>A <code>POST</code> / <code>PUT</code> / <code>PATCH</code> view with <code>etag = True</code> therefore sends the <code>ETag</code> on its <code>201</code> (useful — the client can revalidate on the next <code>GET</code>) and keeps returning the body even when the client echoes a matching <code>If-None-Match</code>. The <code>304</code> is likewise omitted from the OpenAPI schema for those methods.</p>
+<p>When a downgrade does happen, the <code>304</code> carries over the headers a revalidation response is allowed to repeat: <code>ETag</code>, <code>Last-Modified</code>, <code>Cache-Control</code>, <code>Expires</code>, <code>Vary</code> and <code>X-Cache</code>. Everything else (including the body and <code>Content-Length</code>) is dropped.</p>
+<h3 id="lower-level-helpers">Lower-level helpers</h3>
+<p>If you need finer control:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>if_none_match</code> / <code>if_modified_since</code></td>
+<td>the parsed request validators</td>
+</tr>
+<tr>
+<td><code>etag_matches(tag)</code> / <code>not_modified_since(dt)</code></td>
+<td>None-safe matchers</td>
+</tr>
+<tr>
+<td><code>not_modified(*, etag=None, last_modified=None)</code></td>
+<td>build a bare <code>304</code></td>
+</tr>
+<tr>
+<td><code>set_etag(tag)</code> / <code>set_last_modified(dt)</code></td>
+<td>stamp a validator on the response (any 2xx, e.g. a <code>201</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>set_*</code> is handy on writes — stamp the validator a <code>POST</code> returns so the client can revalidate next time:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">:</span> <span class="n">ItemSchema</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span><span class="p">:</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">saved</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_last_modified</span><span class="p">(</span><span class="n">saved</span><span class="o">.</span><span class="n">updated_at</span><span class="p">)</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="k">return</span> <span class="n">saved</span>
+</code></pre></div>
+<hr />
+<h2 id="combining-both">Combining both</h2>
+<p><code>ConditionalCachedAPIView</code> is <code>ConditionalMixin</code> + <code>CachedAPIView</code>: because the cached body flows through <code>finalize_response()</code>, a cache <strong>hit</strong> can still be downgraded to <code>304</code>, so a revalidating client is served neither the recomputation nor the body.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConditionalCachedAPIView</span><span class="p">,</span> <span class="n">use_cache</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemView</span><span class="p">(</span><span class="n">ConditionalCachedAPIView</span><span class="p">,</span> <span class="n">AsyncReadOnlyAPIViewSet</span><span class="p">):</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">cache_key_headers</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;X-Tenant-Id&quot;</span><span class="p">,)</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="n">etag</span> <span class="o">=</span> <span class="kc">True</span>                  <span class="c1"># hashed from the (possibly cached) body</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="n">conditional_requests</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># also document retrieve&#39;s manual validator</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>    <span class="nd">@use_cache</span><span class="p">(</span><span class="n">ttl</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>        <span class="k">return</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span> <span class="o">|</span> <span class="n">Response</span><span class="p">:</span>
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>        <span class="n">item</span> <span class="o">=</span> <span class="k">await</span> <span class="n">repo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_last_modified</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">updated_at</span><span class="p">)</span> <span class="ow">or</span> <span class="n">item</span>
+</code></pre></div>
+<p>The automatic (<code>etag</code> / <code>last_modified</code>) opt-ins are what make a hit downgradeable, since the validator is derived from the cached body. The manual <code>check_*</code> helpers run <em>inside</em> the endpoint, which a cache hit skips entirely — so on a cached action, use the automatic form.</p>
+<h3 id="a-revalidating-client-warms-the-cache">A revalidating client warms the cache</h3>
+<p>The two mechanisms also cooperate on a <strong>miss</strong>. When the view runs, the body is serialized and only <em>then</em> compared against the client's validator, so a request that ends as a <code>304</code> has produced a full representation that would otherwise be thrown away. <code>ConditionalCachedAPIView</code> hands that pre-downgrade body to the cache, so the entry is written even though the client receives no body:</p>
+<table>
+<thead>
+<tr>
+<th>Request</th>
+<th>Response</th>
+<th>Cache after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code> (cold)</td>
+<td><code>200</code>, <code>X-Cache: MISS</code></td>
+<td>populated</td>
+</tr>
+<tr>
+<td><code>GET</code> + matching <code>If-None-Match</code> (cold)</td>
+<td><code>304</code>, <code>X-Cache: MISS</code></td>
+<td><strong>populated</strong></td>
+</tr>
+<tr>
+<td><code>GET</code> (warm)</td>
+<td><code>200</code>, <code>X-Cache: HIT</code></td>
+<td>unchanged</td>
+</tr>
+<tr>
+<td><code>GET</code> + matching <code>If-None-Match</code> (warm)</td>
+<td><code>304</code>, <code>X-Cache: HIT</code></td>
+<td>unchanged</td>
+</tr>
+</tbody>
+</table>
+<p>So a fleet of revalidating clients warms the cache for everyone instead of re-running the view on every request. Two details follow from this:</p>
+<ul>
+<li>What is stored is always the <strong>full representation</strong>, never the empty <code>304</code>, so a later non-conditional request is served a proper <code>200</code> <code>HIT</code> without re-running the view.</li>
+<li>The <code>304</code> itself still carries the cache headers of the request that produced it — <code>X-Cache: MISS</code>, plus <code>Cache-Control</code> and <code>Vary</code> — because the entry was written by <em>this</em> request. The write happens exactly once per miss; <code>CacheMiddleware</code> remains the single writer.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This only works on <code>ConditionalCachedAPIView</code>. Hand-rolling
+<code>class ItemView(ConditionalMixin, CachedAPIView, ...)</code> does <strong>not</strong> get it:
+<code>ConditionalMixin.finalize_response()</code> does not call <code>super()</code>, so the body is
+never recorded, the <code>304</code> reaching the middleware has no body to persist, and
+the cache stays permanently cold — every revalidation re-runs the view. Prefer
+<code>ConditionalCachedAPIView</code>, which overrides <code>finalize_response()</code> to record the
+body before delegating to the mixin.</p>
+</div>
+<hr />
+<h2 id="openapi-documentation">OpenAPI documentation</h2>
+<p>Validator headers and the <code>304</code> response are added to the schema <strong>only when the view actually emits them</strong>, so docs stay honest:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Documented on the success status</th>
+<th><code>304 Not Modified</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>etag = True</code></td>
+<td><code>ETag</code></td>
+<td>safe methods only</td>
+</tr>
+<tr>
+<td><code>last_modified = True</code></td>
+<td><code>Last-Modified</code></td>
+<td>safe methods only</td>
+</tr>
+<tr>
+<td><code>conditional_requests = True</code></td>
+<td><code>ETag</code> <strong>and</strong> <code>Last-Modified</code></td>
+<td>safe methods only</td>
+</tr>
+<tr>
+<td>none of them</td>
+<td>nothing</td>
+<td>never</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>conditional_requests = True</code> exists for the manual pattern: validators produced imperatively can't be introspected, so it documents both of them (and the <code>304</code>) without changing runtime behaviour. Combine it with <code>etag</code> / <code>last_modified</code> freely — the header sets are unioned.</li>
+<li>The <code>304</code> entry is described as <code>Not Modified</code> and repeats the same header map as the success response. It is added only for <code>GET</code> / <code>HEAD</code>, so a <code>POST</code> view with <code>etag = True</code> documents <code>ETag</code> on its <code>201</code> and no <code>304</code> — matching what it actually returns.</li>
+<li><code>ETag</code> is documented as <code>type: string</code>; <code>Last-Modified</code> as <code>type: string, format: http-date</code>.</li>
+<li>The flags are <strong>class-level</strong>, not per-action, so on a viewset they apply to every registered action. <code>supports_conditional_requests()</code> reports whether any of them is set.</li>
+</ul>
+<p><code>CachedAPIView</code> documents its <code>X-Cache</code> (always present), <code>Cache-Control</code> and <code>Vary</code> headers on <code>list</code> / <code>retrieve</code> responses automatically, via the exported <code>CacheHeaders</code> model. Override <code>get_response_headers(action)</code> to document them on other actions, to swap in your own model, or to return <code>None</code> for an action that isn't actually cached (as the example below does). When both apply to the same status code, the cache headers and the validators are merged into one header map.</p>
+<hr />
+<h2 id="complete-example">Complete example</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClassVar</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span><span class="p">,</span> <span class="n">Response</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views</span><span class="w"> </span><span class="kn">import</span> <span class="n">ViewRouter</span><span class="p">,</span> <span class="n">configure_app</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>    <span class="n">CacheControl</span><span class="p">,</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="n">CacheHeaders</span><span class="p">,</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>    <span class="n">CacheMiddleware</span><span class="p">,</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>    <span class="n">ConditionalCachedAPIView</span><span class="p">,</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>    <span class="n">cache</span><span class="p">,</span>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>    <span class="n">use_cache</span><span class="p">,</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="p">)</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.cache.backends.memory</span><span class="w"> </span><span class="kn">import</span> <span class="n">InMemoryCache</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResponseHeaders</span>
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">Action</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fastapi_views.views.viewsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncReadOnlyAPIViewSet</span>
+<a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a>
+<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a>
+<a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemSchema</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a>    <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a>    <span class="n">price</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a>    <span class="n">updated_at</span><span class="p">:</span> <span class="n">datetime</span>
+<a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a>
+<a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a>
+<a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="n">_ITEMS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">UUID</span><span class="p">,</span> <span class="n">ItemSchema</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a>    <span class="n">UUID</span><span class="p">(</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span> <span class="n">ItemSchema</span><span class="p">(</span>
+<a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">UUID</span><span class="p">(</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+<a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a>        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Widget&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a>        <span class="n">price</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a>        <span class="n">updated_at</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">),</span>
+<a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a>    <span class="p">),</span>
+<a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="p">}</span>
+<a id="__codelineno-19-39" name="__codelineno-19-39" href="#__codelineno-19-39"></a>
+<a id="__codelineno-19-40" name="__codelineno-19-40" href="#__codelineno-19-40"></a>
+<a id="__codelineno-19-41" name="__codelineno-19-41" href="#__codelineno-19-41"></a><span class="nd">@cache</span><span class="p">(</span><span class="s2">&quot;items:index&quot;</span><span class="p">,</span> <span class="n">ttl</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-19-42" name="__codelineno-19-42" href="#__codelineno-19-42"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">load_index</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="n">UUID</span><span class="p">,</span> <span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-19-43" name="__codelineno-19-43" href="#__codelineno-19-43"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Any async function can be cached; the result round-trips through JSON.&quot;&quot;&quot;</span>
+<a id="__codelineno-19-44" name="__codelineno-19-44" href="#__codelineno-19-44"></a>    <span class="k">return</span> <span class="n">_ITEMS</span>
+<a id="__codelineno-19-45" name="__codelineno-19-45" href="#__codelineno-19-45"></a>
+<a id="__codelineno-19-46" name="__codelineno-19-46" href="#__codelineno-19-46"></a>
+<a id="__codelineno-19-47" name="__codelineno-19-47" href="#__codelineno-19-47"></a><span class="k">class</span><span class="w"> </span><span class="nc">ItemViewSet</span><span class="p">(</span><span class="n">ConditionalCachedAPIView</span><span class="p">,</span> <span class="n">AsyncReadOnlyAPIViewSet</span><span class="p">):</span>
+<a id="__codelineno-19-48" name="__codelineno-19-48" href="#__codelineno-19-48"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Server-side caching plus ``ETag`` / ``Last-Modified`` revalidation.</span>
+<a id="__codelineno-19-49" name="__codelineno-19-49" href="#__codelineno-19-49"></a>
+<a id="__codelineno-19-50" name="__codelineno-19-50" href="#__codelineno-19-50"></a><span class="sd">    ``etag = True`` hashes a strong validator from the (possibly cached) body, so</span>
+<a id="__codelineno-19-51" name="__codelineno-19-51" href="#__codelineno-19-51"></a><span class="sd">    even a cache hit can be answered with ``304``; ``conditional_requests = True``</span>
+<a id="__codelineno-19-52" name="__codelineno-19-52" href="#__codelineno-19-52"></a><span class="sd">    documents the validators ``retrieve`` produces imperatively.</span>
+<a id="__codelineno-19-53" name="__codelineno-19-53" href="#__codelineno-19-53"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-19-54" name="__codelineno-19-54" href="#__codelineno-19-54"></a>
+<a id="__codelineno-19-55" name="__codelineno-19-55" href="#__codelineno-19-55"></a>    <span class="n">api_component_name</span> <span class="o">=</span> <span class="s2">&quot;Item&quot;</span>
+<a id="__codelineno-19-56" name="__codelineno-19-56" href="#__codelineno-19-56"></a>    <span class="n">response_schema</span> <span class="o">=</span> <span class="n">ItemSchema</span>
+<a id="__codelineno-19-57" name="__codelineno-19-57" href="#__codelineno-19-57"></a>
+<a id="__codelineno-19-58" name="__codelineno-19-58" href="#__codelineno-19-58"></a>    <span class="c1"># Vary the cache key per tenant so cached bodies are not shared across them.</span>
+<a id="__codelineno-19-59" name="__codelineno-19-59" href="#__codelineno-19-59"></a>    <span class="n">cache_key_headers</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;X-Tenant-Id&quot;</span><span class="p">,)</span>
+<a id="__codelineno-19-60" name="__codelineno-19-60" href="#__codelineno-19-60"></a>    <span class="n">etag</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-19-61" name="__codelineno-19-61" href="#__codelineno-19-61"></a>    <span class="n">conditional_requests</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-19-62" name="__codelineno-19-62" href="#__codelineno-19-62"></a>
+<a id="__codelineno-19-63" name="__codelineno-19-63" href="#__codelineno-19-63"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-19-64" name="__codelineno-19-64" href="#__codelineno-19-64"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_response_headers</span><span class="p">(</span>
+<a id="__codelineno-19-65" name="__codelineno-19-65" href="#__codelineno-19-65"></a>        <span class="bp">cls</span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n">Action</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-19-66" name="__codelineno-19-66" href="#__codelineno-19-66"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">type</span><span class="p">[</span><span class="n">ResponseHeaders</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-19-67" name="__codelineno-19-67" href="#__codelineno-19-67"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Only ``list`` is cached, so only it emits the cache headers.&quot;&quot;&quot;</span>
+<a id="__codelineno-19-68" name="__codelineno-19-68" href="#__codelineno-19-68"></a>        <span class="k">return</span> <span class="n">CacheHeaders</span> <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="s2">&quot;list&quot;</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-19-69" name="__codelineno-19-69" href="#__codelineno-19-69"></a>
+<a id="__codelineno-19-70" name="__codelineno-19-70" href="#__codelineno-19-70"></a>    <span class="nd">@use_cache</span><span class="p">(</span><span class="n">ttl</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">cache_control</span><span class="o">=</span><span class="n">CacheControl</span><span class="p">(</span><span class="n">private</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+<a id="__codelineno-19-71" name="__codelineno-19-71" href="#__codelineno-19-71"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ItemSchema</span><span class="p">]:</span>
+<a id="__codelineno-19-72" name="__codelineno-19-72" href="#__codelineno-19-72"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Cached for 30s; ``ttl`` fills in ``Cache-Control: private, max-age=30``.&quot;&quot;&quot;</span>
+<a id="__codelineno-19-73" name="__codelineno-19-73" href="#__codelineno-19-73"></a>        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">_ITEMS</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+<a id="__codelineno-19-74" name="__codelineno-19-74" href="#__codelineno-19-74"></a>
+<a id="__codelineno-19-75" name="__codelineno-19-75" href="#__codelineno-19-75"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ItemSchema</span> <span class="o">|</span> <span class="n">Response</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-19-76" name="__codelineno-19-76" href="#__codelineno-19-76"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Revalidate cheaply with ``Last-Modified`` before building the body.&quot;&quot;&quot;</span>
+<a id="__codelineno-19-77" name="__codelineno-19-77" href="#__codelineno-19-77"></a>        <span class="n">item</span> <span class="o">=</span> <span class="p">(</span><span class="k">await</span> <span class="n">load_index</span><span class="p">())</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<a id="__codelineno-19-78" name="__codelineno-19-78" href="#__codelineno-19-78"></a>        <span class="k">if</span> <span class="n">item</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-19-79" name="__codelineno-19-79" href="#__codelineno-19-79"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-19-80" name="__codelineno-19-80" href="#__codelineno-19-80"></a>        <span class="c1"># If the client&#39;s copy is current, return 304 and skip serialisation;</span>
+<a id="__codelineno-19-81" name="__codelineno-19-81" href="#__codelineno-19-81"></a>        <span class="c1"># otherwise stamp ``Last-Modified`` on the 200 and return the item.</span>
+<a id="__codelineno-19-82" name="__codelineno-19-82" href="#__codelineno-19-82"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_last_modified</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">updated_at</span><span class="p">)</span> <span class="ow">or</span> <span class="n">item</span>
+<a id="__codelineno-19-83" name="__codelineno-19-83" href="#__codelineno-19-83"></a>
+<a id="__codelineno-19-84" name="__codelineno-19-84" href="#__codelineno-19-84"></a>
+<a id="__codelineno-19-85" name="__codelineno-19-85" href="#__codelineno-19-85"></a><span class="n">router</span> <span class="o">=</span> <span class="n">ViewRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/items&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-86" name="__codelineno-19-86" href="#__codelineno-19-86"></a><span class="n">router</span><span class="o">.</span><span class="n">register_view</span><span class="p">(</span><span class="n">ItemViewSet</span><span class="p">)</span>
+<a id="__codelineno-19-87" name="__codelineno-19-87" href="#__codelineno-19-87"></a>
+<a id="__codelineno-19-88" name="__codelineno-19-88" href="#__codelineno-19-88"></a><span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;Cache Example&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-89" name="__codelineno-19-89" href="#__codelineno-19-89"></a><span class="c1"># The backend is shared by every cached view via the global cache.</span>
+<a id="__codelineno-19-90" name="__codelineno-19-90" href="#__codelineno-19-90"></a><span class="n">app</span><span class="o">.</span><span class="n">add_middleware</span><span class="p">(</span><span class="n">CacheMiddleware</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="n">InMemoryCache</span><span class="p">())</span>
+<a id="__codelineno-19-91" name="__codelineno-19-91" href="#__codelineno-19-91"></a><span class="n">app</span><span class="o">.</span><span class="n">include_router</span><span class="p">(</span><span class="n">router</span><span class="p">)</span>
+<a id="__codelineno-19-92" name="__codelineno-19-92" href="#__codelineno-19-92"></a>
+<a id="__codelineno-19-93" name="__codelineno-19-93" href="#__codelineno-19-93"></a><span class="n">configure_app</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["search.suggest", "search.highlight", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
